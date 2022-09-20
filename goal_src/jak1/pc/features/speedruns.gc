@@ -30,7 +30,9 @@
 (defun speedrun-draw-settings ()
   "Draw speedrun related settings in the bottom left corner"
   (when (and (-> *pc-settings* speedrunner-mode?)
-             (< (-> *autosplit-info-jak1* num-power-cells) 1))
+        (or (< (-> *autosplit-info-jak1* num-power-cells) 1)
+        (movie?)
+        (and (= (-> *target* current-level name) 'training) (>= (-> *autosplit-info-jak1* num-power-cells) 50))))
     (with-dma-buffer-add-bucket ((buf (-> (current-frame) global-buf))
                                       (bucket-id debug-no-zbuf))
       (draw-string-xy (string-format "OpenGOAL Version: ~S ~%Speedrun mode: ~A ~%Cutscene Skips ~A"
