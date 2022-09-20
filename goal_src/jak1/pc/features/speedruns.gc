@@ -7,18 +7,18 @@
     ;; Update auto-splitter
     (update-autosplit-info-jak1)
     ;; Draw info to the screen
-    (speedrun-draw-settings))
+    (speedrun-draw-settings)
     ;; Disable any active cheats
-     (set! (-> *pc-settings* cheats) (the-as pc-cheats #x0))
+    (set! (-> *pc-settings* cheats) (the-as pc-cheats #x0)))
   (none))
 
 (defun speedrun-start-run ()
   ;; randomize game id so the autosplitter knows to restart
   (update-autosplit-jak1-new-game)
+  ;; disable hints
+  (set! (-> *setting-control* default play-hints) #f)
   ;; spawn at the warp gate checkpoint
   (initialize! *game-info* 'game (the-as game-save #f) "game-start")
-  ;; disable hints (this seems to be overriden by your slot 1 save though)
-  (set! (-> *setting-control* default play-hints) #f)
   ;; ensure `force actors` is not enabled
   (set! (-> *pc-settings* force-actors?) #f)
   ;; force FPS to `60`
