@@ -13,26 +13,17 @@
              ((-> arg3 param 0)
               (set! (-> self tracking use-point-of-interest) #t)
               (set! (-> self tracking point-of-interest quad) (-> (the-as vector (-> arg3 param 0)) quad))
-              (let ((f0-0 1.0))
-                (set! (-> self tracking point-of-interest-blend target) f0-0)
-                f0-0
-                )
+              (set! (-> self tracking point-of-interest-blend target) 1.0)
               )
              (else
                (set! (-> self tracking use-point-of-interest) #f)
-               (let ((f0-1 0.0))
-                 (set! (-> self tracking point-of-interest-blend target) f0-1)
-                 f0-1
-                 )
+               (set! (-> self tracking point-of-interest-blend target) 0.0)
                )
              )
            )
           ((= v1-0 'set-interpolation)
            (set! (-> self interp-val) 0.0)
-           (let ((f0-4 (/ 5.0 (the float (-> arg3 param 0)))))
-             (set! (-> self interp-step) f0-4)
-             f0-4
-             )
+           (set! (-> self interp-step) (/ 5.0 (the float (-> arg3 param 0))))
            )
           ((= v1-0 'teleport)
            (when (nonzero? (-> self tracking-status))
@@ -172,7 +163,7 @@
   :code (behavior ()
     (local-vars (sv-160 cam-rotation-tracker))
     (loop
-      (when (and (zero? (logand (-> *camera* master-options) 2)) (!= (-> self tracking-status) 0))
+      (when (and (not (logtest? (-> *camera* master-options) 2)) (!= (-> self tracking-status) 0))
         (set! (-> self tracking-status) (the-as uint 0))
         0
         )

@@ -329,7 +329,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (cam-slave-go cam-free-floating)
         )
     (none)
@@ -454,7 +454,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (go cam-free-floating)
         )
     (none)
@@ -516,7 +516,7 @@
               )
             (matrix-axis-angle! s5-0 (-> *camera* local-down) (-> s4-0 y))
             (matrix*! (the-as matrix (-> self tracking)) (the-as matrix (-> self tracking)) s5-0)
-            (when (zero? (logand (-> self options) 8))
+            (when (not (logtest? (-> self options) 8))
               (if (< (vector-dot (-> self tracking inv-mat vector 1) (-> *camera* local-down)) 0.0)
                   (forward-down->inv-matrix
                     (the-as matrix (-> self tracking))
@@ -533,7 +533,7 @@
             (matrix-axis-angle! s5-0 (the-as vector (-> self tracking)) (- (-> s4-0 x)))
             (matrix*! (the-as matrix (-> self tracking)) (the-as matrix (-> self tracking)) s5-0)
             )
-          (when (zero? (logand (-> self options) 8))
+          (when (not (logtest? (-> self options) 8))
             (let ((f30-1 (vector-dot (-> *camera* local-down) (-> self tracking inv-mat vector 2))))
               (set! (-> (new 'stack-no-clear 'vector) quad) (the-as uint128 0))
               (when (< (sin (-> *CAM_EYE-bank* max-degrees)) (fabs f30-1))
@@ -629,7 +629,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (go cam-free-floating)
         )
     (none)
@@ -799,7 +799,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (cam-slave-go cam-free-floating)
         )
     (none)
@@ -1043,7 +1043,7 @@
           (vector-! gp-0 (-> self pivot-pt) (-> self circular-follow))
           )
       (vector-! s5-0 (-> self trans) (-> self pivot-pt))
-      (when (zero? (logand (-> self options) 4))
+      (when (not (logtest? (-> self options) 4))
         (vector-flatten! gp-0 gp-0 (-> *camera* local-down))
         (vector-flatten! s5-0 s5-0 (-> *camera* local-down))
         )
@@ -1096,18 +1096,14 @@
     )
   (vector+! (-> self circular-follow) (-> self circular-follow) (-> self pivot-pt))
   (cam-circular-position #t)
-  (when (!= (-> self fov1) 0.0)
-    (let ((f0-7 (lerp-clamp
-                  (-> self fov0)
-                  (-> self fov1)
-                  (parameter-ease-sin-clamp (dummy-10 (-> self fov-index) (-> *camera* tpos-curr-adj)))
-                  )
-                )
-          )
-      (set! (-> self fov) f0-7)
-      f0-7
+  (if (!= (-> self fov1) 0.0)
+      (set! (-> self fov) (lerp-clamp
+                            (-> self fov0)
+                            (-> self fov1)
+                            (parameter-ease-sin-clamp (dummy-10 (-> self fov-index) (-> *camera* tpos-curr-adj)))
+                            )
+            )
       )
-    )
   )
 
 ;; failed to figure out what this is:
@@ -1198,7 +1194,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (cam-slave-go cam-free-floating)
         )
     (none)
@@ -1225,7 +1221,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (cam-slave-go cam-free-floating)
         )
     (none)
@@ -2194,7 +2190,7 @@
     (cam-los-setup-lateral arg2 s4-1 arg1)
     )
   (cond
-    ((zero? (logand (-> self options) 1024))
+    ((not (logtest? (-> self options) 1024))
      )
     ((= (-> self string-vel-dir) 5)
      )
@@ -2583,12 +2579,12 @@
 
 ;; definition for function cam-string-move
 ;; INFO: Used lq/sq
-;; ERROR: Stack slot load at 240 mismatch: defined as size 4, got size 16
-;; ERROR: Stack slot load at 256 mismatch: defined as size 4, got size 16
-;; ERROR: Stack slot load at 240 mismatch: defined as size 4, got size 16
-;; ERROR: Stack slot load at 256 mismatch: defined as size 4, got size 16
-;; ERROR: Stack slot load at 240 mismatch: defined as size 4, got size 16
-;; ERROR: Stack slot load at 256 mismatch: defined as size 4, got size 16
+;; WARN: Stack slot load at 240 mismatch: defined as size 4, got size 16
+;; WARN: Stack slot load at 256 mismatch: defined as size 4, got size 16
+;; WARN: Stack slot load at 240 mismatch: defined as size 4, got size 16
+;; WARN: Stack slot load at 256 mismatch: defined as size 4, got size 16
+;; WARN: Stack slot load at 240 mismatch: defined as size 4, got size 16
+;; WARN: Stack slot load at 256 mismatch: defined as size 4, got size 16
 (defbehavior cam-string-move camera-slave ()
   (local-vars (sv-240 float) (sv-256 float))
   (vector-! (-> self velocity) (-> self desired-pos) (-> self string-trans))
@@ -2852,10 +2848,7 @@
           (set! (-> self string-max-val quad) (-> (the-as vector (-> arg3 param 1)) quad))
           (set! (-> self string-max-val x) (fmax (-> self string-max-val x) (-> self string-min-val x)))
           (set! (-> self string-max-val y) (fmax (-> self string-max-val y) (-> self string-min-val y)))
-          (let ((f0-7 (fmax (-> self string-max-val z) (-> self string-min-val z))))
-            (set! (-> self string-max-val z) f0-7)
-            f0-7
-            )
+          (set! (-> self string-max-val z) (fmax (-> self string-max-val z) (-> self string-min-val z)))
           )
          (else
            (set! (-> self string-val-locked) #f)
@@ -3021,7 +3014,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (cam-slave-go cam-free-floating)
         )
     (none)
@@ -3195,7 +3188,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (cam-slave-go cam-free-floating)
         )
     (when (not (paused?))
@@ -3444,7 +3437,7 @@
     (none)
     )
   :trans (behavior ()
-    (if (zero? (logand (-> *camera* master-options) 2))
+    (if (not (logtest? (-> *camera* master-options) 2))
         (cam-slave-go cam-free-floating)
         )
     (none)

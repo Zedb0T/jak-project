@@ -197,8 +197,16 @@ void StoreElement::get_modified_regs(RegSet& regs) const {
 // LoadSourceElement
 /////////////////////////////
 
-LoadSourceElement::LoadSourceElement(Form* addr, int size, LoadVarOp::Kind kind)
-    : m_addr(addr), m_size(size), m_kind(kind) {
+LoadSourceElement::LoadSourceElement(Form* addr,
+                                     int size,
+                                     LoadVarOp::Kind kind,
+                                     const std::optional<IR2_RegOffset>& load_source_ro,
+                                     const TP_Type& ro_reg_type)
+    : m_addr(addr),
+      m_size(size),
+      m_kind(kind),
+      m_load_source_ro(load_source_ro),
+      m_ro_reg_type(ro_reg_type) {
   m_addr->parent_element = this;
 }
 
@@ -1867,6 +1875,8 @@ std::string fixed_operator_to_string(FixedOperatorKind kind) {
       return "cpad-hold?";
     case FixedOperatorKind::VECTOR_LENGTH:
       return "vector-length";
+    case FixedOperatorKind::VECTOR_PLUS_FLOAT_TIMES:
+      return "vector+float*!";
     default:
       ASSERT(false);
       return "";

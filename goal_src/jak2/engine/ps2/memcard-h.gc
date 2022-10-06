@@ -39,6 +39,7 @@
   :flag-assert         #x900000044
   )
 
+
 (deftype mc-slot-info (structure)
   ((handle       int32                  :offset-assert   0)
    (known        int32                  :offset-assert   4)
@@ -49,10 +50,12 @@
    (mem-actual   int32                  :offset-assert  24)
    (file         mc-file-info 4 :inline :offset-assert  28)
    )
+  :pack-me
   :method-count-assert 9
   :size-assert         #x12c
   :flag-assert         #x90000012c
   )
+
 
 (defun mc-sync ()
   (let ((v0-0 0))
@@ -106,7 +109,7 @@
             )
           )
         )
-      (draw-string-xy *temp-string* arg0 32 (+ (* 12 s4-0) 8) (font-color orange-red) (font-flags shadow))
+      (draw-string-xy *temp-string* arg0 32 (+ (* 12 s4-0) 8) (font-color precursor-#ec3b00) (font-flags shadow))
       )
     )
   0
