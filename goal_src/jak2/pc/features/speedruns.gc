@@ -14,8 +14,8 @@
   ;; randomize game id so the autosplitter knows to restart
   (update-autosplit-jak2-new-game)
   ;; spawn at the warp gate checkpoint
-  (initialize! *game-info* 'game (the-as game-save #f) "game-start")
-  ;; disable hints (this seems to be overriden by your slot 1 save though)
+  (initialize! *game-info* 'game (the-as game-save #f) (the-as string #f))
+  ;; Set Speech volume to zero if the option if #t
   ;;(set! (-> *setting-control* default play-hints) #f)
   ;; ensure `force actors` is not enabled
   ;;(set! (-> *pc-settings* force-actors?) #f)
@@ -29,13 +29,14 @@
 
 (defun speedrun-draw-settings ()
   "Draw speedrun related settings in the bottom left corner"
-  #|(when (and (-> *pc-settings* speedrunner-mode?)
-             (< (-> *autosplit-info-jak2* num-power-cells) 1))
+  (when #t #|(and (-> *pc-settings* speedrunner-mode?)
+             (< (-> *autosplit-info-jak2* num-power-cells) 1)) Hardcoded for now |#
     (with-dma-buffer-add-bucket ((buf (-> (current-frame) global-buf))
                                       (bucket-id debug-no-zbuf))
       (draw-string-xy (string-format "OpenGOAL Version: ~S ~%Speedrun mode: ~A ~%Cutscene Skips ~A"
-                                     *pc-settings-built-sha*
-                                     (-> *pc-settings* speedrunner-mode?)
-                                     (-> *pc-settings* cutscene-skips?))
-                      buf 0 (- 224 (* 8 4)) (font-color flat-yellow) (font-flags shadow kerning))))|#
+                                     #|*pc-settings-built-sha*|# "Version 1" ;;Hardcoded for now
+                                     #|(-> *pc-settings* speedrunner-mode?)|# #t ;;Hardcoded for now
+                                     #|(-> *pc-settings* cutscene-skips?)|# #t ;;Hardcoded for now
+                                     )
+                      buf 0 (- 224 (* 8 4)) (font-color flat-yellow) (font-flags shadow kerning))))
   (none))
