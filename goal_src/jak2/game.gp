@@ -4693,3 +4693,8 @@
 (group-list "all-code"
   `(,@(reverse *all-gc*))
   )
+
+(goal-src "pc/features/autosplit-h.gc")
+(goal-src "pc/features/autosplit.gc" "autosplit-h" "task-control-h")
+(goal-src "pc/features/speedruns-h.gc")
+(goal-src "pc/features/speedruns.gc" "speedruns-h" "autosplit-h")

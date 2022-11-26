@@ -49,3 +49,10 @@ struct AutoSplitterBlock {
 };
 extern AutoSplitterBlock gAutoSplitterBlock;
 }  // namespace jak1
+
+struct AutoSplitterBlockJak2 {
+  const char marker[20] = "UnLiStEdStRaTs_JaK2";
+  u64 pointer_to_symbol = 0;
+};
+extern AutoSplitterBlockJak2 gAutoSplitterBlockJak2;
+
