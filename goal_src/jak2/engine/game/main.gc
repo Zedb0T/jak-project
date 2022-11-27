@@ -707,6 +707,8 @@
     (set! (-> gp-1 frames 1 start-time) (the-as time-frame (timer-count (the-as timer-bank #x10000800))))
     (set! (-> gp-1 dog-ratio) 1.0)
     (while *run*
+    ;;(reset *pc-settings*)
+    (speedrun-mode-update)
       (display-loop-main gp-1)
       (with-profiler 'actors *profile-actors-color*
         (suspend)

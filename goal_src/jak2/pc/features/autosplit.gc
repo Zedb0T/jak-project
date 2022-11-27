@@ -12,10 +12,10 @@
 (defun update-autosplit-info-jak2 ()
   ;; general statistics
   
-  #|(set! (-> *autosplit-info-jak2* num-power-cells) (the int (-> *game-info* fuel)))
-  (set! (-> *autosplit-info-jak2* num-orbs) (the int (-> *game-info* money-total)))
-  (set! (-> *autosplit-info-jak2* num-scout-flies) (the int (-> *game-info* buzzer-total)))
-  |#
+  ;;(set! (-> *autosplit-info-jak2* num-power-cells) (the int (-> *game-info* fuel)))
+  (set! (-> *autosplit-info-jak2* num-orbs) (the int (-> *game-info* money)))
+  ;;(set! (-> *autosplit-info-jak2* num-scout-flies) (the int (-> *game-info* buzzer-total)))
+  
 
   ;; loading/cutscene related flags
   ;;(set! (-> *autosplit-info-jak2* in-cutscene?) (-> *pc-settings* movie?))
@@ -138,7 +138,7 @@
   ;; end
   (none))
 
-
+(define-extern pc-get-unix-timestamp (function int))
 (defun update-autosplit-jak2-new-game ()
- ;; (set! (-> *autosplit-info-jak2* game-hash) (pc-get-unix-timestamp))
+  (set! (-> *autosplit-info-jak2* game-hash) (pc-get-unix-timestamp))
   (none))
