@@ -300,6 +300,7 @@
 ;; definition for method 9 of type game-info
 ;; INFO: Used lq/sq
 ;; WARN: rewrite_to_get_var got a none typed variable. Is there unreachable code? [OP: 512]
+;; WARN: rewrite_to_get_var got a none typed variable. Is there unreachable code? [OP: 526]
 ;; ERROR: Expression building failed: In (method 9 game-info): Expression pass could not find the set-to-run function. Found t9-31 instead. Make sure there are no casts on this function.
 (defmethod initialize! game-info ((obj game-info) (arg0 symbol) (arg1 game-save) (arg2 string))
   (local-vars
@@ -380,7 +381,7 @@
     ((= v1-135 'debug)
      (reset-actors arg0)
      (if arg1
-         (game-info-method-24 obj arg1)
+         (load-game obj arg1)
          )
      )
     ((= v1-135 'play)
@@ -410,7 +411,7 @@
                             (close! (-> *game-info* sub-task-list 1) 'event)
                             (set-continue! *game-info* arg2 #f)
                             (when arg3
-                              (game-info-method-24 *game-info* arg3)
+                              (load-game *game-info* arg3)
                               (set! arg2 (get-current-continue-forced *game-info*))
                               (reset-actors 'life)
                               (send-event (handle->process (-> *game-info* auto-save-proc)) 'done)
@@ -1297,7 +1298,7 @@
 
 ;; definition for method 18 of type game-info
 ;; INFO: Used lq/sq
-(defmethod game-info-method-18 game-info ((obj game-info) (arg0 symbol))
+(defmethod debug-inspect game-info ((obj game-info) (arg0 symbol))
   (local-vars
     (sv-16 int)
     (sv-24 int)
@@ -1545,7 +1546,7 @@
   )
 
 ;; definition for method 26 of type game-info
-(defmethod you-suck-scale game-info ((obj game-info))
+(defmethod you-suck-scale game-info ((obj game-info) (arg0 object))
   (* 0.25 (the float (you-suck-stage obj #f)))
   )
 
@@ -1670,7 +1671,7 @@
     0
     )
   (if (zero? (-> gp-0 display-text-handle))
-      (set! (-> gp-0 display-text-handle) (the-as uint #f))
+      (set! (-> gp-0 display-text-handle) (the-as handle #f))
       )
   (if (zero? (-> gp-0 game-score))
       (set! (-> gp-0 game-score) (new 'global 'boxed-array float 152))
@@ -1688,9 +1689,7 @@
   (set! (-> gp-0 auto-save-which) -1)
   (set! (-> gp-0 pov-camera-handle) (the-as handle #f))
   (set! (-> gp-0 other-camera-handle) (the-as handle #f))
-  (set! (-> gp-0 features)
-        (game-feature unk-game-feature-06 gun-yellow gun-red gun-blue gun-dark board sidekick darkjak)
-        )
+  (set! (-> gp-0 features) (game-feature gun gun-yellow gun-red gun-blue gun-dark board sidekick darkjak))
   (dotimes (v1-43 2)
     (set! (-> gp-0 controller v1-43) (the-as handle #f))
     )

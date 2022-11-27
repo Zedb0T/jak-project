@@ -124,6 +124,74 @@ namespace draw_string { extern void link(); }
 namespace get_string_length { extern void link(); }
 namespace adgif_shader_texture_with_update { extern void link(); }
 namespace debug_line_clip { extern void link(); }
+namespace init_boundary_regs { extern void link(); }
+namespace render_boundary_tri { extern void link(); }
+namespace render_boundary_quad { extern void link(); }
+namespace set_sky_vf27 { extern void link(); }
+namespace set_sky_vf23_value { extern void link(); }
+namespace draw_boundary_polygon { extern void link(); }
+namespace sp_init_fields { extern void link(); }
+namespace particle_adgif { extern void link(); }
+namespace sp_launch_particles_var { extern void link(); }
+namespace sparticle_motion_blur { extern void link(); }
+namespace sp_process_block_2d { extern void link(); }
+namespace sp_process_block_3d { extern void link(); }
+namespace set_tex_offset { extern void link(); }
+namespace draw_large_polygon { extern void link(); }
+namespace render_sky_quad { extern void link(); }
+namespace render_sky_tri { extern void link(); }
+namespace method_16_sky_work { extern void link(); }
+namespace method_17_sky_work { extern void link(); }
+namespace method_32_sky_work { extern void link(); }
+namespace method_33_sky_work { extern void link(); }
+namespace method_28_sky_work { extern void link(); }
+namespace method_29_sky_work { extern void link(); }
+namespace method_30_sky_work { extern void link(); }
+namespace method_11_collide_hash { extern void link(); }
+namespace method_12_collide_hash { extern void link(); }
+namespace fill_bg_using_box_new { extern void link(); }
+namespace fill_bg_using_line_sphere_new { extern void link(); }
+namespace method_12_collide_mesh { extern void link(); }
+namespace method_14_collide_mesh { extern void link(); }
+namespace method_15_collide_mesh { extern void link(); }
+namespace method_10_collide_edge_hold_list { extern void link(); }
+namespace method_19_collide_edge_work { extern void link(); }
+namespace method_9_edge_grab_info { extern void link(); }
+namespace method_16_collide_edge_work { extern void link(); }
+namespace method_17_collide_edge_work { extern void link(); }
+namespace method_18_collide_edge_work { extern void link(); }
+namespace init_ocean_far_regs { extern void link(); }
+namespace draw_large_polygon_ocean { extern void link(); }
+namespace render_ocean_quad { extern void link(); }
+namespace method_16_ocean { extern void link(); }
+namespace method_15_ocean { extern void link(); }
+namespace method_14_ocean { extern void link(); }
+namespace method_18_grid_hash { extern void link(); }
+namespace method_19_grid_hash { extern void link(); }
+namespace method_20_grid_hash { extern void link(); }
+namespace method_22_grid_hash { extern void link(); }
+namespace method_28_sphere_hash { extern void link(); }
+namespace method_33_sphere_hash { extern void link(); }
+namespace method_29_sphere_hash { extern void link(); }
+namespace method_30_sphere_hash { extern void link(); }
+namespace method_31_sphere_hash { extern void link(); }
+namespace method_32_sphere_hash { extern void link(); }
+namespace method_33_spatial_hash { extern void link(); }
+namespace method_39_spatial_hash { extern void link(); }
+namespace method_36_spatial_hash { extern void link(); }
+namespace method_37_spatial_hash { extern void link(); }
+namespace method_35_spatial_hash { extern void link(); }
+namespace method_10_collide_shape_prim_mesh { extern void link(); }
+namespace method_10_collide_shape_prim_sphere { extern void link(); }
+namespace method_10_collide_shape_prim_group { extern void link(); }
+namespace method_11_collide_shape_prim_mesh { extern void link(); }
+namespace method_11_collide_shape_prim_sphere { extern void link(); }
+namespace method_11_collide_shape_prim_group { extern void link(); }
+namespace method_9_collide_cache_prim { extern void link(); }
+namespace method_10_collide_cache_prim { extern void link(); }
+namespace method_17_collide_cache { extern void link(); }
+namespace method_9_collide_puss_work { extern void link(); }
+namespace method_10_collide_puss_work { extern void link(); }
 }
 // clang-format on
 
@@ -205,7 +273,53 @@ PerGameVersion<std::unordered_map<std::string, std::vector<void (*)()>>> gMips2C
      {"font",
       {jak2::draw_string::link, jak2::get_string_length::link, jak2::draw_string_asm::link}},
      {"texture", {jak2::adgif_shader_texture_with_update::link}},
-     {"debug", {jak2::debug_line_clip::link}}},
+     {"debug",
+      {jak2::debug_line_clip::link, jak2::init_boundary_regs::link,
+       jak2::render_boundary_quad::link, jak2::render_boundary_tri::link, jak2::set_sky_vf27::link,
+       jak2::draw_boundary_polygon::link}},
+     {"sparticle-launcher",
+      {jak2::sp_init_fields::link, jak2::particle_adgif::link, jak2::sp_launch_particles_var::link,
+       jak2::sparticle_motion_blur::link}},
+     {"sparticle", {jak2::sp_process_block_2d::link, jak2::sp_process_block_3d::link}},
+     {"sky-tng",
+      {jak2::set_tex_offset::link, jak2::draw_large_polygon::link, jak2::render_sky_quad::link,
+       jak2::render_sky_tri::link, jak2::method_16_sky_work::link, jak2::method_17_sky_work::link,
+       jak2::method_32_sky_work::link, jak2::method_33_sky_work::link,
+       jak2::method_28_sky_work::link, jak2::method_29_sky_work::link,
+       jak2::method_30_sky_work::link, jak2::set_sky_vf23_value::link}},
+     {"collide-hash",
+      {jak2::method_11_collide_hash::link, jak2::method_12_collide_hash::link,
+       jak2::fill_bg_using_box_new::link, jak2::fill_bg_using_line_sphere_new::link}},
+     {"collide-mesh",
+      {jak2::method_12_collide_mesh::link, jak2::method_14_collide_mesh::link,
+       jak2::method_15_collide_mesh::link}},
+     {"collide-edge-grab",
+      {jak2::method_10_collide_edge_hold_list::link, jak2::method_19_collide_edge_work::link,
+       jak2::method_9_edge_grab_info::link, jak2::method_16_collide_edge_work::link,
+       jak2::method_17_collide_edge_work::link, jak2::method_18_collide_edge_work::link}},
+     {"ocean-vu0",
+      {jak2::method_16_ocean::link, jak2::method_15_ocean::link, jak2::method_14_ocean::link}},
+     {"ocean",
+      {jak2::init_ocean_far_regs::link, jak2::draw_large_polygon_ocean::link,
+       jak2::render_ocean_quad::link}},
+     {"spatial-hash",
+      {jak2::method_18_grid_hash::link, jak2::method_19_grid_hash::link,
+       jak2::method_20_grid_hash::link, jak2::method_22_grid_hash::link,
+       jak2::method_28_sphere_hash::link, jak2::method_33_sky_work::link,
+       jak2::method_29_sphere_hash::link, jak2::method_30_sphere_hash::link,
+       jak2::method_31_sphere_hash::link, jak2::method_32_sphere_hash::link,
+       jak2::method_33_spatial_hash::link, jak2::method_39_spatial_hash::link,
+       jak2::method_36_spatial_hash::link, jak2::method_37_spatial_hash::link,
+       jak2::method_35_spatial_hash::link, jak2::method_33_sphere_hash::link}},
+     {"collide-cache",
+      {jak2::method_10_collide_shape_prim_mesh::link,
+       jak2::method_10_collide_shape_prim_sphere::link,
+       jak2::method_10_collide_shape_prim_group::link,
+       jak2::method_11_collide_shape_prim_mesh::link,
+       jak2::method_11_collide_shape_prim_sphere::link,
+       jak2::method_11_collide_shape_prim_group::link, jak2::method_9_collide_cache_prim::link,
+       jak2::method_10_collide_cache_prim::link, jak2::method_17_collide_cache::link,
+       jak2::method_9_collide_puss_work::link, jak2::method_10_collide_puss_work::link}}},
 };
 
 void LinkedFunctionTable::reg(const std::string& name, u64 (*exec)(void*), u32 stack_size) {
@@ -285,7 +399,7 @@ void LinkedFunctionTable::reg(const std::string& name, u64 (*exec)(void*), u32 s
 u32 LinkedFunctionTable::get(const std::string& name) {
   auto it = m_executes.find(name);
   if (it == m_executes.end()) {
-    ASSERT(false);
+    ASSERT_NOT_REACHED_MSG(fmt::format("mips2c function {} is unknown", name));
   }
   return it->second.goal_trampoline.offset;
 }

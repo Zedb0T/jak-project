@@ -102,6 +102,7 @@ const std::unordered_map<
         {".pw.sra", &Compiler::compile_asm_pw_sra},
 
         {".por", &Compiler::compile_asm_por},
+        {".pxor", &Compiler::compile_asm_pxor},
         {".pnor", &Compiler::compile_asm_pnor},
         {".pand", &Compiler::compile_asm_pand},
 
@@ -176,6 +177,7 @@ const std::unordered_map<
         // DEBUGGING
         {"dbs", &Compiler::compile_dbs},
         {"dbg", &Compiler::compile_dbg},
+        {"dbgc", &Compiler::compile_dbg_and_continue},
         {":cont", &Compiler::compile_cont},
         {":stop", &Compiler::compile_stop},
         {":break", &Compiler::compile_break},

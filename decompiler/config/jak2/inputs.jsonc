@@ -14,11 +14,11 @@
     "CGO/GAME.CGO",
     "CGO/COMMON.CGO",
     // "DGO/LWIDEB.DGO",
-    // "DGO/LMEETBRT.DGO",
+    "DGO/LMEETBRT.DGO",
     "DGO/CTA.DGO",
-    // "DGO/PALOUT.DGO",
-    // "DGO/STD.DGO",
-    // "DGO/FOR.DGO",
+    "DGO/PALOUT.DGO",
+    "DGO/STD.DGO",
+    "DGO/FOR.DGO",
     // "DGO/CASEXT.DGO",
     // "DGO/HIDEOUT.DGO",
     // "DGO/LWIDESTA.DGO",
@@ -56,7 +56,7 @@
     // "DGO/SWB.DGO",
     // "DGO/LPOWER.DGO",
     // "DGO/FOB.DGO",
-    // "DGO/CIB.DGO",
+    "DGO/CIB.DGO",
     // "DGO/LSHUTTLE.DGO",
     // "DGO/LJAKDAX.DGO",
     // "DGO/FORDUMPC.DGO",
@@ -75,7 +75,7 @@
     // "DGO/LRACEDF.DGO",
     // "DGO/LERLCHAL.DGO",
     // "DGO/LHIPOUT.DGO",
-    // "DGO/OUTROCST.DGO",
+    "DGO/OUTROCST.DGO",
     // "DGO/NES.DGO",
     // "DGO/PAR.DGO",
     // "DGO/LERBRNGD.DGO",
@@ -97,7 +97,7 @@
     // "DGO/TITLE.DGO",
     // "DGO/FORDUMPD.DGO",
     // "DGO/D3A.DGO",
-    // "DGO/DRILLMTN.DGO",
+    "DGO/DRILLMTN.DGO",
     // "DGO/PAC.DGO",
     // "DGO/LTENTOB.DGO",
     // "DGO/LRACEBF.DGO",
@@ -140,12 +140,12 @@
     // "DGO/SEW.DGO",
     // "DGO/VIN.DGO",
     // "DGO/CGA.DGO",
-    // "DGO/CMB.DGO",
+    "DGO/CMB.DGO",
     // "DGO/LGUARD.DGO",
     // "DGO/CPA.DGO",
     // "DGO/LCITYLOW.DGO",
     // "DGO/LTENTOUT.DGO",
-    // "DGO/UNB.DGO",
+    "DGO/UNB.DGO",
     // "DGO/CPO.DGO",
     // "DGO/CAP.DGO",
     "DGO/CWI.DGO",
@@ -154,13 +154,13 @@
     // "DGO/LSACK.DGO",
     // "DGO/CTYASHA.DGO",
     // "DGO/LPRTRACE.DGO",
-    "DGO/LWIDEA.DGO"
+    "DGO/LWIDEA.DGO",
     // "DGO/HIPHOG.DGO",
     // "DGO/LSMYSBRT.DGO",
     // "DGO/LRACEBB.DGO",
     // "DGO/CASCITY.DGO",
     // "DGO/LYSAMSAM.DGO" //,
-    // "DGO/VI1.DGO"
+    "DGO/VI1.DGO"
   ],
 
   // some objects are part of STR files (streaming data).
@@ -184,5 +184,12 @@
 
   "streamed_audio_file_names": [],
 
-  "levels_to_extract": ["PRI.DGO", "CTA.DGO", "CWI.DGO", "LWIDEA.DGO"]
+  "levels_to_extract": [
+    "PRI.DGO",
+    "CTA.DGO",
+    "CWI.DGO",
+    "LWIDEA.DGO",
+    "VI1.DGO",
+    "CIB.DGO"
+  ]
 }
