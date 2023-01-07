@@ -250,6 +250,7 @@ link_directories(/opt/NVIDIA_GPU_Computing_SDK/OpenCL/common/<lib or something s
 
 
 set(CURL_INCLUDE_DIR "third-party/curl/include/curl")
+set(CURL_LIBRARY libcurl)
 #include_directories(third-party/curlpp/include)
 include_directories(third-party/curlpp/include)
 
