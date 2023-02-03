@@ -11,6 +11,6 @@
   ("com-airlock-inner-ag.go" "com-airlock-inner")
   ("water-anim-ctypal-ag.go" "water-anim-ctypal")
   ("palace-door-ag.go" "palace-door")
-  ("ctypal-broke-wall-ag.go" "ctypal-broke-wall")
+
   ("ctypal-vis.go" "ctypal-vis")
   )

@@ -101,6 +101,7 @@
 
 (defun movie? ()
   "Are we in a movie?"
+
   (logtest? (-> *kernel-context* prevent-from-run) (process-mask movie))
   )
 
@@ -1411,10 +1412,12 @@
   0
   (none)
   )
-
+(define warp 0)
 (defun display-loop-main ((arg0 display))
   "Run the engine.
    This function is called after actors update."
+
+
   (local-vars (a0-94 int) (a0-96 int))
   (with-pp
 
@@ -1512,6 +1515,8 @@
           )
       )
 
+
+
     ;; generate DMA data for doing the main blit
     ; (blit-displays)
 
@@ -1597,6 +1602,115 @@
 
     ;; handle spawning/despawning as needed.
     (level-update *level*)
+(if (= warp 0)
+(begin
+
+               (if  (and (= (-> *game-info* skill) 7.0)  (string= (symbol->string(-> (level-get-target-inside *level*)name)) "nest"))
+  (begin
+  (set! warp 1)
+  (send-event *target* 'continue (get-continue-by-name *game-info* "ctyport-hiphog"));;change to ctypothiphog when done
+ 
+  )
+  )
+
+
+
+)
+)
+
+
+(if (= warp 1)
+(begin
+
+  (if  (and (= (-> *game-info* skill) 9.0)  (or (string= (symbol->string(-> (level-get-target-inside *level*)name)) "under")(string= (symbol->string(-> (level-get-target-inside *level*)name)) "underb")))
+  (begin
+  (set! warp 2)
+  (send-event *target* 'continue (get-continue-by-name *game-info* "ctyport-hiphog"))
+  )
+  )
+)
+)
+
+(if (= warp 2)
+(begin
+
+  (if  (and (= (-> *game-info* skill) 42.0)  (or (string= (symbol->string(-> (level-get-target-inside *level*)name)) "palroof")(string= (symbol->string(-> (level-get-target-inside *level*)name)) "palcab")))
+  (begin
+  (set! warp 3)
+  (set! (-> *game-info* skill) (+ (-> *game-info* skill) 1.0))
+  (send-event *target* 'continue (get-continue-by-name *game-info* "palroof-boss-victory"));;send to end of palcab ;;untested
+  )
+  )
+)
+)
+
+
+;;crash at dead town mech
+
+(if (= warp 3)
+(begin
+
+  (if  (and (= (-> *game-info* skill) 44.0)  (or (string= (symbol->string(-> (level-get-target-inside *level*)name)) "palroof")(string= (symbol->string(-> (level-get-target-inside *level*)name)) "underb")))
+  (begin
+  (set! warp 4)
+  (set! (-> *game-info* skill) (+ (-> *game-info* skill) 5.0))
+  (send-event *target* 'continue (get-continue-by-name *game-info* "ctygenb-start"))
+  )
+  )
+)
+)
+
+(if (= warp 4)
+(begin
+
+  (if  (and (= (-> *game-info* skill) 78.0)  (or (string= (symbol->string(-> (level-get-target-inside *level*)name)) "dig3a")(string= (symbol->string(-> (level-get-target-inside *level*)name)) "underb")))
+  (begin
+  (set! warp 5)
+  (send-event *target* 'continue (get-continue-by-name *game-info* "forexita-start"))
+  )
+  )
+)
+)
+
+(if (= warp 5)
+(begin
+
+  (if  (and (= (-> *game-info* skill) 80.0)  (or (string= (symbol->string(-> (level-get-target-inside *level*)name)) "forexita")(string= (symbol->string(-> (level-get-target-inside *level*)name)) "underb")))
+  (begin
+  (set! warp 6)
+  (send-event *target* 'continue (get-continue-by-name *game-info* "strip-warp")) ;; go to stip
+  )
+  )
+)
+)
+
+(if (= warp 6)
+(begin
+
+  (if  (and (= (-> *game-info* skill) 87.0)  (or (string= (symbol->string(-> (level-get-target-inside *level*)name)) "strip")(string= (symbol->string(-> (level-get-target-inside *level*)name)) "underb")))
+  (begin
+  (set! warp 7)
+  (send-event *target* 'continue (get-continue-by-name *game-info* "drill-warp")) ;; go to drill plat
+  )
+  )
+)
+)
+
+(if (= warp 7)
+(begin
+
+  (if  (and (= (-> *game-info* skill) 92.0)  (or (string= (symbol->string(-> (level-get-target-inside *level*)name)) "drillmid")(string= (symbol->string(-> (level-get-target-inside *level*)name)) "underb")))
+  (begin
+  (set! warp 8)
+  (send-event *target* 'continue (get-continue-by-name *game-info* "ctyinda-vinroom")) ;; go to vin
+  )
+  )
+)
+)
+
+
+
+
 
     ;; do some memory card operations, check auto-save
     ; (mc-run)

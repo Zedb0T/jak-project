@@ -1589,7 +1589,12 @@
   (none)
   )
 
+
+;;(define ctypal-broke-wall type)
 (defmethod birth! entity-actor ((obj entity-actor))
+ (format #t "~Theap-top: #x~X~%" (-> obj etype))
+(if (!= (-> obj etype) 'ctypal-broke-wall)
+(begin
   (let* ((s5-0 (-> obj etype))
          (v1-0 (entity-info-lookup s5-0))
          (s4-0 (get-process *default-dead-pool* s5-0 (if v1-0
@@ -1616,9 +1621,14 @@
         )
       )
     )
+)
+)
+
+      
+
   obj
   )
-
+  
 ;; WARN: Return type mismatch symbol vs none.
 (defun entity-deactivate-handler ((arg0 process) (arg1 entity-actor))
   (when (= arg0 (-> arg1 extra process))
