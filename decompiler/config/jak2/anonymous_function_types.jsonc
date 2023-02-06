@@ -720,7 +720,7 @@
     [35, "(function process-focusable traffic-object-type-info none)"],
     [36, "(function process-focusable traffic-object-type-info none)"],
     [45, "(function process-tree none)"],
-    [61, "(function vector matrix matrix)"] // a guess
+    [61, "(function traffic-find-segment-struct nav-segment none)"] // a guess
   ],
   "ruins-obs": [
     [0, "(function object :behavior task-manager)"],
@@ -1164,5 +1164,14 @@
     [8, "(function none :behavior task-manager)"],
     [9, "(function none :behavior task-manager)"],
     [10, "(function none :behavior task-manager)"]
+  ],
+  "hover-formation": [
+    [10, "(function form-search-info float)"],
+    [11, "(function int int form-search-info uint)"],
+    [14, "(function vector object)"],
+    [15, "(function int int (pointer object) int)"]
+  ],
+  "pilot-states": [
+    [15, "(function object object object int none)"]
   ]
 }
