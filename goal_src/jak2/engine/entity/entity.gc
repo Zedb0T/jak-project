@@ -1593,11 +1593,12 @@
 
 (define-extern jellyfish type);;zed
 (define-extern under-mine type);;zed
+(define-extern crimson-guard-hover type);;zed
 
 
 (defmethod birth! entity-actor ((obj entity-actor))
   (case (-> obj etype)
-((jellyfish under-mine)
+((jellyfish under-mine crimson-guard-hover)
  
  (none)
         )

@@ -387,7 +387,7 @@
               (set! (-> s4-0 color y) (rand-vu-float-range 192.0 255.0))
               (set! (-> s4-0 color w) (* f30-1 (rand-vu-float-range 16.0 18.0)))
               (add! *simple-sprite-system* (the-as dma-buffer s4-0))
-              (let ((f0-21 (-> obj camera-dist2))
+              #|(let ((f0-21 (-> obj camera-dist2)) ;;zed fix crash at end of fortress
                     (f1-6 245760.0)
                     )
                 (when (< f0-21 (* f1-6 f1-6))
@@ -400,8 +400,8 @@
                   (set! (-> s4-0 color z) (rand-vu-float-range 128.0 160.0))
                   (set! (-> s4-0 color w) (* f30-1 (rand-vu-float-range 32.0 36.0)))
                   (add! *simple-sprite-system* (the-as dma-buffer s4-0))
-                  )
-                )
+                  )|#
+                ;;)
               )
             )
           (let ((s4-1 (new 'stack-no-clear 'sprite-glow-data)))

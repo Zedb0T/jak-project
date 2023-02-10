@@ -144,7 +144,7 @@
 
 (defmethod vehicle-controller-method-15 vehicle-controller ((obj vehicle-controller))
   (let ((gp-0 (the-as nav-branch #f)))
-    (let* ((s5-0 (-> obj branch dest-node))
+    #|(let* ((s5-0 (-> obj branch dest-node))
            (s4-0 (-> s5-0 branch-count))
            )
       (b! (!= s4-0 1) cfg-4 :delay (empty-form))
@@ -176,7 +176,7 @@
           (b! (nonzero? a0-8) cfg-6 :delay (nop!))
           )
         )
-      )
+      )|# ;;breaks zoomers so add a conditional
     (label cfg-12)
     gp-0
     )
