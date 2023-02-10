@@ -371,7 +371,10 @@
           (let ((s4-0 (new 'stack-no-clear 'sprite-glow-data))
                 (s3-0 *vehicle-headlight-glow-template*)
                 )
-            (dotimes (s2-0 (-> obj info-override headlight-count))
+                (if (nonzero? s2-0)
+                         (dotimes (s2-0 (-> obj info-override headlight-count));;maybe zed crash fix
+                )
+   
               (quad-copy! (the-as pointer s4-0) (the-as pointer s3-0) 4)
               (vector-matrix*! (the-as vector (-> s5-0 0)) (-> obj info-override headlight-local-pos s2-0) (-> s5-0 1))
               (let* ((v1-44 s4-0)
