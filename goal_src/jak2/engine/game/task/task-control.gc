@@ -507,6 +507,7 @@
     )
   )
 
+;;zed (initialize! *game-info* 'dead (the-as game-save #f) (the-as string #f))
 (defun restart-mission ()
   (let ((restart? #t))
     (let ((mgr-status #f))

@@ -1266,7 +1266,7 @@
             (let ((s0-0 (-> s1-0 frame-group)))
               (when (not (and s0-0 (nonzero? s0-0) (= (logand (the-as int s0-0) 7) 4) (= (-> s0-0 type) art-joint-anim)))
                 (go process-drawable-art-error "joint-anim")
-                (break!)
+               (none);; (break!) zed
                 ;; (.lw ra-0 return-from-thread s7-0)
                 ;; (.jr ra-0)
                 ;; (nop!)

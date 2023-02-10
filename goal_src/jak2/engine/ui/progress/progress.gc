@@ -968,7 +968,7 @@
      (set! (-> obj current-options) *secret-options*)
      )
     (('quit-restart)
-     (set! (-> obj current-options) *quit-restart-options*)
+     (initialize! *game-info* 'dead (the-as game-save #f) (the-as string #f))
      )
     (('unlocked-secrets)
      (set! (-> obj current-options) *unlocked-secrets*)

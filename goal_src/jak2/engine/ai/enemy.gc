@@ -1255,10 +1255,14 @@ This commonly includes things such as:
 - collision information
 - loading the skeleton group / bones
 - sounds"
+
   (init-enemy-collision! obj)
   (process-drawable-from-entity! obj arg0)
   (init-enemy! obj)
-  (when (>= (-> obj enemy-info gem-joint) 0)
+  (when (and (>= (-> obj enemy-info gem-joint) 0) 
+  (not (or (string= (symbol->string(-> (level-get-target-inside *level*)name)) "under")
+  (string= (symbol->string(-> (level-get-target-inside *level*)name)) "underb")))
+  );;zed
     (cond
       ((and (or (and (-> obj entity) (logtest? (-> obj entity extra perm status) (entity-perm-status save)))
                 (not (-> obj entity))
