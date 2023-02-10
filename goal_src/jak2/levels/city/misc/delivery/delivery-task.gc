@@ -337,7 +337,7 @@ This commonly includes things such as:
       (new 'static 'vector :x -1.0 :w 1.0)
       (new 'static 'vector :y 1.0 :w 1.0)
       )
-    ;;(city-ambush-info-method-9 gp-0 s5-0) zed crash fix
+    ;;(city-ambush-info-method-9 gp-0 s5-0) ;;zed crash fix
     )
   (none)
   )
