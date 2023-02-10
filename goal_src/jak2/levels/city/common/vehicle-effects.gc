@@ -371,7 +371,7 @@
           (let ((s4-0 (new 'stack-no-clear 'sprite-glow-data))
                 (s3-0 *vehicle-headlight-glow-template*)
                 )
-                (if (nonzero? s2-0)
+                (if  s2-0
                          (dotimes (s2-0 (-> obj info-override headlight-count));;maybe zed crash fix
                 )
    
