@@ -9986,7 +9986,7 @@
     [369, "v1", "art-joint-anim"],
     [373, "v1", "art-joint-anim"]
   ],
-  "(trans explode metalkor)": [[15, "v0", "entity-actor"]]
+  "(trans explode metalkor)": [[15, "v0", "entity-actor"]],
   "generic-vu1-init-buf": [[[24, 32], "v1", "dma-packet"]],
   "(method 11 drill-wall)": [
     [159, "v0", "(pointer actor-group)"],
