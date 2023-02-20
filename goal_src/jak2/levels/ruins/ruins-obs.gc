@@ -29,7 +29,7 @@
   (none)
   )
 
-(defmethod rigid-body-object-method-32 sinking-plat ((obj sinking-plat))
+(defmethod allocate-and-init-cshape sinking-plat ((obj sinking-plat))
   (let ((s5-0 (new 'process 'collide-shape-moving obj (collide-list-enum hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s5-0 reaction) cshape-reaction-default)
@@ -58,19 +58,21 @@
   )
 
 (define *ruins-sinking-platform-constants* (new 'static 'rigid-body-platform-constants
-                                             :mass 1.48
-                                             :inv-mass 0.6756757
-                                             :cm-joint (new 'static 'vector :w 1.0)
-                                             :linear-damping 0.8
-                                             :angular-damping 1.0
-                                             :friction-factor 0.1
-                                             :inertial-tensor-x (meters 2)
-                                             :inertial-tensor-y (meters 1)
-                                             :inertial-tensor-z (meters 2)
-                                             :max-time-step 0.02
-                                             :gravity (meters 80)
-                                             :idle-distance (meters 50)
-                                             :attack-force-scale 1.0
+                                             :info (new 'static 'rigid-body-info
+                                               :mass 1.48
+                                               :inv-mass 0.6756757
+                                               :linear-damping 0.8
+                                               :angular-damping 1.0
+                                               :friction-factor 0.1
+                                               :cm-offset-joint (new 'static 'vector :w 1.0)
+                                               :inertial-tensor-box (new 'static 'array meters 3 (meters 2) (meters 1) (meters 2))
+                                               )
+                                             :extra (new 'static 'rigid-body-object-extra-info
+                                               :max-time-step 0.02
+                                               :gravity (meters 80)
+                                               :idle-distance (meters 50)
+                                               :attack-force-scale 1.0
+                                               )
                                              :name '*ruins-sinking-platform-constants*
                                              :drag-factor 2.0
                                              :buoyancy-factor 1.5
@@ -88,14 +90,14 @@
                                              )
         )
 
-(defmethod rigid-body-object-method-33 sinking-plat ((obj sinking-plat))
+(defmethod init-skel-and-rigid-body sinking-plat ((obj sinking-plat))
   (initialize-skeleton
     obj
     (the-as skeleton-group (art-group-get-by-name *level* "skel-sinking-plat" (the-as (pointer uint32) #f)))
     (the-as pair 0)
     )
   (set! (-> obj float-height-offset) 4096.0)
-  (rigid-body-object-method-31 obj *ruins-sinking-platform-constants*)
+  (alloc-and-init-rigid-body-control obj *ruins-sinking-platform-constants*)
   (set! (-> obj anchor-point quad) (-> obj root-override-2 trans quad))
   (let ((s5-1 (-> obj info-override control-point-count)))
     (dotimes (s4-1 s5-1)
@@ -135,7 +137,7 @@
     )
   :post (behavior ()
     (set! (-> self info-override) *ruins-sinking-platform-constants*)
-    (set! (-> self rbody state info) (the-as rigid-body-info (&-> (-> self info-override) mass)))
+    (set! (-> self rbody state info) (-> self info-override info))
     (rigid-body-object-method-37 self)
     (none)
     )

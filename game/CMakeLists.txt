@@ -102,6 +102,9 @@ set(RUNTIME_SOURCE
         mips2c/jak2_functions/texture.cpp
         mips2c/jak2_functions/ocean.cpp
         mips2c/jak2_functions/ocean_vu0.cpp
+        mips2c/jak2_functions/merc_blend_shape.cpp
+        mips2c/jak2_functions/ripple.cpp
+        mips2c/jak2_functions/squid.cpp
         overlord/dma.cpp
         overlord/fake_iso.cpp
         overlord/iso.cpp
@@ -145,6 +148,7 @@ set(RUNTIME_SOURCE
         graphics/opengl_renderer/DirectRenderer.cpp
         graphics/opengl_renderer/DirectRenderer2.cpp
         graphics/opengl_renderer/EyeRenderer.cpp
+        graphics/opengl_renderer/LightningRenderer.cpp
         graphics/opengl_renderer/dma_helpers.cpp
         graphics/opengl_renderer/opengl_utils.cpp
         graphics/opengl_renderer/OpenGLRenderer.cpp

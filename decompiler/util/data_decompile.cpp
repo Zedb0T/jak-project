@@ -25,7 +25,7 @@ goos::Object decompile_at_label_with_hint(const LabelInfo& hint,
                                           const DecompilerLabel& label,
                                           const std::vector<DecompilerLabel>& labels,
                                           const std::vector<std::vector<LinkedWord>>& words,
-                                          DecompilerTypeSystem& dts,
+                                          const TypeSystem& ts,
                                           const LinkedObjectFile* file,
                                           GameVersion version) {
   const auto& type = hint.result_type;
@@ -35,7 +35,7 @@ goos::Object decompile_at_label_with_hint(const LabelInfo& hint,
       throw std::runtime_error(fmt::format(
           "Label {} was marked as a value, but is being decompiled as a reference.", hint.name));
     }
-    return decompile_at_label(type, label, labels, words, dts.ts, file, version);
+    return decompile_at_label(type, label, labels, words, ts, file, version);
   }
 
   if (type.base_type() == "pointer") {
@@ -43,7 +43,7 @@ goos::Object decompile_at_label_with_hint(const LabelInfo& hint,
       throw std::runtime_error(fmt::format(
           "Label {} was marked as a value, but is being decompiled as a reference.", hint.name));
     }
-    auto field_type_info = dts.ts.lookup_type(type.get_single_arg());
+    auto field_type_info = ts.lookup_type(type.get_single_arg());
     if (field_type_info->is_reference()) {
       throw std::runtime_error(
           fmt::format("Type {} label {} is not yet supported by the data decompiler.", type.print(),
@@ -58,7 +58,7 @@ goos::Object decompile_at_label_with_hint(const LabelInfo& hint,
                        words.at(label.target_segment).begin() + (label.offset / 4) + word_count);
 
       return decompile_value_array(type.get_single_arg(), field_type_info, *hint.array_size, stride,
-                                   0, obj_words, dts.ts);
+                                   0, obj_words, ts);
     }
   }
 
@@ -67,7 +67,7 @@ goos::Object decompile_at_label_with_hint(const LabelInfo& hint,
       throw std::runtime_error(fmt::format(
           "Label {} was marked as a value, but is being decompiled as a reference.", hint.name));
     }
-    auto field_type_info = dts.ts.lookup_type(type.get_single_arg());
+    auto field_type_info = ts.lookup_type(type.get_single_arg());
     if (!field_type_info->is_reference()) {
       throw std::runtime_error(
           fmt::format("Type {} for label {} is invalid, the element type is not inlineable.",
@@ -96,8 +96,8 @@ goos::Object decompile_at_label_with_hint(const LabelInfo& hint,
         fake_label.target_segment = label.target_segment;
         fake_label.offset = label.offset + field_type_info->get_offset() + stride * elt;
         fake_label.name = fmt::format("fake-label-{}-elt-{}", type.get_single_arg().print(), elt);
-        array_def.push_back(decompile_at_label(type.get_single_arg(), fake_label, labels, words,
-                                               dts.ts, file, version));
+        array_def.push_back(decompile_at_label(type.get_single_arg(), fake_label, labels, words, ts,
+                                               file, version));
       }
       return pretty_print::build_list(array_def);
     }
@@ -191,28 +191,34 @@ goos::Object decompile_at_label(const TypeSpec& type,
                                 const LinkedObjectFile* file,
                                 GameVersion version,
                                 bool in_static_pair) {
-  if (type == TypeSpec("string")) {
-    return decompile_string_at_label(label, words);
-  }
-
-  if (ts.tc(TypeSpec("function"), type)) {
-    return decompile_function_at_label(label, file, in_static_pair);
-  }
-
-  if (ts.tc(TypeSpec("array"), type)) {
-    std::optional<TypeSpec> content_type_spec;
-    if (type.has_single_arg()) {
-      content_type_spec = type.get_single_arg();
+  try {
+    if (type == TypeSpec("string")) {
+      return decompile_string_at_label(label, words);
     }
-    return decompile_boxed_array(label, labels, words, ts, file, content_type_spec, version);
-  }
 
-  if (ts.tc(TypeSpec("structure"), type)) {
-    return decompile_structure(type, label, labels, words, ts, file, true, version);
-  }
+    if (ts.tc(TypeSpec("function"), type)) {
+      return decompile_function_at_label(label, file, in_static_pair);
+    }
 
-  if (type == TypeSpec("pair")) {
-    return decompile_pair(label, labels, words, ts, true, file, version);
+    if (ts.tc(TypeSpec("array"), type)) {
+      std::optional<TypeSpec> content_type_spec;
+      if (type.has_single_arg()) {
+        content_type_spec = type.get_single_arg();
+      }
+      return decompile_boxed_array(type, label, labels, words, ts, file, content_type_spec,
+                                   version);
+    }
+
+    if (ts.tc(TypeSpec("structure"), type)) {
+      return decompile_structure(type, label, labels, words, ts, file, true, version);
+    }
+
+    if (type == TypeSpec("pair")) {
+      return decompile_pair(label, labels, words, ts, true, file, version);
+    }
+  } catch (std::exception& ex) {
+    throw std::runtime_error(
+        fmt::format("Unable to 'decompile_at_label' {}, Reason: {}", label.name, ex.what()));
   }
 
   throw std::runtime_error(fmt::format(
@@ -383,7 +389,18 @@ goos::Object decomp_ref_to_integer_array_guess_size(
   // the input is the location of the data field.
   // we expect that to be a label:
   ASSERT((field_location % 4) == 0);
-  auto pointer_to_data = words.at(field_location / 4);
+  auto& pointer_to_data = words.at(field_location / 4);
+
+  // pointer-arrays can also be initialized as #f
+  if (pointer_to_data.kind() == LinkedWord::SYM_PTR) {
+    ASSERT_MSG(
+        pointer_to_data.symbol_name() == "#f",
+        fmt::format(
+            "attempted to decompile a pointer array of '{}', but encounted a non `#f` symbol",
+            array_elt_type.base_type()));
+    return pretty_print::to_symbol("#f");
+  }
+
   ASSERT(pointer_to_data.kind() == LinkedWord::PTR);
 
   // the data shouldn't have any labels in the middle of it, so we can find the end of the array
@@ -467,7 +484,7 @@ goos::Object decomp_ref_to_inline_array_guess_size(
   // the input is the location of the data field.
   // we expect that to be a label:
   ASSERT((field_location % 4) == 0);
-  auto pointer_to_data = words.at(field_location / 4);
+  auto& pointer_to_data = words.at(field_location / 4);
 
   // inline-arrays can also be initialized as #f
   if (pointer_to_data.kind() == LinkedWord::SYM_PTR) {
@@ -495,6 +512,9 @@ goos::Object decomp_ref_to_inline_array_guess_size(
   } else {
     const auto& end_label = labels.at(end_label_idx);
     end_offset = end_label.offset;
+    // if misaligned, round down - labels may point 2 bytes into the first word if the data is a
+    // pair, and we should not treat those 2 bytes as padding for this check
+    end_offset &= ~3;
   }
 
   // lg::print("Data is from {} to {}\n", start_label.name, end_label.name);
@@ -726,145 +746,176 @@ const std::unordered_map<
                                   1,
                                   ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}}}},
         {GameVersion::Jak2,
-         {{"ocean-near-indices",
-           {{"data", ArrayFieldDecompMeta(TypeSpec("ocean-near-index"), 32)}}},
-          {"ocean-mid-masks", {{"data", ArrayFieldDecompMeta(TypeSpec("ocean-mid-mask"), 8)}}},
-          {"sparticle-launcher",
-           {{"init-specs", ArrayFieldDecompMeta(TypeSpec("sp-field-init-spec"), 16)}}},
-          {"sparticle-launch-group",
-           {{"launcher", ArrayFieldDecompMeta(TypeSpec("sparticle-group-item"), 32)}}},
-          {"nav-network-info",
-           {{"adjacency", ArrayFieldDecompMeta(TypeSpec("nav-network-adjacency"), 16)}}},
-          {"sig-path", {{"samples", ArrayFieldDecompMeta(TypeSpec("sig-path-sample"), 64)}}},
-          {"fort-robotank-segment",
-           {{"event-tbl", ArrayFieldDecompMeta(TypeSpec("fort-robotank-segment-event"), 32)}}},
-          {"race-info",
-           {{"turbo-pad-array", ArrayFieldDecompMeta(TypeSpec("race-turbo-pad"), 32)},
-            {"racer-array", ArrayFieldDecompMeta(TypeSpec("race-racer-info"), 16)},
-            {"decision-point-array", ArrayFieldDecompMeta(TypeSpec("race-decision-point"), 16)}}},
-          {"actor-hash-bucket",
-           {{"data", ArrayFieldDecompMeta(TypeSpec("actor-cshape-ptr"),
-                                          16,
-                                          ArrayFieldDecompMeta::Kind::REF_TO_INLINE_ARR)}}},
-          {"xz-height-map",
-           {{"data", ArrayFieldDecompMeta(TypeSpec("int8"),
-                                          1,
-                                          ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
-          {"enemy-info",
-           {{"idle-anim-script",
-             ArrayFieldDecompMeta(TypeSpec("idle-control-frame"),
-                                  4,
-                                  ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
-          {"nav-enemy-info",
-           {{"idle-anim-script",
-             ArrayFieldDecompMeta(TypeSpec("idle-control-frame"),
-                                  4,
-                                  ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
-          {"tpath-info",
-           // TODO - should be able to just decompile the `anims` field
-           {{"anim1", ArrayFieldDecompMeta(TypeSpec("tpath-control-frame"), 16)},
-            {"anim2", ArrayFieldDecompMeta(TypeSpec("tpath-control-frame"), 16)},
-            {"anim3", ArrayFieldDecompMeta(TypeSpec("tpath-control-frame"), 16)}}},
-          // kinda want to add regex support now...
-          {"bigmap-compressed-layers",
-           {{"layer0", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer1", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer2", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer3", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer4", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer5", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer6", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer7", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer8", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer9", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                            4,
-                                            ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer10", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer11", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer12", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer13", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer14", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer15", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer16", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer17", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer18", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
-                                             ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"layer19", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                             4,
+         {
+             {"ocean-near-indices",
+              {{"data", ArrayFieldDecompMeta(TypeSpec("ocean-near-index"), 32)}}},
+             {"ocean-mid-masks", {{"data", ArrayFieldDecompMeta(TypeSpec("ocean-mid-mask"), 8)}}},
+             {"sparticle-launcher",
+              {{"init-specs", ArrayFieldDecompMeta(TypeSpec("sp-field-init-spec"), 16)}}},
+             {"sparticle-launch-group",
+              {{"launcher", ArrayFieldDecompMeta(TypeSpec("sparticle-group-item"), 32)}}},
+             {"nav-network-info",
+              {{"adjacency", ArrayFieldDecompMeta(TypeSpec("nav-network-adjacency"), 16)}}},
+             {"sig-path", {{"samples", ArrayFieldDecompMeta(TypeSpec("sig-path-sample"), 64)}}},
+             {"rigid-body-vehicle-constants",
+              {{"color-option-array", ArrayFieldDecompMeta(TypeSpec("vector"), 16)},
+               {"grab-rail-array", ArrayFieldDecompMeta(TypeSpec("vehicle-grab-rail-info"), 48)}}},
+             {"city-ambush-info",
+              {{"array", ArrayFieldDecompMeta(TypeSpec("city-ambush-spot"), 32)}}},
+             {"bombbot-path", {{"node", ArrayFieldDecompMeta(TypeSpec("bombbot-node"), 32)}}},
+             {"fort-robotank-segment",
+              {{"event-tbl", ArrayFieldDecompMeta(TypeSpec("fort-robotank-segment-event"), 32)}}},
+             {"race-info",
+              {{"turbo-pad-array", ArrayFieldDecompMeta(TypeSpec("race-turbo-pad"), 32)},
+               {"racer-array", ArrayFieldDecompMeta(TypeSpec("race-racer-info"), 16)},
+               {"decision-point-array",
+                ArrayFieldDecompMeta(TypeSpec("race-decision-point"), 16)}}},
+             {"actor-hash-bucket",
+              {{"data", ArrayFieldDecompMeta(TypeSpec("actor-cshape-ptr"),
+                                             16,
+                                             ArrayFieldDecompMeta::Kind::REF_TO_INLINE_ARR)}}},
+             {"xz-height-map",
+              {{"data", ArrayFieldDecompMeta(TypeSpec("int8"),
+                                             1,
                                              ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
-          {"lightning-probe-vars", {{"probe-dirs", ArrayFieldDecompMeta(TypeSpec("vector"), 16)}}},
-          {"nav-mesh",
-           {{"poly-array", ArrayFieldDecompMeta(TypeSpec("nav-poly"), 64)},
-            {"nav-control-array", ArrayFieldDecompMeta(TypeSpec("nav-control"), 288)}}},
-          {"trail-conn-hash",
-           {{"cell", ArrayFieldDecompMeta(TypeSpec("trail-conn-hash-cell"), 4)},
-            {"conn-ids", ArrayFieldDecompMeta(TypeSpec("uint16"),
-                                              2,
-                                              ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
-          {"trail-graph",
-           {{"node", ArrayFieldDecompMeta(TypeSpec("trail-node"), 18)},
-            {"conn", ArrayFieldDecompMeta(TypeSpec("trail-conn"), 8)},
-            {"conn-ids", ArrayFieldDecompMeta(TypeSpec("uint16"),
-                                              2,
-                                              ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
-            {"visgroup", ArrayFieldDecompMeta(TypeSpec("trail-conn-hash-cell"), 4)},
-            {"visnode-ids", ArrayFieldDecompMeta(TypeSpec("uint16"),
+             {"enemy-info",
+              {{"idle-anim-script",
+                ArrayFieldDecompMeta(TypeSpec("idle-control-frame"),
+                                     4,
+                                     ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
+             {"nav-enemy-info",
+              {{"idle-anim-script",
+                ArrayFieldDecompMeta(TypeSpec("idle-control-frame"),
+                                     4,
+                                     ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
+             {"tpath-info",
+              // TODO - should be able to just decompile the `anims` field
+              {{"anim1", ArrayFieldDecompMeta(TypeSpec("tpath-control-frame"), 16)},
+               {"anim2", ArrayFieldDecompMeta(TypeSpec("tpath-control-frame"), 16)},
+               {"anim3", ArrayFieldDecompMeta(TypeSpec("tpath-control-frame"), 16)}}},
+             // kinda want to add regex support now...
+             {"bigmap-compressed-layers",
+              {{"layer0", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer1", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer2", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer3", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer4", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer5", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer6", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer7", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer8", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer9", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                               4,
+                                               ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer10", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer11", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer12", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer13", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer14", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer15", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer16", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer17", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer18", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"layer19", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                                4,
+                                                ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
+             {"lightning-probe-vars",
+              {{"probe-dirs", ArrayFieldDecompMeta(TypeSpec("vector"), 16)}}},
+             {"nav-mesh",
+              {{"poly-array", ArrayFieldDecompMeta(TypeSpec("nav-poly"), 64)},
+               {"nav-control-array", ArrayFieldDecompMeta(TypeSpec("nav-control"), 288)}}},
+             {"trail-conn-hash",
+              {{"cell", ArrayFieldDecompMeta(TypeSpec("trail-conn-hash-cell"), 4)},
+               {"conn-ids", ArrayFieldDecompMeta(TypeSpec("uint16"),
                                                  2,
                                                  ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
-          {"predator-graph",
-           {{"node", ArrayFieldDecompMeta(TypeSpec("predator-node"), 48)},
-            {"edge", ArrayFieldDecompMeta(TypeSpec("predator-edge"), 4)}}},
-          {"sig0-course",
-           {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)},
-            {"speeches", ArrayFieldDecompMeta(TypeSpec("bot-speech-info"), 16)},
-            {"dirs", ArrayFieldDecompMeta(TypeSpec("vector"), 16)},
-            {"speech-tunings", ArrayFieldDecompMeta(TypeSpec("bot-speech-tuning"), 16)}}},
-          {"ashelin-course",
-           {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)},
-            {"speeches", ArrayFieldDecompMeta(TypeSpec("bot-speech-info"), 16)},
-            {"dirs", ArrayFieldDecompMeta(TypeSpec("vector"), 16)},
-            {"speech-tunings", ArrayFieldDecompMeta(TypeSpec("bot-speech-tuning"), 16)}}},
-          {"ai-task-pool",
-           {{"tasks", ArrayFieldDecompMeta(TypeSpec("uint32"),
-                                           4,
-                                           ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
-          {"bot-course", {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)}}},
-          {"hal3-course", {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)}}}}}};
+             {"trail-graph",
+              {{"node", ArrayFieldDecompMeta(TypeSpec("trail-node"), 18)},
+               {"conn", ArrayFieldDecompMeta(TypeSpec("trail-conn"), 8)},
+               {"conn-ids", ArrayFieldDecompMeta(TypeSpec("uint16"),
+                                                 2,
+                                                 ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"visgroup", ArrayFieldDecompMeta(TypeSpec("trail-conn-hash-cell"), 4)},
+               {"visnode-ids",
+                ArrayFieldDecompMeta(TypeSpec("uint16"),
+                                     2,
+                                     ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
+             {"predator-graph",
+              {{"node", ArrayFieldDecompMeta(TypeSpec("predator-node"), 48)},
+               {"edge", ArrayFieldDecompMeta(TypeSpec("predator-edge"), 4)}}},
+             {"sig0-course",
+              {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)},
+               {"speeches", ArrayFieldDecompMeta(TypeSpec("bot-speech-info"), 16)},
+               {"dirs", ArrayFieldDecompMeta(TypeSpec("vector"), 16)},
+               {"speech-tunings", ArrayFieldDecompMeta(TypeSpec("bot-speech-tuning"), 16)}}},
+             {"ashelin-course",
+              {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)},
+               {"speeches", ArrayFieldDecompMeta(TypeSpec("bot-speech-info"), 16)},
+               {"dirs", ArrayFieldDecompMeta(TypeSpec("vector"), 16)},
+               {"speech-tunings", ArrayFieldDecompMeta(TypeSpec("bot-speech-tuning"), 16)}}},
+             {"ai-task-pool",
+              {{"tasks", ArrayFieldDecompMeta(TypeSpec("uint32"),
+                                              4,
+                                              ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
+             {"bot-course", {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)}}},
+             {"hal3-course", {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)}}},
+             {"sig5-course",
+              {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)},
+               {"speeches", ArrayFieldDecompMeta(TypeSpec("bot-speech-info"), 16)},
+               {"dirs", ArrayFieldDecompMeta(TypeSpec("vector"), 16)},
+               {"speech-tunings", ArrayFieldDecompMeta(TypeSpec("bot-speech-tuning"), 16)}}},
+             {"under-block-puzzle",
+              {{"cells", ArrayFieldDecompMeta(TypeSpec("int32"),
+                                              4,
+                                              ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)},
+               {"pulse-ops",
+                ArrayFieldDecompMeta(TypeSpec("int8"),
+                                     1,
+                                     ArrayFieldDecompMeta::Kind::REF_TO_INTEGER_ARR)}}},
+             {"turret-path",
+              {{"event-tbl", ArrayFieldDecompMeta(TypeSpec("turret-path-event"), 16)}}},
+             {"hal4-course",
+              {{"spots", ArrayFieldDecompMeta(TypeSpec("bot-spot"), 32)},
+               {"speeches", ArrayFieldDecompMeta(TypeSpec("bot-speech-info"), 16)},
+               {"dirs", ArrayFieldDecompMeta(TypeSpec("vector"), 16)},
+               {"speech-tunings", ArrayFieldDecompMeta(TypeSpec("bot-speech-tuning"), 16)}}},
+         }}};
 
 goos::Object decompile_structure(const TypeSpec& type,
                                  const DecompilerLabel& label,
@@ -1476,7 +1527,8 @@ goos::Object decompile_value(const TypeSpec& type,
   }
 }
 
-goos::Object decompile_boxed_array(const DecompilerLabel& label,
+goos::Object decompile_boxed_array(const TypeSpec& type,
+                                   const DecompilerLabel& label,
                                    const std::vector<DecompilerLabel>& labels,
                                    const std::vector<std::vector<LinkedWord>>& words,
                                    const TypeSystem& ts,
@@ -1490,6 +1542,7 @@ goos::Object decompile_boxed_array(const DecompilerLabel& label,
     if (type_ptr.kind() != LinkedWord::TYPE_PTR) {
       throw std::runtime_error("Invalid basic in decompile_boxed_array");
     }
+    // TODO - ideally this wouldn't be hard-coded
     if (type_ptr.symbol_name() == "array" || type_ptr.symbol_name() == "texture-anim-array") {
       auto content_type_ptr_word_idx = type_ptr_word_idx + 3;
       auto& content_type_ptr = words.at(label.target_segment).at(content_type_ptr_word_idx);
@@ -1505,8 +1558,15 @@ goos::Object decompile_boxed_array(const DecompilerLabel& label,
     throw std::runtime_error("Invalid alignment in decompile_boxed_array");
   }
 
+  std::string array_type = "boxed-array";
+
   if (content_type_override) {
     content_type = *content_type_override;
+  }
+
+  // Handle children of `array`
+  if (type.base_type() != "array") {
+    array_type = type.print();
   }
 
   // now get the size
@@ -1523,12 +1583,13 @@ goos::Object decompile_boxed_array(const DecompilerLabel& label,
   int array_allocated_length = size_word_2.data;
 
   auto content_type_info = ts.lookup_type(content_type);
-  auto params_obj = array_length == array_allocated_length
-                        ? pretty_print::to_symbol(fmt::format("new 'static 'boxed-array :type {}",
-                                                              content_type.print()))
-                        : pretty_print::to_symbol(fmt::format(
-                              "new 'static 'boxed-array :type {} :length {} :allocated-length {}",
-                              content_type.print(), array_length, array_allocated_length));
+  auto params_obj =
+      array_length == array_allocated_length
+          ? pretty_print::to_symbol(
+                fmt::format("new 'static '{} :type {}", array_type, content_type.print()))
+          : pretty_print::to_symbol(
+                fmt::format("new 'static '{} :type {} :length {} :allocated-length {}", array_type,
+                            content_type.print(), array_length, array_allocated_length));
   if (content_type_info->is_reference() || content_type == TypeSpec("object")) {
     // easy, stride of 4.
     std::vector<goos::Object> result = {params_obj};
@@ -1538,12 +1599,20 @@ goos::Object decompile_boxed_array(const DecompilerLabel& label,
       if (word.kind() == LinkedWord::PLAIN_DATA && word.data == 0) {
         result.push_back(pretty_print::to_symbol("0"));
       } else if (word.kind() == LinkedWord::PTR) {
+        const auto& elt_label = labels.at(word.label_id());
         if (content_type == TypeSpec("object")) {
-          result.push_back(decompile_at_label_guess_type(labels.at(word.label_id()), labels, words,
-                                                         ts, file, version));
+          // if there is a type hint for the label, no need to guess!
+          if (file->label_db->label_exists_by_name(elt_label.name)) {
+            result.push_back(decompile_at_label_with_hint(file->label_db->lookup(elt_label.name),
+                                                          elt_label, labels, words, ts, file,
+                                                          version));
+          } else {
+            result.push_back(
+                decompile_at_label_guess_type(elt_label, labels, words, ts, file, version));
+          }
         } else {
-          result.push_back(decompile_at_label(content_type, labels.at(word.label_id()), labels,
-                                              words, ts, file, version));
+          result.push_back(
+              decompile_at_label(content_type, elt_label, labels, words, ts, file, version));
         }
       } else if (word.kind() == LinkedWord::SYM_PTR) {
         result.push_back(pretty_print::to_symbol(fmt::format("'{}", word.symbol_name())));

@@ -459,6 +459,7 @@ void render_game_frame(int game_width,
     options.msaa_samples = msaa_samples;
     options.draw_render_debug_window = g_gfx_data->debug_gui.should_draw_render_debug();
     options.draw_profiler_window = g_gfx_data->debug_gui.should_draw_profiler();
+    options.draw_loader_window = g_gfx_data->debug_gui.should_draw_loader_menu();
     options.draw_subtitle_editor_window = g_gfx_data->debug_gui.should_draw_subtitle_editor();
     options.draw_filters_window = g_gfx_data->debug_gui.should_draw_filters_menu();
     options.save_screenshot = false;
@@ -501,7 +502,8 @@ void render_game_frame(int game_width,
     }
     want_hotkey_screenshot = false;
 
-    options.draw_small_profiler_window = g_gfx_data->debug_gui.small_profiler;
+    options.draw_small_profiler_window =
+        g_gfx_data->debug_gui.master_enable && g_gfx_data->debug_gui.small_profiler;
     options.pmode_alp_register = g_gfx_data->pmode_alp;
 
     GLint msaa_max;
@@ -845,6 +847,7 @@ void GLDisplay::render() {
 #endif
 
   // render game!
+  g_gfx_data->debug_gui.master_enable = is_imgui_visible();
   if (g_gfx_data->debug_gui.should_advance_frame()) {
     auto p = scoped_prof("game-render");
     int game_res_w = Gfx::g_global_settings.game_res_w;

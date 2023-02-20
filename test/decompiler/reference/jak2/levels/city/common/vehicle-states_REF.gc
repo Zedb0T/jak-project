@@ -2,6 +2,7 @@
 (in-package goal)
 
 ;; definition for function vehicle-event-handler
+;; WARN: Return type mismatch object vs none.
 (defbehavior vehicle-event-handler vehicle ((arg0 process) (arg1 int) (arg2 symbol) (arg3 event-message-block))
   (rigid-body-object-method-46 self (the-as process-drawable arg0) arg1 arg2 arg3)
   (none)
@@ -28,13 +29,10 @@
 (defstate inactive (vehicle)
   :virtual #t
   :event (behavior ((proc process) (arg1 int) (event-type symbol) (event event-message-block))
-    (the-as
-      object
-      (case event-type
-        (('nav-mesh-kill 'traffic-activate 'traffic-off-force 'traffic-off 'rider-on 'rider-off)
-         (the-as symbol (rigid-body-object-method-46 self (the-as process-drawable proc) arg1 event-type event))
-         )
-        )
+    (case event-type
+      (('nav-mesh-kill 'traffic-activate 'traffic-off-force 'traffic-off 'rider-on 'rider-off)
+       (rigid-body-object-method-46 self (the-as process-drawable proc) arg1 event-type event)
+       )
       )
     )
   :enter (behavior ()
@@ -327,7 +325,7 @@
     (cond
       ((logtest? (-> self rbody state flags) (rigid-body-flag enable-physics))
        (let ((gp-2 (new 'stack-no-clear 'rigid-body-info)))
-         (mem-copy! (&-> gp-2 mass) (&-> (-> self info-override) mass) 188)
+         (mem-copy! (&-> gp-2 mass) (the-as pointer (-> self info-override info)) 188)
          (set! (-> self rbody state info) (the-as rigid-body-info (&-> gp-2 mass)))
          (set! (-> gp-2 bounce-mult-factor) 0.0)
          (set! (-> gp-2 bounce-factor) 0.4)
@@ -336,7 +334,7 @@
          (set! (-> gp-2 friction-factor) 0.05)
          )
        (vehicle-method-121 self)
-       (set! (-> self rbody state info) (the-as rigid-body-info (&-> (-> self info-override) mass)))
+       (set! (-> self rbody state info) (-> self info-override info))
        (when (logtest? (-> self flags) (rigid-body-object-flag disturbed))
          (let* ((f0-14 (* 0.0033333334 (the float (- (-> self clock frame-counter) (-> self disturbed-time)))))
                 (f0-17 (* f0-14 f0-14 (-> self camera-dist2)))
@@ -429,7 +427,7 @@
             )
           (send-event-function (handle->process (-> self rider-array gp-1)) a1-2)
           )
-        (vehicle-method-71 self gp-1 (the-as process-focusable #f))
+        (put-rider-in-seat self gp-1 (the-as process-focusable #f))
         )
       (logior! (-> self focus-status) (focus-status dead))
       (set! (-> self crash-level) 3)

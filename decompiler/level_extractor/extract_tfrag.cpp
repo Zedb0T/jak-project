@@ -2053,6 +2053,7 @@ void make_tfrag3_data(std::map<u32, std::vector<GroupedDraw>>& draws,
 
       for (auto& strip : draw.strips) {
         tfrag3::StripDraw::VisGroup vgroup;
+        ASSERT(strip.tfrag_id < UINT16_MAX);
         vgroup.vis_idx_in_pc_bvh = strip.tfrag_id;  // associate with the tfrag for culling
         vgroup.num_inds = strip.verts.size() + 1;   // one for the primitive restart!
         vgroup.num_tris = strip.verts.size() - 2;
@@ -2121,9 +2122,10 @@ void emulate_tfrags(int geom,
 
   if (dump_level) {
     auto debug_out = debug_dump_to_obj(all_draws);
-    file_util::write_text_file(
-        file_util::get_file_path({"debug_out", fmt::format("tfrag-{}.obj", debug_name)}),
-        debug_out);
+    auto file_path =
+        file_util::get_file_path({"debug_out", fmt::format("tfrag-{}.obj", debug_name)});
+    file_util::create_dir_if_needed_for_file(file_path);
+    file_util::write_text_file(file_path, debug_out);
   }
 }
 
@@ -2230,7 +2232,7 @@ void extract_tfrag(const level_tools::DrawableTreeTfrag* tree,
       for (auto& str : draw.vis_groups) {
         auto it = tfrag_parents.find(str.vis_idx_in_pc_bvh);
         if (it == tfrag_parents.end()) {
-          str.vis_idx_in_pc_bvh = UINT32_MAX;
+          str.vis_idx_in_pc_bvh = UINT16_MAX;
         } else {
           str.vis_idx_in_pc_bvh = it->second;
         }
