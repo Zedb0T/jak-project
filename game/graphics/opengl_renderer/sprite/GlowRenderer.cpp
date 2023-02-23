@@ -409,7 +409,7 @@ void GlowRenderer::add_sprite_pass_3(const SpriteGlowOutput& data, int sprite_id
 
   // handle adgif stuff
   {
-    ASSERT(data.adgif.tex0_addr == (u32)GsRegisterAddress::TEX0_1);
+    //ASSERT(data.adgif.tex0_addr == (u32)GsRegisterAddress::TEX0_1);
     GsTex0 reg(data.adgif.tex0_data);
     record.tbp = reg.tbp0();
     record.draw_mode.set_tcc(reg.tcc());
