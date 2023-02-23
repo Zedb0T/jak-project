@@ -693,7 +693,7 @@
         (set! (-> s5-0 guard-type) (the-as uint 1))
         (vector-reset! (-> s5-0 velocity))
         (quaternion-identity! (-> s5-0 rotation))
-        (city-ambush-info-method-9 gp-2 s5-0)
+        ;;(city-ambush-info-method-9 gp-2 s5-0)
         )
       (go-virtual complete)
       (none)
