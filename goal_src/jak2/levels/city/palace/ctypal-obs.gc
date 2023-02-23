@@ -190,7 +190,7 @@ This commonly includes things such as:
 - loading the skeleton group / bones
 - sounds"
   (format #t "~A initialising~%" (-> obj name))
-  (stack-size-set! (-> obj main-thread) 1024)
+  (stack-size-set! (-> obj main-thread) (* 2 1024))
   (let ((s4-0 (new 'process 'collide-shape obj (collide-list-enum usually-hit-by-player))))
     (let ((v1-2 (new 'process 'collide-shape-prim-mesh s4-0 (the-as uint 0) (the-as uint 0))))
       (set! (-> v1-2 prim-core collide-as) (collide-spec obstacle))

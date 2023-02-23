@@ -1606,7 +1606,7 @@
   )
 
 (defbehavior display-loop process ()
-  (stack-size-set! (-> self main-thread) 512)
+  (stack-size-set! (-> self main-thread) (* 2 1024));; maybe a crash fix idk zed
 
   ;; it's unclear why this exists, when there's also a call to execute-math-engine
   ;; in display-loop-main
