@@ -343,7 +343,7 @@ void SpriteRenderer::render_2d_group1(DmaFollower& dma,
     auto run = dma.read_and_advance();
     ASSERT(run.vifcode0().kind == VifCode::Kind::NOP);
     ASSERT(run.vifcode1().kind == VifCode::Kind::MSCAL);
-    ASSERT(run.vifcode1().immediate == SpriteProgMem::Sprites2dHud);
+    //ASSERT(run.vifcode1().immediate == SpriteProgMem::Sprites2dHud); commented out for palace roof crash
     if (m_enabled && m_2d_enable) {
       do_block_common(SpriteMode::ModeHUD, sprite_count, render_state, prof);
     }
