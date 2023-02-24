@@ -1247,53 +1247,46 @@
   `(or ,@(apply (lambda (x) `(begin (define-extern ,x type) (type-type? (-> obj etype) ,x))) types))
   )
 
-(defmethod birth! entity-actor ((obj entity-actor))
-  "Create a process for this entity and start it."
-  
-  ;; temp
-  ; (when (or (not (obj-etype? process))
-            ; ;; disallowed types
-            ; ;(obj-etype?)
-            ; (zero? (-> obj etype)))
-    ; (when (nonzero? (-> obj etype))
-        ; (birth-log "rejecting etype ~A birth~%" (-> obj etype))
-        ; )
-    ; (logior! (-> obj extra perm status) (entity-perm-status bit-0))
-    ; (return obj)
-    ; )
-  
-  ;;(birth-log "call to birth! on ~A~%" obj)
+(define-extern jellyfish type);;zed
+(define-extern under-mine type);;zed
+(define-extern crimson-guard-hover type);;zed
+;; define unfinished types to skip birth! method
 
-  (let* ((entity-type (-> obj etype))
-         (info (entity-info-lookup entity-type))
-         (entity-process (get-process *default-dead-pool* entity-type (if info
-                                                                          (-> info heap-size)
-                                                                          #x4000
-                                                                          )
-                                      )
-                         )
+(defmethod birth! entity-actor ((obj entity-actor))
+  (case (-> obj etype)
+((jellyfish under-mine crimson-guard-hover)
+ 
+ (none)
+        )
+(else
+ (let* ((s5-0 (-> obj etype))
+         (v1-0 (entity-info-lookup s5-0))
+         (s4-0 (get-process *default-dead-pool* s5-0 (if v1-0
+                                                         (-> v1-0 heap-size)
+                                                         #x4000
+                                                         )
+                            )
+               )
          )
     (cond
-      ((not entity-process)
-       (birth-log "could not birth because there is no process.~%")
+      ((not s4-0)
        )
       ((begin
-         (set! (-> entity-process type) entity-type)
-         (and entity-type
-              (valid? entity-type type #f #f 0)
-              (valid? (method-of-object entity-process init-from-entity!) function #f #f 0)
-              )
+         (set! (-> s4-0 type) s5-0)
+         (and s5-0 (valid? s5-0 type #f #f 0) (valid? (method-of-object s4-0 init-from-entity!) function #f #f 0))
          )
-       (init-entity entity-process obj)
+       (init-entity s4-0 obj (the-as process s5-0))
        )
       (else
-        (when (not (birth-viewer entity-process obj))
-          (format 0 "ERROR: no proper process type named ~A exists in the code, could not start ~A~%" entity-type obj)
+        (when (not (birth-viewer s4-0 obj))
+          (format 0 "ERROR: no proper process type named ~A exists in the code, could not start ~A~%" s5-0 obj)
           (logior! (-> obj extra perm status) (entity-perm-status bit-0))
           )
         )
       )
     )
+)
+)
   obj
   )
 
