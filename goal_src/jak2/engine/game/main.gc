@@ -94,12 +94,12 @@
 
 ;;WEIRD NO ZOOMER BUG, MANUALLY WARP AFTER palace-boss-resolution to ctypal-shaft
 
-;;Palace Cable
+;;shuttle fighters
  (close-broken-task-if-necessary 
   (game-task-node city-krew-collection-resolution)
   (game-task-node city-shuttle-resolution) 
   (game-task-node ruins-enemy-introduction) 
-  "Skips a statue glitch as cutscene in throne wont load do boosted")
+  "Shuttle fighters is unfinished and just a crash go talk to torn")
 (none))
 
 
