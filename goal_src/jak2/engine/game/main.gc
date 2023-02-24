@@ -33,19 +33,20 @@
 
 (defun close-broken-task-if-necessary ((before-broken game-task-node)
                                        (broken-task game-task-node)
-                                       (task-after game-task-node))
+                                       (task-after game-task-node)
+                                       (issue-description string))
   (when (and (task-node-closed? before-broken)
              (not (task-node-closed?  broken-task)))
     (task-node-close!  broken-task))
   (when (and (task-node-closed? broken-task)
              (not (task-node-closed? task-after)))
-    (format *stdcon* "Had to Close task ~S as it is unfinished ~%Next Task should be ~S ~%" (game-task-node->string broken-task) (game-task-node->string task-after))))
+    (format *stdcon* "Had to Close task ~S as it is unfinished ~%Next Task should be ~S ~% ~S ~%" (game-task-node->string broken-task) (game-task-node->string task-after) issue-description)))
 
     ;; (close-broken-task-if-necessary (game-task-node fortress-escape-resolution) (game-task-node city-help-kid-resolution) (game-task-node city-vehicle-training-map))
 
 (defun close-unfinished-tasks-by-name ()
 
- (close-broken-task-if-necessary (game-task-node atoll-sig-introduction) (game-task-node atoll-sig-resolution) (game-task-node sewer-enemy-introduction))
+ (close-broken-task-if-necessary (game-task-node atoll-sig-introduction) (game-task-node atoll-sig-resolution) (game-task-node sewer-enemy-introduction) "Skip Sig he gets stuck at the start")
 
 
 (none))
