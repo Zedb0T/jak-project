@@ -46,7 +46,51 @@
 
 (defun close-unfinished-tasks-by-name ()
 
- (close-broken-task-if-necessary (game-task-node atoll-sig-introduction) (game-task-node atoll-sig-resolution) (game-task-node sewer-enemy-introduction) "Skip Sig he gets stuck at the start")
+#|((before-broken game-task-node)
+ (broken-task game-task-node)
+ (task-after game-task-node)
+ (issue-description string))|#
+
+ (close-broken-task-if-necessary
+   (game-task-node atoll-sig-introduction) 
+   (game-task-node atoll-sig-resolution)
+   (game-task-node sewer-enemy-introduction) 
+  "Skip Sig he gets stuck at the start")
+
+;;Keira drive to stadium statue glitch at end
+ (close-broken-task-if-necessary 
+  (game-task-node city-keira-delivery-introduction)
+  (game-task-node stadium-board1-introduction) 
+  (game-task-node stadium-board1-introduction) 
+  "Skip drive it works, but does not end correctly")
+
+;;Defen ashlien
+ (close-broken-task-if-necessary 
+  (game-task-node atoll-battle-battle)
+  (game-task-node atoll-battle-resolution) 
+  (game-task-node mountainn-lens-introduction) 
+  "Skip the end of defend ashlien as she is object of bot")
+
+;;Staduim jetboard
+ (close-broken-task-if-necessary 
+  (game-task-node stadium-board1-done)
+  (game-task-node stadium-board1-resolution) 
+  (game-task-node mountainn-lens-introduction) 
+  "Keira doesnt load so do board1-resolution go to switches")
+
+;;City Power Switch
+ (close-broken-task-if-necessary 
+  (game-task-node city-power-introduction)
+  (game-task-node city-power-post-win) 
+  (game-task-node mountainn-lens-introduction) 
+  "Mission might work? but no turrets in city")
+
+;;Palace Cable
+ (close-broken-task-if-necessary 
+  (game-task-node city-power-post-win)
+  (game-task-node palace-cable-introduction) 
+  (game-task-node palace-boss-resolution) 
+  "Skips a statue glitch as cutscene in throne wont load")
 
 
 (none))
