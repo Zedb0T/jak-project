@@ -22,7 +22,7 @@
       :player-intro-pos (new 'static 'vector :x 242892.8 :y 46284.8 :z -2453913.5 :w 1.0)
       :flags #x50
       :score #xd
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xc
       :decision-point-count #x6
@@ -81,7 +81,7 @@
       :player-intro-pos (new 'static 'vector :x -347750.4 :y 46284.8 :z -2706227.2 :w 1.0)
       :flags #x12
       :score #xc
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xc
       :map-index 1
@@ -141,7 +141,7 @@
       :player-intro-pos (new 'static 'vector :x 52715.52 :y 46284.8 :z -2615705.5 :w 1.0)
       :flags #x10
       :score #xb
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xf
       :map-index 2
@@ -238,7 +238,7 @@
       :player-intro-pos (new 'static 'vector :x 242892.8 :y 46284.8 :z -2453913.5 :w 1.0)
       :flags #x38
       :score #xd
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xc
       :decision-point-count #x6
@@ -297,7 +297,7 @@
       :player-intro-pos (new 'static 'vector :x -347750.4 :y 46284.8 :z -2706227.2 :w 1.0)
       :flags #x38
       :score #xc
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xc
       :map-index 1
@@ -357,7 +357,7 @@
       :player-intro-pos (new 'static 'vector :x 52715.52 :y 46284.8 :z -2615705.5 :w 1.0)
       :flags #x38
       :score #xb
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xf
       :map-index 2
@@ -483,7 +483,7 @@
       :player-intro-pos (new 'static 'vector :x 242892.8 :y 46284.8 :z -2453913.5 :w 1.0)
       :flags #x38
       :score #x12
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xc
       :decision-point-count 5
@@ -541,7 +541,7 @@
       :player-intro-pos (new 'static 'vector :x -347750.4 :y 46284.8 :z -2706227.2 :w 1.0)
       :flags #x38
       :score #x11
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xc
       :map-index 1
@@ -600,7 +600,7 @@
       :player-intro-pos (new 'static 'vector :x 52715.52 :y 46284.8 :z -2615705.5 :w 1.0)
       :flags #x38
       :score #x10
-      :lap-count 5
+      :lap-count 3
       :racer-count #x8
       :turbo-pad-count #xf
       :map-index 2
