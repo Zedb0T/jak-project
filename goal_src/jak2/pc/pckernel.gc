@@ -27,7 +27,8 @@
   "Update settings from GOAL to the C kernel."
   (pc-discord-rpc-set (if (-> obj discord-rpc?) 1 0))
   (none))
-
+(define-extern close-broken-task-if-necessary (function game-task-node game-task-node game-task-node object))
+(define-extern close-unfinished-tasks-by-name (function none))
 (defmethod update pc-settings ((obj pc-settings))
   "Update settings to/from PC kernel. Call this at the start of every frame.
    This will update things like the aspect-ratio, which will be used for graphics code later."
@@ -53,7 +54,7 @@
     
       (speedrun-mode-update))
     )
-
+   (close-unfinished-tasks-by-name)
   (none))
 
 

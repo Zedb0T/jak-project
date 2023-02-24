@@ -21,6 +21,36 @@
     )
   )
 
+
+ #| (if (and (task-node-closed? (game-task-node fortress-escape-resolution)) (not (task-node-closed? (game-task-node city-help-kid-resolution))))
+       (task-node-close! (game-task-node city-help-kid-resolution)))
+
+(define-extern task-node-closed? (function game-task-node symbol))
+
+;;  (close-broken-task-if-necessary fortress-escape-resolution city-help-kid-resolution city-vehicle-training-map)
+|#
+(define-extern game-task-node->string (function game-task-node string))
+
+(defun close-broken-task-if-necessary ((before-broken game-task-node)
+                                       (broken-task game-task-node)
+                                       (task-after game-task-node))
+  (when (and (task-node-closed? before-broken)
+             (not (task-node-closed?  broken-task)))
+    (task-node-close!  broken-task))
+  (when (and (task-node-closed? broken-task)
+             (not (task-node-closed? task-after)))
+    (format *stdcon* "Had to Close task ~S as it is unfinished ~%Next Task should be ~S ~%" (game-task-node->string broken-task) (game-task-node->string task-after))))
+
+    ;; (close-broken-task-if-necessary (game-task-node fortress-escape-resolution) (game-task-node city-help-kid-resolution) (game-task-node city-vehicle-training-map))
+
+(defun close-unfinished-tasks-by-name ()
+
+ (close-broken-task-if-necessary (game-task-node atoll-sig-introduction) (game-task-node atoll-sig-resolution) (game-task-node sewer-enemy-introduction))
+
+
+(none))
+
+
 (defun letterbox ()
   "Draw letterbox bars."
   (let* ((s5-0 (-> *display* frames (-> *display* on-screen) global-buf))
@@ -98,9 +128,16 @@
   "Are we paused, or in some menu that should make us pause?"
   (or (= *master-mode* 'pause) (= *master-mode* 'progress) (= *master-mode* 'menu) (= *master-mode* 'freeze))
   )
+#|(defmacro close-broken-task-if-necessary (before-broken broken-task task-after)
+  `(progn
+     (when (and (task-node-closed? ,before-broken) (not (task-node-closed? ,broken-task)))
+       (task-node-close! ,broken-task))
+     (when (and (task-node-closed? ,broken-task) (not (task-node-closed? ,task-after)))
+       (format *stdcon* "in-target-poly "))))|#
 
 (defun movie? ()
   "Are we in a movie?"
+
   (logtest? (-> *kernel-context* prevent-from-run) (process-mask movie))
   )
 
@@ -1604,6 +1641,18 @@
     (none)
     )
   )
+
+#|(defmacro display-skipped-mission-text! (before-broken broken-task task-after)
+  "Given a field name in the autosplitter struct, and a [[game-task]] name to check, sets either a 0 or a 1"
+  `(set! (-> *autosplit-info-jak2* ,field-name) (if (task-complete? *game-info* (game-task ,task-name)) 1 0)))
+  (if (and (task-node-closed? before-broken)(not (task-node-closed? broken-task)))
+  (task-node-close! broken-task)
+  )
+  (if (and (task-node-closed? broken-task) (not (task-node-closed? task-after))
+  ;;display text on next mission
+  ))
+|#
+
 
 (defbehavior display-loop process ()
   (stack-size-set! (-> self main-thread) (* 2 1024));; maybe a crash fix idk zed

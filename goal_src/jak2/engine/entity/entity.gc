@@ -1590,8 +1590,19 @@
   (none)
   )
 
+(define-extern jellyfish type);;zed
+(define-extern under-mine type);;zed
+(define-extern crimson-guard-hover type);;zed
+;; define unfinished types to skip birth! method
+
 (defmethod birth! entity-actor ((obj entity-actor))
-  (let* ((s5-0 (-> obj etype))
+(case (-> obj etype)
+((jellyfish under-mine crimson-guard-hover)
+ 
+ (none)
+        )
+(else
+ (let* ((s5-0 (-> obj etype))
          (v1-0 (entity-info-lookup s5-0))
          (s4-0 (get-process *default-dead-pool* s5-0 (if v1-0
                                                          (-> v1-0 heap-size)
@@ -1617,8 +1628,11 @@
         )
       )
     )
+)
+)
   obj
   )
+
 
 ;; WARN: Return type mismatch symbol vs none.
 (defun entity-deactivate-handler ((arg0 process) (arg1 entity-actor))
