@@ -75,7 +75,7 @@
  (close-broken-task-if-necessary 
   (game-task-node stadium-board1-done)
   (game-task-node stadium-board1-resolution) 
-  (game-task-node mountainn-lens-introduction) 
+  (game-task-node mountain-lens-introduction) 
   "Keira doesnt load so do board1-resolution go to switches")
 
 ;;City Power Switch
