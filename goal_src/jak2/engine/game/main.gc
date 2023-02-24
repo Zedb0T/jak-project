@@ -68,21 +68,21 @@
  (close-broken-task-if-necessary 
   (game-task-node atoll-battle-battle)
   (game-task-node atoll-battle-resolution) 
-  (game-task-node mountainn-lens-introduction) 
+  (game-task-node mountain-lens-introduction) 
   "Skip the end of defend ashlien as she is object of bot")
 
 ;;Staduim jetboard
  (close-broken-task-if-necessary 
   (game-task-node stadium-board1-done)
   (game-task-node stadium-board1-resolution) 
-  (game-task-node mountain-lens-introduction) 
+  (game-task-node city-power-introduction) 
   "Keira doesnt load so do board1-resolution go to switches")
 
 ;;City Power Switch
  (close-broken-task-if-necessary 
   (game-task-node city-power-introduction)
   (game-task-node city-power-post-win) 
-  (game-task-node mountain-lens-introduction) 
+  (game-task-node palace-cable-introduction) 
   "Mission might work? but no turrets in city")
 
 ;;Palace Cable
