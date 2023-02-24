@@ -88,11 +88,18 @@
 ;;Palace Cable
  (close-broken-task-if-necessary 
   (game-task-node city-power-post-win)
-  (game-task-node palace-cable-introduction) 
+  (game-task-node palace-boss-introduction) 
   (game-task-node palace-boss-resolution) 
-  "Skips a statue glitch as cutscene in throne wont load")
+  "Skips a statue glitch as cutscene in throne wont load do boosted")
 
+;;WEIRD NO ZOOMER BUG, MANUALLY WARP AFTER palace-boss-resolution to ctypal-shaft
 
+;;Palace Cable
+ (close-broken-task-if-necessary 
+  (game-task-node city-krew-collection-resolution)
+  (game-task-node city-shuttle-resolution) 
+  (game-task-node ruins-enemy-introduction) 
+  "Skips a statue glitch as cutscene in throne wont load do boosted")
 (none))
 
 
