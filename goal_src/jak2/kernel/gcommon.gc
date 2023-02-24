@@ -271,6 +271,8 @@
 
 (defun type-type? ((arg0 type) (arg1 type))
   "Is the given type equal to, or a child of, the second type?"
+  (if (and (not (= arg0 #f ))(not (= arg0 #f )))
+  (begin
   (let ((v1-0 object))
     (if (= arg1 v1-0)
         (return #t)
@@ -282,6 +284,9 @@
       (set! arg0 (-> arg0 parent))
       )
     )
+  )
+  )
+  ;; zed jordan maybe fix lul 
   #f
   )
 
