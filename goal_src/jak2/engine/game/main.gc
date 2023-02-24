@@ -82,7 +82,7 @@
  (close-broken-task-if-necessary 
   (game-task-node city-power-introduction)
   (game-task-node city-power-post-win) 
-  (game-task-node mountainn-lens-introduction) 
+  (game-task-node mountain-lens-introduction) 
   "Mission might work? but no turrets in city")
 
 ;;Palace Cable
