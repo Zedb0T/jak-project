@@ -23,6 +23,7 @@
 (deftype pc-settings-jak2 (pc-settings)
   (
    (jetboard-trick-text? symbol) ;; enable rendering jetboard trick combo during minigame
+   (random-size-mod? symbol) ;; enable rendering jetboard trick combo during minigame
 	 )
   )
 
@@ -54,6 +55,7 @@
   (set! (-> obj jetboard-trick-text?) #t)
   (set! (-> obj speedrunner-mode?) #f)
   (set! (-> obj skip-broken-mission?) #t)
+  (set! (-> obj random-size-mod?) #f)
   (none))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
