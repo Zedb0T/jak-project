@@ -49,7 +49,7 @@
 (define-extern close-broken-task-if-necessary (function game-task-node game-task-node game-task-node string object))
 (define-extern close-unfinished-tasks-by-name (function none))
 (defmethod get-game-language! pc-settings-jak2 ((obj pc-settings-jak2))
-  (-> *setting-control* user-default language)
+  (get-current-language)
   )
 
 (defmethod update-discord-rpc pc-settings-jak2 ((obj pc-settings-jak2))
@@ -83,11 +83,12 @@
   #f
   )
 
-(defmethod update-progress-video-hacks pc-settings-jak2 ((obj pc-settings-jak2))
+(defmethod update-video-hacks pc-settings-jak2 ((obj pc-settings-jak2))
   "update the graphics hacks used for the progress menu. ugh."
 
    (close-unfinished-tasks-by-name)
-  #f
+  (set! (-> (get-video-params) relative-x-scale) (-> obj aspect-ratio-reciprocal))
+  (set! (-> (get-video-params) relative-x-scale-reciprical) (-> obj aspect-ratio-scale))
   )
 
 
@@ -117,7 +118,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(define *pc-settings* (new 'global 'pc-settings-jak2))
+(define-once *pc-settings* (new 'global 'pc-settings-jak2))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
