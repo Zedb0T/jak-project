@@ -1590,12 +1590,20 @@
   (none)
   )
 
+(define *spawn-count* 1)
+(define *spawn-chance* 100)
 (define-extern jellyfish type);;zed
 (define-extern under-mine type);;zed
 (define-extern crimson-guard-hover type);;zed
 ;; define unfinished types to skip birth! method
 
 (defmethod birth! entity-actor ((obj entity-actor))
+
+(dotimes (i *spawn-count*) 
+
+(if (< (rand-vu-int-range 0 100) *spawn-chance*)
+
+(begin
 (case (-> obj etype)
 ((jellyfish under-mine crimson-guard-hover)
  
@@ -1629,6 +1637,12 @@
       )
     )
 )
+)
+
+)
+)
+
+
 )
   obj
   )

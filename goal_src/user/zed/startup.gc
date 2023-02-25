@@ -3,3 +3,4 @@
 (dbgc)
 (test-play)
 (set! (-> *pc-settings* skip-broken-mission?) #t)
+(set! *spawn-count* 1)
