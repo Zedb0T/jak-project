@@ -319,6 +319,7 @@
    (cheats-known pc-cheats)
 
    (flava-hack int64)
+   (skip-broken-mission? symbol)
 
    ;; TODO - save/restore original settings (language/sound/etc)
    )

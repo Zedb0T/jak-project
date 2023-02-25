@@ -45,7 +45,8 @@
     ;; (close-broken-task-if-necessary (game-task-node fortress-escape-resolution) (game-task-node city-help-kid-resolution) (game-task-node city-vehicle-training-map))
 
 (defun close-unfinished-tasks-by-name ()
-
+(if (-> *pc-settings* skip-broken-mission?)
+(begin
 #|((before-broken game-task-node)
  (broken-task game-task-node)
  (task-after game-task-node)
@@ -100,6 +101,9 @@
   (game-task-node city-shuttle-resolution) 
   (game-task-node ruins-enemy-introduction) 
   "Shuttle fighters is unfinished and just a crash go talk to torn")
+)
+)
+
 (none))
 
 

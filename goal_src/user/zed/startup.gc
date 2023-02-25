@@ -1,0 +1,5 @@
+(mi)
+(lt)
+(dbgc)
+(test-play)
+(set! (-> *pc-settings* skip-broken-mission?) #t)
