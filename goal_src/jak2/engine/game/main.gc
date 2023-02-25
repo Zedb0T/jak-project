@@ -87,11 +87,11 @@
   "Mission might work? but no turrets in city")|#
 
 ;;Palace Cable
- (close-broken-task-if-necessary 
+  #|(close-broken-task-if-necessary 
   (game-task-node city-power-post-win)
   (game-task-node palace-boss-introduction) 
   (game-task-node palace-boss-resolution) 
-  "Skips a statue glitch as cutscene in throne wont load do boosted")
+  "Skips a statue glitch as cutscene in throne wont load do boosted")|#
 
 ;;WEIRD NO ZOOMER BUG, MANUALLY WARP AFTER palace-boss-resolution to ctypal-shaft
 
