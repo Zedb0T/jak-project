@@ -1591,7 +1591,7 @@
   )
 
 (define *spawn-count* 1)
-(define *spawn-chance* 100)
+(define *spawn-chance* 25)
 (define-extern jellyfish type);;zed
 (define-extern under-mine type);;zed
 (define-extern crimson-guard-hover type);;zed
@@ -1601,7 +1601,7 @@
 
 (dotimes (i *spawn-count*) 
 
-(if (< (rand-vu-int-range 0 100) *spawn-chance*)
+(if (> (rand-vu-int-range 0 100) *spawn-chance*)
 
 (begin
 (case (-> obj etype)
