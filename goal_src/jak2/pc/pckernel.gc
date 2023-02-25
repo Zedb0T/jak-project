@@ -74,6 +74,7 @@
     
       (speedrun-mode-update))
     )
+    (close-unfinished-tasks-by-name)
     ;;(-> self control unknown-vector37 quad)
       0)
 
@@ -85,8 +86,6 @@
 
 (defmethod update-video-hacks pc-settings-jak2 ((obj pc-settings-jak2))
   "update the graphics hacks used for the progress menu. ugh."
-
-   (close-unfinished-tasks-by-name)
   (set! (-> (get-video-params) relative-x-scale) (-> obj aspect-ratio-reciprocal))
   (set! (-> (get-video-params) relative-x-scale-reciprical) (-> obj aspect-ratio-scale))
   )
