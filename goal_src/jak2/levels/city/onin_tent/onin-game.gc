@@ -2631,6 +2631,7 @@
                      )
                  )
            )
+           (inspect (handle->process gp-1))
       (if (not (handle->process gp-1))
           (auto-save-user)
           )
