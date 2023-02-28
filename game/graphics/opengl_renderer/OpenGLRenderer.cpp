@@ -7,10 +7,9 @@
 #include "game/graphics/opengl_renderer/DirectRenderer.h"
 #include "game/graphics/opengl_renderer/EyeRenderer.h"
 #include "game/graphics/opengl_renderer/LightningRenderer.h"
+#include "game/graphics/opengl_renderer/ProgressRenderer.h"
 #include "game/graphics/opengl_renderer/ShadowRenderer.h"
 #include "game/graphics/opengl_renderer/SkyRenderer.h"
-#include "game/graphics/opengl_renderer/Sprite3.h"
-#include "game/graphics/opengl_renderer/SpriteRenderer.h"
 #include "game/graphics/opengl_renderer/TextureUploadHandler.h"
 #include "game/graphics/opengl_renderer/VisDataHandler.h"
 #include "game/graphics/opengl_renderer/background/Shrub.h"
@@ -20,6 +19,8 @@
 #include "game/graphics/opengl_renderer/foreground/Merc2.h"
 #include "game/graphics/opengl_renderer/ocean/OceanMidAndFar.h"
 #include "game/graphics/opengl_renderer/ocean/OceanNear.h"
+#include "game/graphics/opengl_renderer/sprite/Sprite3.h"
+#include "game/graphics/opengl_renderer/sprite/SpriteRenderer.h"
 #include "game/graphics/pipelines/opengl.h"
 
 #include "third-party/imgui/imgui.h"
@@ -310,10 +311,10 @@ void OpenGLRenderer::init_bucket_renderers_jak2() {
   init_bucket_renderer<TextureUploadHandler>("tex-all-map", BucketCategory::TEX,
                                              BucketId::TEX_ALL_MAP);
   // 320
-  init_bucket_renderer<DirectRenderer>("progress", BucketCategory::OTHER, BucketId::PROGRESS,
-                                       0x8000);
+  init_bucket_renderer<ProgressRenderer>("progress", BucketCategory::OTHER, BucketId::PROGRESS,
+                                         0x8000);
   init_bucket_renderer<DirectRenderer>("screen-filter", BucketCategory::OTHER,
-                                       BucketId::SCREEN_FILTER, 0x8000);
+                                       BucketId::SCREEN_FILTER, 256);
   init_bucket_renderer<DirectRenderer>("bucket-322", BucketCategory::OTHER, BucketId::BUCKET_322,
                                        0x8000);
   init_bucket_renderer<DirectRenderer>("debug2", BucketCategory::OTHER, BucketId::DEBUG2, 0x8000);

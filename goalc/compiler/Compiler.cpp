@@ -54,8 +54,10 @@ Compiler::Compiler(GameVersion version,
   }
 
   // add built-in forms to symbol info
-  for (auto& builtin : g_goal_forms) {
-    m_symbol_info.add_builtin(builtin.first);
+  for (const auto& [builtin_name, builtin_info] : g_goal_forms) {
+    SymbolInfo::Metadata sym_meta;
+    sym_meta.docstring = builtin_info.first;
+    m_symbol_info.add_builtin(builtin_name, sym_meta);
   }
 
   // load auto-complete history, only if we are running in the interactive mode.
@@ -302,6 +304,7 @@ std::vector<u8> Compiler::codegen_object_file(FileEnv* env) {
     }
     auto stats = gen.get_obj_stats();
     m_debug_stats.num_moves_eliminated += stats.moves_eliminated;
+    env->cleanup_after_codegen();
     return result;
   } catch (std::exception& e) {
     throw_compiler_error_no_code("Error during codegen: {}", e.what());
