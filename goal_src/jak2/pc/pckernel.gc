@@ -50,7 +50,7 @@
 (defmethod get-game-language! pc-settings-jak2 ((obj pc-settings-jak2))
   (get-current-language)
   )
-
+(define-extern close-unfinished-tasks-by-name (function none))
 (defmethod update-discord-rpc pc-settings-jak2 ((obj pc-settings-jak2))
   "update discord rpc module"
 
@@ -70,6 +70,7 @@
     ;; TODO - wrapping in `with-profiler` causes an error, fix it
     (pc-discord-rpc-update info)
     )
+    (close-unfinished-tasks-by-name)
   0)
 
 (defmethod update-speedrun pc-settings-jak2 ((obj pc-settings-jak2))
