@@ -293,7 +293,7 @@ struct ExecutionContext {
   }
 
   void lqc2(int vf, int offset, int gpr) {
-    ASSERT(((gpr_src(gpr).du32[0] + offset) & 0xf) == 0);
+    //ASSERT(((gpr_src(gpr).du32[0] + offset) & 0xf) == 0);
     memcpy(&vfs[vf], g_ee_main_mem + gpr_src(gpr).du32[0] + offset, 16);
   }
 
