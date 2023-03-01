@@ -45,6 +45,12 @@
   (game-task-node tomb-poles-resolution) 
   (game-task-node tomb-poles-resolution) 
   "Shuttle fighters is unfinished and just a crash go talk to torn")
+
+  (close-broken-task-if-necessary 
+  (game-task-node fortress-save-friends-resolution)
+  (game-task-node sewer-escort-introduction) 
+  (game-task-node sewer-escort-introduction) 
+  "Shuttle fighters is unfinished and just a crash go talk to torn")
 )
 
 
