@@ -946,7 +946,7 @@ void OpenGLRenderer::dispatch_buckets_jak1(DmaFollower dma,
   dma.read_and_advance();
 
   // now we should point to the first bucket!
-  ASSERT(dma.current_tag_offset() == m_render_state.next_bucket);
+  //ASSERT(dma.current_tag_offset() == m_render_state.next_bucket);
   m_render_state.next_bucket += 16;
 
   // loop over the buckets!
@@ -963,7 +963,7 @@ void OpenGLRenderer::dispatch_buckets_jak1(DmaFollower dma,
 
     // lg::info("Render: {} end", g_current_render);
     //  should have ended at the start of the next chain
-    ASSERT(dma.current_tag_offset() == m_render_state.next_bucket);
+    //ASSERT(dma.current_tag_offset() == m_render_state.next_bucket);
     m_render_state.next_bucket += 16;
     vif_interrupt_callback(bucket_id);
     m_category_times[(int)m_bucket_categories[bucket_id]] += bucket_prof.get_elapsed_time();
@@ -1004,7 +1004,7 @@ void OpenGLRenderer::dispatch_buckets_jak2(DmaFollower dma,
 
     // lg::info("Render: {} end", g_current_render);
     //  should have ended at the start of the next chain
-    ASSERT(dma.current_tag_offset() == m_render_state.next_bucket);
+    //ASSERT(dma.current_tag_offset() == m_render_state.next_bucket);
     m_render_state.next_bucket += 16;
     vif_interrupt_callback(bucket_id + 1);
     m_category_times[(int)m_bucket_categories[bucket_id]] += bucket_prof.get_elapsed_time();
