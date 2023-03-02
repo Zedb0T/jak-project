@@ -949,7 +949,7 @@ the sprite renderer draw 2D or 3D sprites
       ;;;;;;;;;;;;;;;;
 
       (sprite-glow-init-engine dma-buff)
-      (sprite-glow-draw dma-buff)
+      ;;(sprite-glow-draw dma-buff)
       (draw-all-sprites! *simple-sprite-system* dma-buff)
       (let* ((v1-26 dma-buff)
              (pkt6 (the-as dma-packet (-> v1-26 base)))
