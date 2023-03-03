@@ -208,7 +208,8 @@
 (defun string<-charp ((arg0 string) (arg1 (pointer uint8)))
   "Copy all chars from a char* to a GOAL string.
    Does NO length checking."
-  (let ((v1-0 (-> arg0 data)))
+   (while (nonzero? arg0)
+     (let ((v1-0 (-> arg0 data)))
     (while (nonzero? (-> arg1 0))
       (set! (-> v1-0 0) (-> arg1 0))
       (set! v1-0 (&-> v1-0 1))
@@ -216,6 +217,8 @@
       )
     (set! (-> v1-0 0) (the-as uint 0))
     )
+   )
+
   arg0
   )
 
