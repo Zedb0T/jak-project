@@ -139,6 +139,7 @@
 (cgo-file "pas.gd" ("$OUT/obj/cty-guard-turret-button.o"))
 ;; (cgo-file "lbbush.gd" ("$OUT/obj/cty-guard-turret-button.o")) - moved
 ;; (cgo-file "lpackage.gd" ("$OUT/obj/cty-guard-turret-button.o")) - moved
+(cgo-file "mechp.gd" ("$OUT/obj/mech.o"))
 (cgo-file "lportrun.gd" ("$OUT/obj/cty-guard-turret-button.o"))
 (cgo-file "cgb.gd" ("$OUT/obj/cty-guard-turret-button.o"))
 (cgo-file "lhelldog.gd" ("$OUT/obj/cty-guard-turret-button.o"))

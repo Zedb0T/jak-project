@@ -1,0 +1,11 @@
+("MECHP.CGO"
+ ("jak-mech+0-ag.go"
+  "grunt-mech-anims+0-ag.go"
+  "mech-part.o"
+  "mech.o"
+  "target-mech.o"
+  "mech-states.o"
+  "grunt-mech.o"
+  "mechtest-obs.o"
+  "mech-ag.go"
+))
