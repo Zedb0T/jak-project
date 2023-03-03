@@ -57,7 +57,7 @@
 (if *target*
 (begin
 
-  (if (and (not (= (-> *target* state name) 'target-stance))(= (-> *target* state name) 'target-indax-stance))
+(if (and (and (task-node-closed?  (game-task-node tomb-poles-introduction)) (not (task-node-closed?  (game-task-node tomb-water-vibe))))(not (= (-> *target* state name) 'target-stance))(= (-> *target* state name) 'target-indax-stance))
 (send-event *target* 'continue (get-continue-by-name *game-info* "tomb-poles-start"))
 )
 
