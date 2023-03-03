@@ -1246,6 +1246,9 @@
                      )
                    )
                   ((= v1-45 'indax)
+                      (if *debug-segment*
+                       (load-package "daxp" global)
+                       )
                    enter-state
                    (process->handle (the-as process (-> arg3 param 1)))
                    (go target-indax-start)
