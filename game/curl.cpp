@@ -2,7 +2,7 @@
 #include <iostream>
 #include <string>
 
-int main()
+int test()
 {
     // Initialize curl
     curl_global_init(CURL_GLOBAL_ALL);
