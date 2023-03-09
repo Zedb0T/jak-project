@@ -16,7 +16,7 @@
 #include "common/util/os.h"
 #include "common/util/unicode_util.h"
 #include "common/versions.h"
-#include <jsoncpp/json/json.h>
+
 
 #ifdef _WIN32
 extern "C" {
@@ -90,14 +90,23 @@ void test_curl() {
   curl_global_cleanup();
 }
 
+
+size_t curl_write_callbacka(char* ptr, size_t size, size_t nmemb, std::string* userdata) {
+  size_t len = size * nmemb;
+  userdata->append(ptr, len);
+  return len;
+}
+
+
 void getxpos1() {
     // Initialize curl
+
     curl_global_init(CURL_GLOBAL_ALL);
     CURL* curl = curl_easy_init();
 
     // Set curl options
     curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8080/");
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callbacka);
     std::string response_data;
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
 
@@ -105,34 +114,29 @@ void getxpos1() {
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
-        return 1;
-    }
-
-    // Parse response data as JSON
-    Json::Value root;
-    Json::Reader reader;
-    if (!reader.parse(response_data, root)) {
-        std::cerr << "Failed to parse response data as JSON: " << reader.getFormattedErrorMessages() << std::endl;
-        return 1;
+        return;
     }
 
     // Extract value of xpos1 key
-    float X1POS = root["xpos1"].asFloat();
-
-    // Print result
-    std::cout << "Value of X1POS: " << X1POS << std::endl;
+    std::size_t xpos1_pos = response_data.find("\"xpos1\":");
+    if (xpos1_pos != std::string::npos) {
+        std::size_t xpos1_end_pos = response_data.find(',', xpos1_pos);
+        if (xpos1_end_pos == std::string::npos) {
+            xpos1_end_pos = response_data.find('}', xpos1_pos);
+        }
+        if (xpos1_end_pos != std::string::npos) {
+            std::string xpos1_str = response_data.substr(xpos1_pos + 8, xpos1_end_pos - xpos1_pos - 8);
+            float X1POS = std::stof(xpos1_str);
+            std::cout << "Value of X1POS: " << X1POS << std::endl;
+        }
+    }
 
     // Cleanup curl
     curl_easy_cleanup(curl);
     curl_global_cleanup();
-
-    return 0;
-
-
-
-
-
+ 
 }
+
 
 /*!
  * Entry point for the game.

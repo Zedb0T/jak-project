@@ -212,6 +212,8 @@ write_svnrev_h()
 
 add_subdirectory(sound)
 
+
+
 # we build the runtime as a static library.
 add_library(runtime STATIC ${RUNTIME_SOURCE} "../third-party/glad/src/glad.c")
 
