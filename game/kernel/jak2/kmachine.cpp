@@ -1,13 +1,17 @@
 #include "kmachine.h"
-
 #include <cstring>
 #include <stdexcept>
 #include <string>
+//added
+#include <iostream>
+#include "common/util/FileUtil.h"
+#include "common/util/os.h"
+#include "common/versions.h"
+#include "common/util/unicode_util.h"
 
 #include "common/log/log.h"
 #include "common/symbols.h"
 #include "common/util/FileUtil.h"
-
 #include "game/discord.h"
 #include "game/kernel/common/Symbol4.h"
 #include "game/kernel/common/fileio.h"
@@ -36,6 +40,13 @@
 #include "game/sce/sif_ee.h"
 #include "game/sce/stubs.h"
 #include "game/system/vm/vm.h"
+//added
+#include "curl/curl.h"
+#include <mutex>
+#include "common/util/json_util.h"
+#include <mutex>
+
+std::mutex mtx; // Mutex for thread-safe access to position variables
 
 using namespace ee;
 
@@ -520,7 +531,106 @@ void pc_set_levels(u32 lev_list) {
   Gfx::set_levels(levels);
 }
 
+
+std::atomic<bool> thread2_created(false);
+float p2_xpos = 0.0f;
+float p2_ypos = 0.0f;
+float p2_zpos = 0.0f;
+
+size_t curl_write_callbacka(char* ptr, size_t size, size_t nmemb, void* userdata) {
+  size_t len = size * nmemb;
+  std::string* response_data = reinterpret_cast<std::string*>(userdata);
+  response_data->append(ptr, len);
+  return len;
+}
+
+void get_XYZ_POS() {
+  int retries = 0;
+  while (retries < 3) {
+    // Initialize curl
+    curl_global_cleanup();
+    curl_global_init(CURL_GLOBAL_ALL);
+    CURL* curl = curl_easy_init();
+
+    // Construct JSON payload
+    nlohmann::json payload = {
+      {"p2_xpos", p2_xpos},
+      {"p2_ypos", p2_ypos},
+      {"p2_zpos", p2_zpos}
+    };
+    std::string payload_str = payload.dump();
+
+    // Set curl options
+    curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8080/");
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callbacka);
+    std::string response_data;
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
+
+    // Perform curl request
+    CURLcode res = curl_easy_perform(curl);
+
+    // Cleanup curl
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+    
+    // Check if the request was successful
+    if (res != CURLE_OK) {
+      retries++;
+      std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Wait 500 ms before retrying
+    } else {
+      // Parse JSON response
+      nlohmann::json response_json = nlohmann::json::parse(response_data);
+
+      // Extract values from JSON response
+      float new_xpos = response_json["p2_xpos"];
+      float new_ypos = response_json["p2_ypos"];
+      float new_zpos = response_json["p2_zpos"];
+
+      // Lock mutex to update position variables
+      std::lock_guard<std::mutex> lock(mtx);
+      p2_xpos = new_xpos;
+      p2_ypos = new_ypos;
+      p2_zpos = new_zpos;
+
+      // Reset retry counter
+      retries = 0;
+    }
+
+    // Sleep for some time before making the next request
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+}
+
+void create_or_reuse_thread2(float xpos, float ypos, float zpos) {
+  // Lock mutex to update position variables
+  std::lock_guard<std::mutex> lock(mtx);
+  // Update the position values
+  p2_xpos = xpos;
+  p2_ypos = ypos;
+  p2_zpos = zpos;
+
+  // Check if the thread has already been created
+  if (!thread2_created) {
+    // Create the thread and set the flag
+    std::thread t2(get_XYZ_POS);
+    thread2_created = true;
+    // Detach the thread
+    t2.detach();
+  }
+}
+
+void postPlayer2POS(u32 xpos_ptr, u32 ypos_ptr, u32 zpos_ptr) {
+  float xpos, ypos, zpos;
+  memcpy(&xpos, &xpos_ptr, 4);
+  memcpy(&ypos, &ypos_ptr, 4);
+  memcpy(&zpos, &zpos_ptr, 4);
+  create_or_reuse_thread2(xpos, ypos, zpos);
+}
+
 void update_discord_rpc(u32 discord_info) {
+  //This runs every frame not a bad place to test some things...
+
   if (gDiscordRpcEnabled) {
     DiscordRichPresence rpc;
     char state[128];
@@ -674,6 +784,7 @@ void InitMachine_PCPort() {
   make_function_symbol_from_c("pc-prof", (void*)prof_event);
 
   // debugging tools
+  make_function_symbol_from_c("pc-post-target-pos", (void*)postPlayer2POS);
   make_function_symbol_from_c("pc-filter-debug-string?", (void*)pc_filter_debug_string);
 
   // init ps2 VM
@@ -690,6 +801,8 @@ void InitMachine_PCPort() {
   intern_from_c("*pc-settings-folder*")->value() =
       make_string_from_c(settings_path.string().c_str());
   intern_from_c("*pc-settings-built-sha*")->value() = make_string_from_c(GIT_VERSION);
+
+  
 }
 
 /*!

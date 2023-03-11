@@ -17,6 +17,9 @@
 #include "common/util/unicode_util.h"
 #include "common/versions.h"
 
+//Added
+#include "common/util/json_util.h"
+
 
 #ifdef _WIN32
 extern "C" {
@@ -90,20 +93,19 @@ void test_curl() {
   curl_global_cleanup();
 }
 
-
-size_t curl_write_callbacka(char* ptr, size_t size, size_t nmemb, std::string* userdata) {
+/*
+size_t curl_write_callbacka(char* ptr, size_t size, size_t nmemb, void* userdata) {
   size_t len = size * nmemb;
-  userdata->append(ptr, len);
+  std::string* response_data = reinterpret_cast<std::string*>(userdata);
+  response_data->append(ptr, len);
   return len;
 }
 
-
-void getxpos1() {
+void getplayer1POS() {
     // Initialize curl
-
     curl_global_init(CURL_GLOBAL_ALL);
     CURL* curl = curl_easy_init();
-
+    
     // Set curl options
     curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8080/");
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callbacka);
@@ -117,25 +119,79 @@ void getxpos1() {
         return;
     }
 
-    // Extract value of xpos1 key
-    std::size_t xpos1_pos = response_data.find("\"xpos1\":");
-    if (xpos1_pos != std::string::npos) {
-        std::size_t xpos1_end_pos = response_data.find(',', xpos1_pos);
-        if (xpos1_end_pos == std::string::npos) {
-            xpos1_end_pos = response_data.find('}', xpos1_pos);
-        }
-        if (xpos1_end_pos != std::string::npos) {
-            std::string xpos1_str = response_data.substr(xpos1_pos + 8, xpos1_end_pos - xpos1_pos - 8);
-            float X1POS = std::stof(xpos1_str);
-            std::cout << "Value of X1POS: " << X1POS << std::endl;
-        }
-    }
+    // Print raw JSON string
+    std::cout << "Raw JSON string: " << response_data << std::endl;
+
+    // Parse JSON response
+    nlohmann::json response_json = nlohmann::json::parse(response_data);
+
+    // Extract values from JSON response
+    float p1_x1 = response_json["p1_xpos"];
+    float p1_ypos = response_json["p1_ypos"];
+    float p1_zpos = response_json["p1_zpos"];
+
+    // Print results
+    std::cout << "Value of p1_x1: " << p1_x1 << std::endl;
+    std::cout << "Value of p1_ypos: " << p1_ypos << std::endl;
+    std::cout << "Value of p1_zpos: " << p1_zpos << std::endl;
 
     // Cleanup curl
     curl_easy_cleanup(curl);
     curl_global_cleanup();
- 
 }
+*/
+
+/*
+void postPlayer2POS(float p2_xpos, float p2_ypos, float p2_zpos) {
+    // Initialize curl
+    curl_global_init(CURL_GLOBAL_ALL);
+    CURL* curl = curl_easy_init();
+    
+    // Construct JSON payload
+    nlohmann::json payload = {
+        {"p2_xpos", p2_xpos},
+        {"p2_ypos", p2_ypos},
+        {"p2_zpos", p2_zpos}
+    };
+    std::string payload_str = payload.dump();
+
+    // Set curl options
+    curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8080/");
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callbacka);
+    std::string response_data;
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
+
+    // Perform curl request
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+        return;
+    }
+
+    // Print raw JSON string
+    std::cout << "Raw JSON string: " << response_data << std::endl;
+
+    // Parse JSON response
+    nlohmann::json response_json = nlohmann::json::parse(response_data);
+
+    // Extract values from JSON response
+     p2_xpos = response_json["p2_xpos"];
+     p2_ypos = response_json["p2_ypos"];
+     p2_zpos = response_json["p2_zpos"];
+
+    // Print results
+    std::cout << "Value of p2_x1: " << p2_xpos << std::endl;
+    std::cout << "Value of p2_ypos: " << p2_ypos << std::endl;
+    std::cout << "Value of p2_zpos: " << p2_zpos << std::endl;
+
+    // Cleanup curl
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+}
+/*
+
+
 
 
 /*!
@@ -148,7 +204,7 @@ int main(int argc, char** argv) {
   // we'll need to wrangle the SSL dependency
   // see for an example
   // - https://sourcegraph.com/github.com/RPCS3/rpcs3/-/blob/3rdparty/curl/CMakeLists.txt?L11:15
-  getxpos1();
+
 
   // TODO - replace with CLI11 and just propagate args through
   // - https://github.com/CLIUtils/CLI11/issues/744

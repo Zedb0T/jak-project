@@ -17,6 +17,12 @@
 #include "game/sce/libpad.h"
 #include "game/sce/libscf.h"
 #include "game/sce/sif_ee.h"
+#include "curl/curl.h"
+#include "common/util/json_util.h"
+#include <iostream>
+
+
+
 
 /*!
  * Where does OVERLORD load its data from?
@@ -552,7 +558,6 @@ u64 pc_filter_debug_string(u32 str_ptr, u32 dist_ptr) {
       return s7.offset + true_symbol_offset(g_game_version);
     }
   }
-
   // Get the current filters
   const auto& filters = Gfx::g_debug_settings.debug_text_filters;
   if (filters.empty()) {
@@ -579,3 +584,6 @@ u64 pc_filter_debug_string(u32 str_ptr, u32 dist_ptr) {
   }
   return s7.offset;
 }
+
+
+
