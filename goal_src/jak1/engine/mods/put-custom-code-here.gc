@@ -26,6 +26,12 @@ an orb |#
 (define *last-position-sync-time* (the-as time-frame #f))
 
 (define *remote-targets* (new 'global 'boxed-array handle 12))
+;;These return true if the specified target is currently "alive".
+(defun target-alive? ((tgt target))
+  (and tgt 
+    (not (or (= (-> tgt state) #f) (= (-> tgt state) symbol)))
+    )
+  )
 
 (defun start-extra-target ()
   (ppointer->handle (process-spawn
@@ -121,8 +127,19 @@ an orb |#
         (when (zero? (-> *remote-targets* idx))
           (case *multiplayer-mode*
             (('jaks)
-              (set! (-> *remote-targets* idx) (start-extra-target))
-              )
+              ;;(set! (-> *remote-targets* idx) (start-extra-target))
+              (if (target-alive? tgt)
+                (begin
+                  ;; despawn target
+                  (deactivate tgt)
+                  (set! (-> *target-list* tgt-idx) (the-as handle #f))
+                )
+                (begin
+                  ;; spawn new target
+                  (set! tgt (-> (start-extra-target tgt-idx) 0))
+                  (warp-jakA-to-jakB tgt *target*)
+                  (set! (-> *target-list* tgt-idx) (process->handle tgt))
+                )
             (('orbs)
               (let ((vec (new 'stack-no-clear 'vector)))
                 (set! (-> vec x) 0.0)
