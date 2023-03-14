@@ -128,18 +128,19 @@ an orb |#
           (case *multiplayer-mode*
             (('jaks)
               ;;(set! (-> *remote-targets* idx) (start-extra-target))
-              (if (target-alive? tgt)
+              (if (target-alive? (the-as target (handle->process(-> *remote-targets* idx))))
                 (begin
                   ;; despawn target
-                  (deactivate tgt)
-                  (set! (-> *target-list* tgt-idx) (the-as handle #f))
+                  (deactivate (the-as target (handle->process (-> *remote-targets* idx))))
+                  (set! (-> *remote-targets* idx) (the-as handle #f))
                 )
                 (begin
                   ;; spawn new target
-                  (set! tgt (-> (start-extra-target tgt-idx) 0))
-                  (warp-jakA-to-jakB tgt *target*)
-                  (set! (-> *target-list* tgt-idx) (process->handle tgt))
+                  (set! (-> *remote-targets* idx) (start-extra-target))
+                  (set! (-> *remote-targets* idx)  (-> *remote-targets* idx))
                 )
+              )
+            )
             (('orbs)
               (let ((vec (new 'stack-no-clear 'vector)))
                 (set! (-> vec x) 0.0)
