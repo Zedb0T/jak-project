@@ -1241,7 +1241,7 @@
 (defmacro obj-etype? (&rest types)
   `(or ,@(apply (lambda (x) `(begin (define-extern ,x type) (type-type? (-> obj etype) ,x))) types))
   )
-
+(define-extern hopper type)
 (defmethod birth! entity-actor ((obj entity-actor))
   "Create a process for this entity and start it."
   
@@ -1258,8 +1258,9 @@
     ; )
   
   ;;(birth-log "call to birth! on ~A~%" obj)
-
-  (let* ((entity-type (-> obj etype))
+(if  (= (-> obj etype) babak)
+(begin
+  (let* ((entity-type hopper)
          (info (entity-info-lookup entity-type))
          (entity-process (get-process *default-dead-pool* entity-type (if info
                                                                           (-> info heap-size)
@@ -1289,6 +1290,40 @@
         )
       )
     )
+)
+(begin
+  (let* ((entity-type (-> obj etype))
+         (info (entity-info-lookup entity-type))
+         (entity-process (get-process *default-dead-pool* entity-type (if info
+                                                                          (-> info heap-size)
+                                                                          #x4000
+                                                                          )
+                                      )
+                         )
+         )
+    (cond
+      ((not entity-process)
+       (birth-log "could not birth because there is no process.~%")
+       )
+      ((begin
+         (set! (-> entity-process type) entity-type)
+         (and entity-type
+              (valid? entity-type type #f #f 0)
+              (valid? (method-of-object entity-process init-from-entity!) function #f #f 0)
+              )
+         )
+       (init-entity entity-process obj)
+       )
+      (else
+        (when (not (birth-viewer entity-process obj))
+          (format 0 "ERROR: no proper process type named ~A exists in the code, could not start ~A~%" entity-type obj)
+          (logior! (-> obj extra perm status) (entity-perm-status bit-0))
+          )
+        )
+      )
+    ))
+)
+
   obj
   )
 

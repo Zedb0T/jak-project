@@ -169,6 +169,7 @@ std::vector<level_tools::TextureRemap> extract_bsp_from_level(const ObjectFileDB
   }
 
   bool got_collide = false;
+
   for (auto& draw_tree : bsp_header.drawable_tree_array.trees) {
     if (tfrag_trees.count(draw_tree->my_type())) {
       auto as_tfrag_tree = dynamic_cast<level_tools::DrawableTreeTfrag*>(draw_tree.get());
@@ -211,6 +212,9 @@ std::vector<level_tools::TextureRemap> extract_bsp_from_level(const ObjectFileDB
     }
   }
   level_data.level_name = level_name;
+  std::string targetName = "flut-saddle-lod0";
+
+
 
   return bsp_header.texture_remap_table;
 }
@@ -243,13 +247,23 @@ void extract_common(const ObjectFileDB& db,
 
   Serializer ser;
   tfrag_level.serialize(ser);
+
   auto compressed =
       compression::compress_zstd(ser.get_save_result().first, ser.get_save_result().second);
 
   lg::info("stats for {}", dgo_name);
+  lg::print("Number of objects in mercModel: {}\n", tfrag_level.merc_data.models.size());
   print_memory_usage(tfrag_level, ser.get_save_result().second);
   lg::info("compressed: {} -> {} ({:.2f}%)", ser.get_save_result().second, compressed.size(),
            100.f * compressed.size() / ser.get_save_result().second);
+
+
+  
+    for (const auto& mercModel : tfrag_level.merc_data.models) {
+
+    lg::print("Found a MercModel with name '{}'", mercModel.name);
+
+}
   file_util::write_binary_file(
       output_folder / fmt::format("{}.fr3", dgo_name.substr(0, dgo_name.length() - 4)),
       compressed.data(), compressed.size());
@@ -280,18 +294,33 @@ void extract_from_level(const ObjectFileDB& db,
       extract_bsp_from_level(db, tex_db, dgo_name, hacks, extract_collision, level_data);
   extract_art_groups_from_level(db, tex_db, tex_remap, dgo_name, level_data);
 
+  if (dgo_name != "SNO.DGO") {
+    extract_art_groups_from_level(db, tex_db, extract_bsp_from_level(db, tex_db, "SNO.DGO", hacks, extract_collision, level_data), "SNO.DGO", level_data);
+}
+
+  if (dgo_name != "JUN.DGO") {
+    extract_art_groups_from_level(db, tex_db, extract_bsp_from_level(db, tex_db, "JUN.DGO", hacks, extract_collision, level_data), "JUN.DGO", level_data);
+}
+
+
   Serializer ser;
   level_data.serialize(ser);
   auto compressed =
       compression::compress_zstd(ser.get_save_result().first, ser.get_save_result().second);
   lg::info("stats for {}", dgo_name);
+    lg::print("Number of objects in mercModel: {}\n", level_data.merc_data.models.size());
+        for (const auto& mercModel : level_data.merc_data.models) {
+
+    lg::print("Found a MercModel with name '{}\n'", mercModel.name);
+
+}
   print_memory_usage(level_data, ser.get_save_result().second);
   lg::info("compressed: {} -> {} ({:.2f}%)", ser.get_save_result().second, compressed.size(),
            100.f * compressed.size() / ser.get_save_result().second);
   file_util::write_binary_file(
       output_folder / fmt::format("{}.fr3", dgo_name.substr(0, dgo_name.length() - 4)),
       compressed.data(), compressed.size());
-
+  level_data.merc_data.models[0].name;
   if (dump_level) {
     auto back_file_path = file_util::get_jak_project_dir() / "glb_out" /
                           fmt::format("{}_background.glb", level_data.level_name);

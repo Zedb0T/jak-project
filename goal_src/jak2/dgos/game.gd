@@ -444,4 +444,10 @@
   "elec-gate.o"
   "cty-guard-turret-button.o"
   "entity-debug.o" ;; added
+    ;; keep flutflut stuff loaded
+  "flut-part.o"
+  "flutflut.o"
+  "target-flut.o"
+  "flut-saddle-ag.go"
+  "eichar-flut+0-ag.go"
  ))

@@ -345,4 +345,10 @@
   "ropebridge.o"
   "ticky.o"
   "hud-classes-pc.o" ;; added
+    ;; keep flutflut stuff loaded
+  "flut-part.o"
+  "flutflut.o"
+  "target-flut.o"
+  "flut-saddle-ag.go"
+  "eichar-flut+0-ag.go"
  ))

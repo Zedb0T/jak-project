@@ -10,6 +10,8 @@
   "bird-lady-beach.o"
   "mayor.o"
   "sculptor.o"
+  "hopper.o"
+  "hopper-ag.go"
   "pelican.o"
   "lurkerworm.o"
   "lurkercrab.o"
