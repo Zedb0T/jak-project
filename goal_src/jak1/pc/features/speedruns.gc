@@ -1,6 +1,7 @@
 ;;-*-Lisp-*-
 (in-package goal)
 
+(define touched-ground? #f)
 (define *speedrun-info* (new 'static 'speedrun-info-jak1 :should-display? #t :needs-post-blackout-setup? #f))
 
 (define *hub1-cell-list* (new 'static 'boxed-array :type game-task
@@ -124,6 +125,7 @@
   )
 
 (defun start-speedrun ((category speedrun-category))
+
   ;; randomize game id so the autosplitter knows to restart
   (update-autosplit-jak1-new-game)
   ;; disable hints (turned back on later for all-cutscenes category)
@@ -426,6 +428,28 @@
 (defun speedrun-mode-update ()
   "A per frame update for speedrunning related stuff"
   (when (-> *pc-settings* speedrunner-mode?)
+      (when 
+        (and *target*
+          (logtest? (-> *target* control unknown-surface00 flags) (surface-flags allow-look-around))
+           
+        )
+          (set! touched-ground? #t)
+          (set! touched-ground? #f))
+      )
+  (case (-> *speedrun-info* category)
+    (((speedrun-category full-game) (speedrun-category il-training) (speedrun-category il-village1) (speedrun-category il-village2) (speedrun-category il-village3))
+    (when  touched-ground?
+    (update-autosplit-info-jak1)
+    ;; Draw info to the screen
+    (speedrun-draw-settings)
+    ;;Disable any active cheats
+    (set! (-> *pc-settings* cheats) (the-as pc-cheats #x0))
+    ;; Run after-blackout speedrun setup (if needed)
+    (setup-speedrun-post-blackout)
+    );; Update auto-splitter
+
+      )
+    (else
     ;; Update auto-splitter
     (update-autosplit-info-jak1)
     ;; Draw info to the screen
@@ -434,8 +458,10 @@
     (set! (-> *pc-settings* cheats) (the-as pc-cheats #x0))
     ;; Run after-blackout speedrun setup (if needed)
     (setup-speedrun-post-blackout)
+      )
     )
-  (none))
+  (none)
+    )
 
 (defun speedrun-start-full-game-run ()
   ;; start a full game speedrun, save file is already selected so don't default to first slot
