@@ -124,6 +124,8 @@
   )
 
 (defun start-speedrun ((category speedrun-category))
+  ;; randomize game id so the autosplitter knows to restart
+  (update-autosplit-jak1-new-game)
   ;; disable hints (turned back on later for all-cutscenes category)
   (set! (-> *setting-control* default play-hints) #f)
   ;; turn on speedrun verification display and flip flag for setting up speedrun after initialize!
@@ -236,18 +238,6 @@
   (set-frame-rate! *pc-settings* 60)
   ;; enable auto saving by default
   (set! (-> *setting-control* default auto-save) #t)
-    (case (-> *speedrun-info* category)
-    (((speedrun-category full-game) (speedrun-category il-training) (speedrun-category il-village1) (speedrun-category il-village2) (speedrun-category il-village3))
-      ;; wait until we hit the ground to start the autosplitter
-      (when (= (-> *target* next-state name) 'target-hit-ground)
-           (update-autosplit-jak1-new-game))
-      )
-    (else
-      ;; randomize game id so the autosplitter knows to restart
-      (update-autosplit-jak1-new-game)
-      (format 0 "start-speedrun: unrecognized category ~S~%" (enum->string speedrun-category (-> *speedrun-info* category)))
-      )
-    )
   (none)
   )
   
