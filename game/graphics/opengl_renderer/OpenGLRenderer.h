@@ -22,7 +22,7 @@ struct RenderOptions {
   bool draw_filters_window = false;
 
   // internal rendering settings - The OpenGLRenderer will internally use this resolution/format.
-  int msaa_samples = 4;
+  int msaa_samples = 2;
   int game_res_w = 640;
   int game_res_h = 480;
 
@@ -36,9 +36,6 @@ struct RenderOptions {
   // logic inside of the game - it needs to know the desired aspect ratio.
   int draw_region_height = 0;
   int draw_region_width = 0;
-
-  // windows-specific tweaks to the size of the drawing area in borderless.
-  bool borderless_windows_hacks = false;
 
   bool save_screenshot = false;
   std::string screenshot_path;
@@ -69,6 +66,10 @@ struct Fbo {
   bool matches(int w, int h, int msaa) const {
     int effective_msaa = multisampled ? multisample_count : 1;
     return valid && width == w && height == h && effective_msaa == msaa;
+  }
+
+  bool matches(const Fbo& other) const {
+    return matches(other.width, other.height, other.multisample_count);
   }
 
   // Free opengl resources, if we have any.
@@ -116,6 +117,7 @@ class OpenGLRenderer {
   void dispatch_buckets_jak2(DmaFollower dma, ScopedProfilerNode& prof, bool sync_after_buckets);
 
   void do_pcrtc_effects(float alp, SharedRenderState* render_state, ScopedProfilerNode& prof);
+  void blit_display();
   void init_bucket_renderers_jak1();
   void init_bucket_renderers_jak2();
   void draw_renderer_selection_window();
@@ -156,6 +158,7 @@ class OpenGLRenderer {
       Fbo window;          // provided by glfw
       Fbo render_buffer;   // temporary buffer to render to
       Fbo resolve_buffer;  // temporary buffer to resolve to
+      Fbo back_buffer;     // the previous buffer we rendered
     } resources;
 
     Fbo* render_fbo = nullptr;  // the selected fbo from the three above to use for rendering

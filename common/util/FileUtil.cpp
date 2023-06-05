@@ -16,6 +16,7 @@
 
 #include "common/common_types.h"
 #include "common/util/BinaryReader.h"
+#include "common/util/string_util.h"
 #include "common/util/unicode_util.h"
 
 // This disables the use of PCLMULQDQ which is probably ok, but let's just be safe and disable it
@@ -111,20 +112,21 @@ std::string get_current_executable_path() {
 #endif
 }
 
+std::optional<std::string> try_get_project_path_from_path(const std::string& path) {
+  std::string::size_type pos =
+      std::string(path).rfind("jak-project");  // Strip file path down to /jak-project/ directory
+  if (pos == std::string::npos) {
+    return {};
+  }
+  return std::string(path).substr(
+      0, pos + 11);  // + 12 to include "/jak-project" in the returned filepath
+}
+
 /*!
  * See if the current executable is somewhere in jak-project/. If so, return the path to jak-project
  */
 std::optional<std::string> try_get_jak_project_path() {
-  std::string my_path = get_current_executable_path();
-
-  std::string::size_type pos =
-      std::string(my_path).rfind("jak-project");  // Strip file path down to /jak-project/ directory
-  if (pos == std::string::npos) {
-    return {};
-  }
-
-  return std::make_optional(std::string(my_path).substr(
-      0, pos + 11));  // + 12 to include "/jak-project" in the returned filepath
+  return try_get_project_path_from_path(get_current_executable_path());
 }
 
 std::optional<fs::path> try_get_data_dir() {
@@ -200,10 +202,12 @@ bool create_dir_if_needed(const fs::path& path) {
   return false;
 }
 
+// TODO - explodes if the file path is invalid
 bool create_dir_if_needed_for_file(const std::string& path) {
   return create_dir_if_needed_for_file(fs::path(path));
 }
 
+// TODO - explodes if the file path is invalid
 bool create_dir_if_needed_for_file(const fs::path& path) {
   return fs::create_directories(path.parent_path());
 }
@@ -633,6 +637,20 @@ void copy_file(const fs::path& src, const fs::path& dst) {
         "Cannot copy '{}', couldn't make directory to copy into '{}'", src.string(), dst.string()));
   }
   fs::copy_file(src, dst, fs::copy_options::overwrite_existing);
+}
+
+std::string make_screenshot_filepath(const GameVersion game_version, const std::string& name) {
+  std::string file_name;
+  if (name.empty()) {
+    file_name = fmt::format("{}_{}.png", version_to_game_name(game_version),
+                            str_util::current_local_timestamp_no_colons());
+  } else {
+    file_name = fmt::format("{}_{}_{}.png", version_to_game_name(game_version), name,
+                            str_util::current_local_timestamp_no_colons());
+  }
+  const auto file_path = file_util::get_file_path({"screenshots", file_name});
+  file_util::create_dir_if_needed_for_file(file_path);
+  return file_path;
 }
 
 }  // namespace file_util
