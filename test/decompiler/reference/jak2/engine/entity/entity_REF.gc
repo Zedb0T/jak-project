@@ -234,7 +234,7 @@
 
 ;; definition for function entity-actor-from-level-name
 ;; WARN: Return type mismatch entity vs entity-actor.
-(defun entity-actor-from-level-name ((arg0 level))
+(defun entity-actor-from-level-name ((arg0 symbol))
   (let ((v0-0 (the-as entity #f)))
     (dotimes (s5-0 (-> *level* length))
       (let ((s4-0 (-> *level* level s5-0)))
@@ -667,13 +667,13 @@
             (a1-5 "~8D ~3D ~-8S #x~4X")
             (a2-4 (-> obj extra perm aid))
             (a3-3 (-> obj extra perm task))
-            (t0-3 (the-as object (-> obj extra level nickname)))
+            (t0-3 (-> obj extra level nickname))
             )
         (set! t0-3 (cond
-                     ((the-as string t0-3)
-                      (empty)
-                      t0-3
-                      )
+                     (t0-3
+                       (empty)
+                       t0-3
+                       )
                      (else
                        (-> obj extra level name)
                        )
@@ -831,11 +831,11 @@
       )
   (cond
     ((= (-> obj type) entity-actor)
-     (set! (-> obj extra perm task) (the-as uint (-> obj task)))
+     (set! (-> obj extra perm task) (-> obj task))
      (set! (-> obj extra vis-id) (-> obj vis-id))
      )
     (else
-      (set! (-> obj extra perm task) (the-as uint 0))
+      (set! (-> obj extra perm task) (game-task none))
       (set! (-> obj extra vis-id) 0)
       0
       )
@@ -1308,7 +1308,7 @@
        (bucket-id debug-no-zbuf1)
        (res-lump-struct sv-16 'name string)
        (-> (the-as process-drawable arg0) root trans)
-       (if (logtest? (-> sv-16 extra perm status) (entity-perm-status bit-0 bit-1))
+       (if (logtest? (-> sv-16 extra perm status) (entity-perm-status bit-0 error))
            (font-color red)
            (font-color white)
            )
@@ -1456,7 +1456,7 @@
                         (set! sv-32 318)
                         (let ((a2-4 (res-lump-struct s2-0 'name structure))
                               (a3-2 sv-20)
-                              (t0-1 (if (logtest? (-> s2-0 extra perm status) (entity-perm-status bit-0 bit-1))
+                              (t0-1 (if (logtest? (-> s2-0 extra perm status) (entity-perm-status bit-0 error))
                                         1
                                         5
                                         )
@@ -1788,7 +1788,7 @@
 
 ;; definition for function init-entity
 ;; WARN: Return type mismatch process vs none.
-(defun init-entity ((arg0 process) (arg1 entity-actor) (arg2 process))
+(defun init-entity ((arg0 process) (arg1 entity-actor) (arg2 type))
   (activate arg0 *entity-pool* (res-lump-struct arg1 'name basic) (the-as pointer #x70004000))
   (set! (-> arg0 entity) arg1)
   (set! (-> arg0 level) (-> arg1 extra level))
@@ -1818,7 +1818,7 @@
               (valid? (method-of-object s4-0 init-from-entity!) function (the-as string #f) #f 0)
               )
          )
-       (init-entity s4-0 obj (the-as process s5-0))
+       (init-entity s4-0 obj s5-0)
        )
       (else
         (when (not (birth-viewer s4-0 obj))
@@ -1835,7 +1835,7 @@
 ;; WARN: Return type mismatch symbol vs none.
 (defun entity-deactivate-handler ((arg0 process) (arg1 entity-actor))
   (when (= arg0 (-> arg1 extra process))
-    (logclear! (-> arg1 extra perm status) (entity-perm-status bit-1 no-kill))
+    (logclear! (-> arg1 extra perm status) (entity-perm-status error no-kill))
     (set! (-> arg1 extra process) #f)
     )
   (none)
@@ -2154,7 +2154,7 @@
     ((= arg0 'game)
      (logclear! (-> obj status) arg1)
      )
-    ((task-complete? *game-info* (the-as game-task (-> obj task)))
+    ((task-complete? *game-info* (-> obj task))
      (logclear! (-> obj status) (logior (if (logtest? (-> obj status) (entity-perm-status bit-4))
                                             524
                                             0
@@ -2541,7 +2541,7 @@
 ;; WARN: Return type mismatch int vs none.
 (defun entity-task-complete-off ((arg0 entity))
   (let ((v1-0 (-> arg0 extra)))
-    (if (!= (-> v1-0 perm task) 1)
+    (if (!= (-> v1-0 perm task) (game-task complete))
         (logclear! (-> *game-info* task-perm-list data (-> v1-0 perm task) status) (entity-perm-status complete))
         )
     )

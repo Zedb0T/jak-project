@@ -82,6 +82,7 @@ struct GraphicsData {
             file_util::get_jak_project_dir() / "out" / game_version_names[version] / "fr3",
             fr3_level_count[version])),
         ogl_renderer(texture_pool, loader, version),
+        debug_gui(version),
         version(version) {}
 };
 
@@ -90,10 +91,13 @@ std::unique_ptr<GraphicsData> g_gfx_data;
 static bool gl_inited = false;
 static int gl_init(GfxGlobalSettings& settings) {
   prof().instant_event("ROOT");
+  Timer gl_init_timer;
   // Initialize SDL
   {
     auto p = scoped_prof("startup::sdl::init_sdl");
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) != 0) {
+    // remove SDL garbage from hooking signal handler.
+    SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) {
       sdl_util::log_error("Could not initialize SDL, exiting");
       return 1;
     }
@@ -126,7 +130,7 @@ static int gl_init(GfxGlobalSettings& settings) {
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
   }
-
+  lg::info("gl init took {:.3f}s\n", gl_init_timer.getSeconds());
   return 0;
 }
 
@@ -152,7 +156,7 @@ static void init_imgui(SDL_Window* window,
   if (!Gfx::g_debug_settings.monospaced_font) {
     // TODO - add or switch to Noto since it supports the entire unicode range
     std::string font_path =
-        (file_util::get_jak_project_dir() / "game" / "assets" / "fonts" / "Roboto-Medium.ttf")
+        (file_util::get_jak_project_dir() / "game" / "assets" / "fonts" / "NotoSansJP-Medium.ttf")
             .string();
     if (file_util::file_exists(font_path)) {
       static const ImWchar ranges[] = {
@@ -163,11 +167,11 @@ static void init_imgui(SDL_Window* window,
           0x3000, 0x30FF,  // CJK Symbols and Punctuations, Hiragana, Katakana
           0x3131, 0x3163,  // Korean alphabets
           0x31F0, 0x31FF,  // Katakana Phonetic Extensions
+          0x4E00, 0x9FAF,  // CJK Ideograms
           0xA640, 0xA69F,  // Cyrillic Extended-B
           0xAC00, 0xD7A3,  // Korean characters
           0xFF00, 0xFFEF,  // Half-width characters
           0xFFFD, 0xFFFD,  // Invalid
-          0x4e00, 0x9FAF,  // CJK Ideograms
           0,
       };
       io.Fonts->AddFontFromFileTTF(font_path.c_str(), Gfx::g_debug_settings.imgui_font_size,
@@ -183,7 +187,6 @@ static void init_imgui(SDL_Window* window,
   }
 
   // set up to get inputs for this window
-  auto test = SDL_GetCurrentVideoDriver();
   ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
 
   // NOTE: imgui's setup calls functions that may fail intentionally, and attempts to disable error
@@ -198,7 +201,7 @@ static void init_imgui(SDL_Window* window,
 static std::shared_ptr<GfxDisplay> gl_make_display(int width,
                                                    int height,
                                                    const char* title,
-                                                   GfxGlobalSettings& settings,
+                                                   GfxGlobalSettings& /*settings*/,
                                                    GameVersion game_version,
                                                    bool is_main) {
   // Setup the window
@@ -291,8 +294,8 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
 GLDisplay::GLDisplay(SDL_Window* window, SDL_GLContext gl_context, bool is_main)
     : m_window(window),
       m_gl_context(gl_context),
-      m_input_manager(std::make_shared<InputManager>()),
-      m_display_manager(std::make_shared<DisplayManager>(window)) {
+      m_display_manager(std::make_shared<DisplayManager>(window)),
+      m_input_manager(std::make_shared<InputManager>()) {
   m_main = is_main;
 
   // Register commands
@@ -337,9 +340,8 @@ void render_game_frame(int game_width,
   {
     auto p = scoped_prof("wait-for-dma");
     std::unique_lock<std::mutex> lock(g_gfx_data->dma_mutex);
-    // note: there's a timeout here. If the engine is messed up and not sending us frames,
-    // we still want to run the glfw loop.
-    got_chain = g_gfx_data->dma_cv.wait_for(lock, std::chrono::milliseconds(50),
+    // there's a timeout here, so imgui can still be responsive even if we don't render anything
+    got_chain = g_gfx_data->dma_cv.wait_for(lock, std::chrono::milliseconds(40),
                                             [=] { return g_gfx_data->has_data_to_render; });
   }
   // render that chain.
@@ -357,12 +359,16 @@ void render_game_frame(int game_width,
     options.draw_profiler_window = g_gfx_data->debug_gui.should_draw_profiler();
     options.draw_loader_window = g_gfx_data->debug_gui.should_draw_loader_menu();
     options.draw_subtitle_editor_window = g_gfx_data->debug_gui.should_draw_subtitle_editor();
+    options.draw_subtitle2_editor_window = g_gfx_data->debug_gui.should_draw_subtitle2_editor();
     options.draw_filters_window = g_gfx_data->debug_gui.should_draw_filters_menu();
     options.save_screenshot = false;
+    options.quick_screenshot = false;
+    options.internal_res_screenshot = false;
     options.gpu_sync = g_gfx_data->debug_gui.should_gl_finish();
 
     if (take_screenshot) {
       options.save_screenshot = true;
+      options.quick_screenshot = true;
       options.screenshot_path = file_util::make_screenshot_filepath(g_game_version);
     }
     if (g_gfx_data->debug_gui.get_screenshot_flag()) {
@@ -431,19 +437,16 @@ void GLDisplay::process_sdl_events() {
     if (evt.type == SDL_QUIT) {
       m_should_quit = true;
     }
-
     {
       auto p = scoped_prof("sdl-display-manager");
       m_display_manager->process_sdl_event(evt);
     }
-
     if (!m_should_quit) {
       {
         auto p = scoped_prof("imgui-sdl-process");
         ImGui_ImplSDL2_ProcessEvent(&evt);
       }
     }
-
     ImGuiIO& io = ImGui::GetIO();
     {
       auto p = scoped_prof("sdl-input-monitor");
@@ -461,6 +464,12 @@ void GLDisplay::process_sdl_events() {
 void GLDisplay::render() {
   // Process SDL Events
   process_sdl_events();
+  // Also process any display related events received from the EE (the game)
+  // this is done here so they run from the perspective of the graphics thread
+  {
+    auto p = scoped_prof("display-manager-ee-events");
+    m_display_manager->process_ee_events();
+  }
 
   // imgui start of frame
   {
