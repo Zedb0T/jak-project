@@ -1642,6 +1642,16 @@
 ;; the DGO file
 (custom-level-cgo "TSZ.DGO" "test-zone/testzone.gd")
 
+;; it should point to the .jsonc file that specifies the level.
+(build-custom-level "warp1")
+;; the DGO file
+(custom-level-cgo "WA1.DGO" "warp1/warp1.gd")
+
+;; it should point to the .jsonc file that specifies the level.
+(build-custom-level "warp2")
+;; the DGO file
+(custom-level-cgo "WA2.DGO" "warp2/warp2.gd")
+
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Game Engine Code
 ;;;;;;;;;;;;;;;;;;;;;

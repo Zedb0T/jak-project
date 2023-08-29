@@ -2012,4 +2012,86 @@
                            )
         )
 
+(define warp1 (new 'static 'level-load-info
+                           :index 27
+                           :name 'warp1
+                           :visname 'warp1-vis ;; name + -vis
+                           :nickname 'wa1         ;; nickname
+                           :packages '()
+                           :sound-banks '()
+                           :music-bank #f
+                           :ambient-sounds '()
+                           :mood '*default-mood*
+                           :mood-func 'update-mood-default
+                           :ocean #f
+                           :sky #t
+                           :continues '((new 'static 'continue-point
+                                             :name "warp1-start"
+                                             :level 'warp1
+                                             ;;201.07 100.00 -96.02
+                                             :trans (new 'static 'vector :x (meters 201.07) :y (meters 100.0) :z (meters -96.0) :w 1.0)
+                                             :quat (new 'static 'quaternion  :w 1.0)
+                                             :camera-trans (new 'static 'vector :x 0.0 :y 4096.0 :z 0.0 :w 1.0)
+                                             :camera-rot (new 'static 'array float 9 1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 1.0)
+                                             :load-commands '()
+                                             :vis-nick 'none
+                                             :lev0 'warp1
+                                             :disp0 'display
+                                             :lev1 'village1
+                                             :disp1 'display
+                                             ))
+                           :tasks '()
+                           :priority 100
+                           :load-commands '()
+                           :alt-load-commands '()
+                           :bsp-mask #xffffffffffffffff
+                           :bsphere (new 'static 'sphere :w 167772160000.0)
+                           :bottom-height (meters -20)
+                           :run-packages '()
+                           :wait-for-load #t
+                           )
+        )
+
+
+(define warp2 (new 'static 'level-load-info
+                           :index 26
+                           :name 'warp2
+                           :visname 'warp2-vis ;; name + -vis
+                           :nickname 'wa2         ;; nickname
+                           :packages '()
+                           :sound-banks '()
+                           :music-bank #f
+                           :ambient-sounds '()
+                           :mood '*default-mood*
+                           :mood-func 'update-mood-default
+                           :ocean #f
+                           :sky #t
+                           :continues '((new 'static 'continue-point
+                                             :name "warp2-start"
+                                             :level 'warp2
+                                             :trans (new 'static 'vector :x (meters 101.07) :y (meters 100.0) :z (meters -96.0) :w 1.0)
+                                             :quat (new 'static 'quaternion  :w 1.0)
+                                             :camera-trans (new 'static 'vector :x 0.0 :y 4096.0 :z 0.0 :w 1.0)
+                                             :camera-rot (new 'static 'array float 9 1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 1.0)
+                                             :load-commands '()
+                                             :vis-nick 'none
+                                             :lev0 'warp2
+                                             :disp0 'display
+                                             :lev1 'village1
+                                             :disp1 'display
+                                             ))
+                           :tasks '()
+                           :priority 100
+                           :load-commands '()
+                           :alt-load-commands '()
+                           :bsp-mask #xffffffffffffffff
+                           :bsphere (new 'static 'sphere :w 167772160000.0)
+                           :bottom-height (meters -20)
+                           :run-packages '()
+                           :wait-for-load #t
+                           )
+        )
+
 (cons! *level-load-list* 'test-zone)
+(cons! *level-load-list* 'warp1)
+(cons! *level-load-list* 'warp2)
