@@ -104,7 +104,10 @@
     (remove-setting! 'allow-progress)
     (set! (-> self state-time) (-> *display* base-frame-counter))
     (loop
-      (when (and (and *target* (>= 20480.0 (vector-vector-distance (-> self root trans) (-> *target* control trans))))
+      ;; for whatever reason, one of these tests was failing for custom warpgates, so we made it a OR statement and duplicated the first condition
+      ;; that always just checks distance and if ur close displays menu for warpgate
+      (when (or (and *target* (>= 20480.0 (vector-vector-distance (-> self root trans) (-> *target* control trans)))) 
+            (and (and *target* (>= 20480.0 (vector-vector-distance (-> self root trans) (-> *target* control trans))))
                  (and (>= (-> self level-slot) 0)
                       (not (movie?))
                       (not (level-hint-displayed?))
@@ -120,6 +123,7 @@
                         )
                       )
                  )
+          )
         (hide-hud)
         (level-hint-surpress!)
         (kill-current-level-hint '() '(sidekick voicebox) 'exit)

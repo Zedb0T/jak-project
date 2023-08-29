@@ -6,4 +6,8 @@
  ("static-screen.o"
   "warp2.go"
   "plat-ag.go"
+  "warp-gate-switch-ag.go"
+  "training-part.o"
+  "warpgate-ag.go"
+  "villagep-obs.o"
  ))

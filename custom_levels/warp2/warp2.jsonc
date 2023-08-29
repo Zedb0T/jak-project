@@ -36,7 +36,7 @@
 
   // All art groups you want to use in your custom level. Will add their models and corresponding textures to the FR3 file.
   // Note: You will still have to add them to your level's .gd file.
-  "art_groups": ["plat-ag"],
+  "art_groups": ["plat-ag", "warpgate-ag", "warp-gate-switch-ag"],
 
   // Ambients you want to use in your custom level. Ambients can be used for various things like changing the music variation (flava),
   // adding ambient sounds, level name hints, etc.
@@ -55,11 +55,49 @@
 
   "actors" : [
     {
+      "trans": [ 100.0,103.0,-100.0], 
+      "etype": "warpgate",
+      "game_task": 0,
+      "quat" : [-0.1204, -0.1174, 0.6881, 0.7057],
+      "bsphere": [105.0, 100.0, -100.0, 1000], 
+      "lump": {
+        "name": "warp2-warpgate"
+      }
+    },
+	
+	{
+      "trans": [105.0, 100.0, -100.0], 
+      "etype": "warp-gate-switch",
+      "game_task": 105,
+      "quat" : [0, 0, 0, 1],
+      "bsphere": [105.0, 100.0, -100.0, 1000], 
+      "lump": {
+        "name": "warp2-warp-gate-switch",
+		"alt-actor": "warp2-training-part-1"
+      }
+    },
+	
+	{
+      "trans": [ 100.0, 103.0, -100.0], 
+      "etype": "training-part",
+      "game_task": 0,
+      "quat" : [-0.1204, -0.1174, 0.6881, 0.7057],
+      "bsphere":  [105.0, 100.0, -100.0, 1000], 
+      "lump": {
+        "name": "warp2-training-part-1",
+		"effect-name": "'warpgate-loop",
+        "art-name":"group-training-warpgate",
+        "effect-param": ["float", 3.0000, 80.0000, 12.0000, 40.0000],
+        "cycle-speed": ["float", -1.0000, 0.0000],
+        "rot": ["float", -1.0000, -1.0000,-1.0]
+      }
+    },
+    {
       "trans": [-21.6238, 20.0496, 17.1191], // translation
       "etype": "fuel-cell",  // actor type
       "game_task": 0, // associated game task (for powercells, etc)
       "quat" : [0, 0, 0, 1], // quaternion
-      "bsphere": [-21.6238, 19.3496, 17.1191, 10], // bounding sphere
+      "bsphere": [105.0, 100.0, -100.0, 1000], 
       "lump": {
         "name":"test-fuel-cell"
       }
