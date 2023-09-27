@@ -17,7 +17,7 @@ bool Compiler::try_getting_macro_from_goos(const goos::Object& macro_name, goos:
     got_macro = true;
   }
 
-  if (got_macro) {
+  if (got_macro && dest) {
     *dest = macro_obj;
   }
   return got_macro;
@@ -265,13 +265,29 @@ Val* Compiler::compile_mlet(const goos::Object& form, const goos::Object& rest, 
   return result;
 }
 
+Val* Compiler::compile_macro_expand(const goos::Object& form, const goos::Object& rest, Env* env) {
+  auto& macro = pair_car(rest);
+  auto& macro_name = pair_car(macro);
+  if (!try_getting_macro_from_goos(macro_name, nullptr)) {
+    throw_compiler_error(form, "invalid argument to `macro-expand`: {} does not exist as a macro",
+                         macro_name.print());
+  }
+  if (!pair_cdr(rest).is_empty_list()) {
+    throw_compiler_error(form, "too many arguments to `macro-expand`");
+  }
+  auto result = expand_macro_completely(macro, env);
+  auto code = pretty_print::to_string(result);
+  lg::print("{}\n", code);
+  return get_none();
+}
+
 bool Compiler::expand_macro_once(const goos::Object& src, goos::Object* out, Env*) {
   if (!src.is_pair()) {
     return false;
   }
 
-  auto first = src.as_pair()->car;
-  auto rest = src.as_pair()->cdr;
+  auto& first = src.as_pair()->car;
+  auto& rest = src.as_pair()->cdr;
   if (!first.is_symbol()) {
     return false;
   }
