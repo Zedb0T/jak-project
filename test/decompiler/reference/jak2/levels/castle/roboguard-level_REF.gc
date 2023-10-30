@@ -3,37 +3,35 @@
 
 ;; definition of type roboguard-level
 (deftype roboguard-level (nav-enemy)
-  ((unknown-n12kjh3n123 int32      5       :offset-assert 604)
-   (flags               uint16             :offset-assert 624)
-   (roll-timer          time-frame         :offset-assert 632)
-   (roll-dir            vector     :inline :offset-assert 640)
-   (incoming-attack-id  uint32             :offset-assert 656)
-   (turning-acc         float              :offset-assert 660)
-   (speed               float              :offset-assert 664)
-   (roll-attack-count   uint32             :offset-assert 668)
-   (roll-sound          sound-id           :offset-assert 672)
+  ((unknown-n12kjh3n123  int32   5)
+   (flags                uint16)
+   (roll-timer           time-frame)
+   (roll-dir             vector  :inline)
+   (incoming-attack-id   uint32)
+   (turning-acc          float)
+   (speed                float)
+   (roll-attack-count    uint32)
+   (roll-sound           sound-id)
    )
-  :heap-base #x230
-  :method-count-assert 189
-  :size-assert         #x2a4
-  :flag-assert         #xbd023002a4
+  (:state-methods
+    roboguard-level-state-178
+    roboguard-level-state-179
+    roll-enter
+    roll-hostile
+    roll-to-walk
+    idle-dizzy
+    explode
+    )
   (:methods
-    (roboguard-level-method-178 (_type_) none 178)
-    (roboguard-level-method-179 (_type_) none 179)
-    (roll-enter () _type_ :state 180)
-    (roll-hostile () _type_ :state 181)
-    (roll-to-walk () _type_ :state 182)
-    (idle-dizzy () _type_ :state 183)
-    (explode () _type_ :state 184)
-    (roboguard-level-method-185 (_type_ symbol) none 185)
-    (roboguard-level-method-186 (_type_) none 186)
-    (roboguard-level-method-187 (_type_) none 187)
-    (roboguard-level-method-188 (_type_) none 188)
+    (roboguard-level-method-185 (_type_ symbol) none)
+    (roboguard-level-method-186 (_type_) none)
+    (roboguard-level-method-187 (_type_) none)
+    (roboguard-level-method-188 (_type_) none)
     )
   )
 
 ;; definition for method 3 of type roboguard-level
-(defmethod inspect roboguard-level ((this roboguard-level))
+(defmethod inspect ((this roboguard-level))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -405,9 +403,9 @@
     )
   :code (behavior ()
     (let ((a0-0 (-> self skel root-channel 0)))
-      (set! (-> a0-0 frame-group) (the-as art-joint-anim (-> self draw art-group data 9)))
+      (set! (-> a0-0 frame-group) (the-as art-joint-anim roboguard-idle-to-ball-ja))
       (set! (-> a0-0 frame-num) 3.0)
-      (joint-control-channel-group! a0-0 (the-as art-joint-anim (-> self draw art-group data 9)) num-func-identity)
+      (joint-control-channel-group! a0-0 (the-as art-joint-anim roboguard-idle-to-ball-ja) num-func-identity)
       )
     (until (logtest? (-> self root status) (collide-status on-surface))
       (nav-enemy-falling-post)
@@ -441,65 +439,47 @@
   :code (behavior ()
     (ja-channel-push! 1 (seconds 0.1))
     (until #f
-      (ja-no-eval :group! (-> self draw art-group data 4)
-                  :num! (seek! 2.0 (rand-vu-float-range 0.1 0.15))
-                  :frame-num 0.0
-                  )
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 2.0 (rand-vu-float-range 0.1 0.15)) :frame-num 0.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 2.0 (rand-vu-float-range 0.1 0.15)))
         )
-      (ja-no-eval :group! (-> self draw art-group data 4)
-                  :num! (seek! 3.0 (rand-vu-float-range 0.1 0.15))
-                  :frame-num 2.0
-                  )
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 3.0 (rand-vu-float-range 0.1 0.15)) :frame-num 2.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 3.0 (rand-vu-float-range 0.1 0.15)))
         )
-      (ja-no-eval :group! (-> self draw art-group data 4)
-                  :num! (seek! 4.0 (rand-vu-float-range 0.1 0.15))
-                  :frame-num 3.0
-                  )
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 4.0 (rand-vu-float-range 0.1 0.15)) :frame-num 3.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 4.0 (rand-vu-float-range 0.1 0.15)))
         )
-      (ja-no-eval :group! (-> self draw art-group data 4)
-                  :num! (seek! 5.0 (rand-vu-float-range 0.1 0.15))
-                  :frame-num 4.0
-                  )
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 5.0 (rand-vu-float-range 0.1 0.15)) :frame-num 4.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 5.0 (rand-vu-float-range 0.1 0.15)))
         )
-      (ja-no-eval :group! (-> self draw art-group data 4)
-                  :num! (seek! 6.0 (rand-vu-float-range 0.1 0.15))
-                  :frame-num 5.0
-                  )
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 6.0 (rand-vu-float-range 0.1 0.15)) :frame-num 5.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 6.0 (rand-vu-float-range 0.1 0.15)))
         )
-      (ja-no-eval :group! (-> self draw art-group data 4) :num! (seek! 7.0 0.07) :frame-num 6.0)
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 7.0 0.07) :frame-num 6.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 7.0 0.07))
         )
-      (ja-no-eval :group! (-> self draw art-group data 4) :num! (seek! 8.0 0.07) :frame-num 7.0)
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 8.0 0.07) :frame-num 7.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 8.0 0.07))
         )
-      (ja-no-eval :group! (-> self draw art-group data 4) :num! (seek! 9.0 0.07) :frame-num 8.0)
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 9.0 0.07) :frame-num 8.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 9.0 0.07))
         )
-      (ja-no-eval :group! (-> self draw art-group data 4)
-                  :num! (seek! 10.0 (rand-vu-float-range 0.02 0.05))
-                  :frame-num 9.0
-                  )
+      (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 10.0 (rand-vu-float-range 0.02 0.05)) :frame-num 9.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek! 10.0 (rand-vu-float-range 0.02 0.05)))
@@ -531,7 +511,7 @@
     (ja-channel-push! 1 (seconds 0.2))
     (let ((f30-0 (get-rand-float-range self 0.9 1.1)))
       (until #f
-        (ja-no-eval :group! (-> self draw art-group data 4) :num! (seek! 10.0 (* 0.1 f30-0)) :frame-num 9.0)
+        (ja-no-eval :group! roboguard-idle0-ja :num! (seek! 10.0 (* 0.1 f30-0)) :frame-num 9.0)
         (until (ja-done? 0)
           (suspend)
           (ja :num! (seek! 10.0 (* 0.1 f30-0)))
@@ -551,7 +531,7 @@
     (logand! (-> self flags) -9)
     )
   :code (behavior ()
-    (ja-no-eval :group! (-> self draw art-group data 9) :num! (seek!) :frame-num 0.0)
+    (ja-no-eval :group! roboguard-idle-to-ball-ja :num! (seek!) :frame-num 0.0)
     (until (ja-done? 0)
       (suspend)
       (ja :num! (seek!))
@@ -708,7 +688,7 @@
         )
     )
   :code (behavior ()
-    (ja :group! (-> self draw art-group data 10))
+    (ja :group! roboguard-ball-ja)
     (until #f
       (let ((a0-3 (-> self skel root-channel 0)))
         (let ((f0-0 0.000024414063)
@@ -735,7 +715,7 @@
     '()
     )
   :code (behavior ()
-    (ja-no-eval :group! (-> self draw art-group data 27) :num! (seek!) :frame-num 0.0)
+    (ja-no-eval :group! roboguard-ball-to-dizzy-ja :num! (seek!) :frame-num 0.0)
     (until (ja-done? 0)
       (when (< 17.0 (ja-aframe-num 0))
         (logand! (-> self flags) -5)
@@ -768,7 +748,7 @@
     )
   :code (behavior ()
     (ja-channel-push! 1 (seconds 0.1))
-    (ja-no-eval :group! (-> self draw art-group data 28) :num! (seek!) :frame-num 0.0)
+    (ja-no-eval :group! roboguard-dizzy-ja :num! (seek!) :frame-num 0.0)
     (until (ja-done? 0)
       (suspend)
       (ja :num! (seek!))
@@ -781,7 +761,7 @@
   )
 
 ;; definition for method 70 of type roboguard-level
-(defmethod go-hostile roboguard-level ((this roboguard-level))
+(defmethod go-hostile ((this roboguard-level))
   (go (method-of-object this roll-enter))
   )
 
@@ -798,7 +778,7 @@
     )
   :code (behavior ()
     (ja-channel-push! 1 (seconds 0.075))
-    (ja-no-eval :group! (-> self draw art-group data 12)
+    (ja-no-eval :group! roboguard-death-standing-ja
                 :num! (seek! (ja-aframe 20.0 0))
                 :frame-num (ja-aframe 13.0 0)
                 )
@@ -806,7 +786,7 @@
       (suspend)
       (ja :num! (seek! (ja-aframe 20.0 0)))
       )
-    (ja-no-eval :group! (-> self draw art-group data 12)
+    (ja-no-eval :group! roboguard-death-standing-ja
                 :num! (seek! (ja-aframe 25.0 0) 0.5)
                 :frame-num (ja-aframe 20.0 0)
                 )
@@ -814,7 +794,7 @@
       (suspend)
       (ja :num! (seek! (ja-aframe 25.0 0) 0.5))
       )
-    (ja-no-eval :group! (-> self draw art-group data 12)
+    (ja-no-eval :group! roboguard-death-standing-ja
                 :num! (seek! (ja-aframe 26.0 0))
                 :frame-num (ja-aframe 25.0 0)
                 )
@@ -863,7 +843,7 @@
 
 ;; definition for method 185 of type roboguard-level
 ;; WARN: Return type mismatch int vs none.
-(defmethod roboguard-level-method-185 roboguard-level ((this roboguard-level) (arg0 symbol))
+(defmethod roboguard-level-method-185 ((this roboguard-level) (arg0 symbol))
   (let ((v1-1 (-> this root root-prim))
         (a0-1 arg0)
         )
@@ -930,7 +910,7 @@
   )
 
 ;; definition for method 77 of type roboguard-level
-(defmethod enemy-method-77 roboguard-level ((this roboguard-level) (arg0 (pointer float)))
+(defmethod enemy-method-77 ((this roboguard-level) (arg0 (pointer float)))
   (ja-channel-push! 1 0)
   (case (-> this incoming knocked-type)
     (((knocked-type knocked-type-0)
@@ -964,7 +944,7 @@
   )
 
 ;; definition for method 78 of type roboguard-level
-(defmethod enemy-method-78 roboguard-level ((this roboguard-level) (arg0 (pointer float)))
+(defmethod enemy-method-78 ((this roboguard-level) (arg0 (pointer float)))
   (case (-> this incoming knocked-type)
     (((knocked-type knocked-type-0)
       (knocked-type knocked-type-1)
@@ -998,7 +978,7 @@
 
 ;; definition for method 74 of type roboguard-level
 ;; INFO: Used lq/sq
-(defmethod general-event-handler roboguard-level ((this roboguard-level) (arg0 process) (arg1 int) (arg2 symbol) (arg3 event-message-block))
+(defmethod general-event-handler ((this roboguard-level) (arg0 process) (arg1 int) (arg2 symbol) (arg3 event-message-block))
   "Handles various events for the enemy
 @TODO - unsure if there is a pattern for the events and this should have a more specific name"
   (case arg2
@@ -1082,7 +1062,7 @@
 ;; definition for method 76 of type roboguard-level
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch object vs symbol.
-(defmethod enemy-method-76 roboguard-level ((this roboguard-level) (arg0 process) (arg1 event-message-block))
+(defmethod enemy-method-76 ((this roboguard-level) (arg0 process) (arg1 event-message-block))
   (rlet ((acc :class vf)
          (vf0 :class vf)
          (vf4 :class vf)
@@ -1177,7 +1157,7 @@
 ;; definition for method 142 of type roboguard-level
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod nav-enemy-method-142 roboguard-level ((this roboguard-level) (arg0 nav-control))
+(defmethod nav-enemy-method-142 ((this roboguard-level) (arg0 nav-control))
   (let ((s3-0 (new 'stack-no-clear 'vector)))
     (let ((a1-1 (-> arg0 state)))
       (set! (-> s3-0 quad) (-> a1-1 heading quad))
@@ -1204,7 +1184,7 @@
 ;; definition for method 176 of type roboguard-level
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod nav-enemy-method-176 roboguard-level ((this roboguard-level))
+(defmethod nav-enemy-method-176 ((this roboguard-level))
   (nav-enemy-method-177 this)
   (let ((a0-2 this))
     (when (logtest? (enemy-flag enemy-flag36) (-> a0-2 enemy-flags))
@@ -1227,7 +1207,7 @@
   )
 
 ;; definition for method 132 of type roboguard-level
-(defmethod dispose! roboguard-level ((this roboguard-level))
+(defmethod dispose! ((this roboguard-level))
   "Cleans-up the enemy and any associated resources. Potentially spawns skull gems"
   (when (not (logtest? (enemy-flag recover-applied-velocity) (-> this enemy-flags)))
     (send-event (ppointer->process (-> this parent)) 'roboguard-die)
@@ -1237,20 +1217,20 @@
   )
 
 ;; definition for method 10 of type roboguard-level
-(defmethod deactivate roboguard-level ((this roboguard-level))
+(defmethod deactivate ((this roboguard-level))
   (sound-stop (-> this roll-sound))
   (call-parent-method this)
   (none)
   )
 
 ;; definition for method 7 of type roboguard-level
-(defmethod relocate roboguard-level ((this roboguard-level) (arg0 int))
+(defmethod relocate ((this roboguard-level) (arg0 int))
   (call-parent-method this arg0)
   )
 
 ;; definition for method 114 of type roboguard-level
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-enemy-collision! roboguard-level ((this roboguard-level))
+(defmethod init-enemy-collision! ((this roboguard-level))
   "Initializes the [[collide-shape-moving]] and any ancillary tasks to make the enemy collide properly"
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
@@ -1310,7 +1290,7 @@
 
 ;; definition for method 115 of type roboguard-level
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-enemy! roboguard-level ((this roboguard-level))
+(defmethod init-enemy! ((this roboguard-level))
   "Common method called to initialize the enemy, typically sets up default field values and calls ancillary helper methods"
   (initialize-skeleton
     this

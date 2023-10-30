@@ -18,17 +18,13 @@
   )
 
 (deftype forest-hover-manager (hover-enemy-manager)
-  ((transport-actor entity-actor 2 :offset-assert 168)
+  ((transport-actor  entity-actor  2)
    )
-  :heap-base #x30
-  :method-count-assert 19
-  :size-assert         #xb0
-  :flag-assert         #x13003000b0
   )
 
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! forest-hover-manager ((this forest-hover-manager) (arg0 entity-actor))
+(defmethod init-from-entity! ((this forest-hover-manager) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -58,26 +54,22 @@ This commonly includes things such as:
   )
 
 (deftype forest-youngsamos (process-focusable)
-  ((root                collide-shape-moving         :override)
-   (init-quat           quaternion           :inline :offset-assert 208)
-   (desired-pos         vector               :inline :offset-assert 224)
-   (hit-dir             vector               :inline :offset-assert 240)
-   (hit-points          float                        :offset-assert 256)
-   (incoming-attack-id  uint32                       :offset-assert 260)
-   (falling?            basic                        :offset-assert 264)
-   (focus-disable-timer uint64                       :offset-assert 272)
-   (hud                 handle                       :offset-assert 280)
-   (sound-id            sound-id                     :offset-assert 288)
+  ((root                 collide-shape-moving :override)
+   (init-quat            quaternion            :inline)
+   (desired-pos          vector                :inline)
+   (hit-dir              vector                :inline)
+   (hit-points           float)
+   (incoming-attack-id   uint32)
+   (falling?             basic)
+   (focus-disable-timer  uint64)
+   (hud                  handle)
+   (sound-id             sound-id)
    )
-  :heap-base #xb0
-  :method-count-assert 31
-  :size-assert         #x124
-  :flag-assert         #x1f00b00124
-  (:methods
-    (idle () _type_ :state 27)
-    (hit () _type_ :state 28)
-    (die () _type_ :state 29)
-    (dormant () _type_ :state 30)
+  (:state-methods
+    idle
+    hit
+    die
+    dormant
     )
   )
 
@@ -110,7 +102,10 @@ This commonly includes things such as:
     )
   (if (-> self falling?)
       (vector-v++! (-> self root transv) (compute-acc-due-to-gravity (-> self root) (new-stack-vector0) 1.0))
-      (spawn (-> self part) (vector<-cspace! (new 'stack-no-clear 'vector) (-> self node-list data 3)))
+      (spawn
+        (-> self part)
+        (vector<-cspace! (new 'stack-no-clear 'vector) (joint-node-index youngsamos-highres-lod0-jg main))
+        )
       )
   (let ((gp-4 (-> self root)))
     (let ((a2-7 (new 'stack-no-clear 'collide-query)))
@@ -228,7 +223,7 @@ This commonly includes things such as:
   :code (behavior ()
     (ja-channel-push! 1 (seconds 0.2))
     (until #f
-      (ja-no-eval :group! (-> self draw art-group data 11) :num! (seek!) :frame-num 0.0)
+      (ja-no-eval :group! youngsamos-highres-idle-deep-meditate0-ja :num! (seek!) :frame-num 0.0)
       (until (ja-done? 0)
         (suspend)
         (ja :num! (seek!))
@@ -270,21 +265,21 @@ This commonly includes things such as:
     (let ((v1-5 (vector-inv-orient-by-quat! (new 'stack-no-clear 'vector) (-> self hit-dir) (-> self root quat))))
       (cond
         ((< (-> v1-5 x) (-> v1-5 z))
-         (ja-no-eval :group! (-> self draw art-group data 12) :num! (seek!) :frame-num 0.0)
+         (ja-no-eval :group! youngsamos-highres-hit-back0-ja :num! (seek!) :frame-num 0.0)
          (until (ja-done? 0)
            (suspend)
            (ja :num! (seek!))
            )
          )
         ((< (-> v1-5 x) 0.0)
-         (ja-no-eval :group! (-> self draw art-group data 13) :num! (seek!) :frame-num 0.0)
+         (ja-no-eval :group! youngsamos-highres-hit-right0-ja :num! (seek!) :frame-num 0.0)
          (until (ja-done? 0)
            (suspend)
            (ja :num! (seek!))
            )
          )
         (else
-          (ja-no-eval :group! (-> self draw art-group data 14) :num! (seek!) :frame-num 0.0)
+          (ja-no-eval :group! youngsamos-highres-hit-left0-ja :num! (seek!) :frame-num 0.0)
           (until (ja-done? 0)
             (suspend)
             (ja :num! (seek!))
@@ -321,12 +316,12 @@ This commonly includes things such as:
       (set! (-> gp-0 y) (lerp 20480.0 40960.0 f30-0))
       )
     (ja-channel-push! 1 (seconds 0.2))
-    (ja-no-eval :group! (-> self draw art-group data 15) :num! (seek!) :frame-num 0.0)
+    (ja-no-eval :group! youngsamos-highres-death-fall-ja :num! (seek!) :frame-num 0.0)
     (until (ja-done? 0)
       (suspend)
       (ja :num! (seek!))
       )
-    (ja-no-eval :group! (-> self draw art-group data 16) :num! (seek!) :frame-num 0.0)
+    (ja-no-eval :group! youngsamos-highres-death-land-ja :num! (seek!) :frame-num 0.0)
     (until (ja-done? 0)
       (suspend)
       (ja :num! (seek!))
@@ -390,7 +385,7 @@ This commonly includes things such as:
   (-> arg0 status)
   )
 
-(defmethod deactivate forest-youngsamos ((this forest-youngsamos))
+(defmethod deactivate ((this forest-youngsamos))
   (if (valid? (-> this hud) (the-as type #f) "" #t 0)
       (send-event (handle->process (-> this hud)) 'hide-and-die)
       )
@@ -400,7 +395,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! forest-youngsamos ((this forest-youngsamos) (arg0 entity-actor))
+(defmethod init-from-entity! ((this forest-youngsamos) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size

@@ -9,19 +9,13 @@
 ;; DECOMP BEGINS
 
 (deftype snowball-info (basic)
-  ((entity basic  :offset-assert   4)
+  ((entity  basic)
    )
-  :method-count-assert 9
-  :size-assert         #x8
-  :flag-assert         #x900000008
   )
 
 
 (deftype snowball-bank (basic)
   ()
-  :method-count-assert 9
-  :size-assert         #x4
-  :flag-assert         #x900000004
   )
 
 
@@ -105,7 +99,7 @@
     (move-by-vector! (-> self control) (new 'static 'vector :y 4096.0 :w 1.0))
     (logior! (-> self control root-prim prim-core action) (collide-action snowball))
     (ja-channel-set! 1)
-    (ja :group! (-> self draw art-group data 5) :num! min)
+    (ja :group! eichar-stance-loop-ja :num! min)
     (remove-exit)
     (go target-snowball)
     )

@@ -34,6 +34,7 @@ struct CompilationOptions {
   bool write = false;                   // write object file to out/obj
   bool no_code = false;                 // file shouldn't generate code, throw error if it does
   bool disassemble = false;             // either print disassembly to stdout or output_file
+  bool disasm_code_only = false;        // if on, IR and source lines are not printed
   bool print_time = false;              // print timing statistics
 };
 
@@ -97,7 +98,7 @@ class Compiler {
   MakeSystem& make_system() { return m_make; }
   std::set<std::string> lookup_symbol_infos_starting_with(const std::string& prefix) const;
   std::vector<SymbolInfo>* lookup_exact_name_info(const std::string& name) const;
-  std::optional<TypeSpec> lookup_typespec(const std::string& symbol_name) const;
+  std::optional<TypeSpec> lookup_typespec(const std::string& symbol_name);
 
  private:
   GameVersion m_version;
@@ -110,9 +111,12 @@ class Compiler {
   goos::Interpreter m_goos;
   Debugger m_debugger;
   std::unordered_map<std::string, goos::ArgumentSpec> m_macro_specs;
-  std::unordered_map<std::string, TypeSpec> m_symbol_types;
-  std::unordered_map<goos::HeapObject*, goos::Object> m_global_constants;
-  std::unordered_map<goos::HeapObject*, InlineableFunction> m_inlineable_functions;
+  std::unordered_map<goos::InternedSymbolPtr, TypeSpec, goos::InternedSymbolPtr::hash>
+      m_symbol_types;
+  std::unordered_map<goos::InternedSymbolPtr, goos::Object, goos::InternedSymbolPtr::hash>
+      m_global_constants;
+  std::unordered_map<goos::InternedSymbolPtr, InlineableFunction, goos::InternedSymbolPtr::hash>
+      m_inlineable_functions;
   CompilerSettings m_settings;
   bool m_throw_on_define_extern_redefinition = false;
   std::unordered_set<std::string> m_allow_inconsistent_definition_symbols;
@@ -207,7 +211,8 @@ class Compiler {
   std::vector<u8> codegen_object_file(FileEnv* env);
   bool codegen_and_disassemble_object_file(FileEnv* env,
                                            std::vector<u8>* data_out,
-                                           std::string* asm_out);
+                                           std::string* asm_out,
+                                           bool omit_ir);
 
   void for_each_in_list(const goos::Object& list,
                         const std::function<void(const goos::Object&)>& f);
@@ -220,7 +225,7 @@ class Compiler {
                 const std::unordered_map<std::string,
                                          std::pair<bool, std::optional<goos::ObjectType>>>& named);
   const std::string& as_string(const goos::Object& o);
-  const std::string& symbol_string(const goos::Object& o);
+  std::string symbol_string(const goos::Object& o);
   std::string quoted_sym_as_string(const goos::Object& o);
   goos::Object unquote(const goos::Object& o);
   bool is_quoted_sym(const goos::Object& o);
