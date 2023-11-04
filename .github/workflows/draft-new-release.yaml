@@ -32,4 +32,4 @@ jobs:
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.BOT_PAT }}
-        run: gh release create ${{ steps.tag_version.outputs.new_tag }} --generate-notes --draft --repo zedb0tl/jak-project
+        run: gh release create ${{ steps.tag_version.outputs.new_tag }} --generate-notes --draft --repo zedb0t/jak-project

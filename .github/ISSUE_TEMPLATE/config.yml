@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Feature Requests and Ideas
-    url: https://github.com/zedb0tl/jak-project/discussions/new/choose
+    url: https://github.com/zedb0t/jak-project/discussions/new/choose
     about: Please use the discussion board to bring up feature requests and ideas. If there is interest in them, they can then be converted to an issue(s).
   - name: Discord Help Channel
     url: https://discord.gg/dPRCfsju3N

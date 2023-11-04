@@ -112,11 +112,11 @@ jobs:
 #           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 #         run: |
 #           TAG_VAL=$(echo ${{ github.REF }} | awk -F'refs/tags/' '{print $2}')
-#           gh release upload "${TAG_VAL}" ${{ github.WORKSPACE }}/ci-artifacts/final/* --repo zedb0tl/jak-project --clobber
+#           gh release upload "${TAG_VAL}" ${{ github.WORKSPACE }}/ci-artifacts/final/* --repo zedb0t/jak-project --clobber
 
 #       - name: Publish Release
 #         env:
 #           GITHUB_TOKEN: ${{ secrets.BOT_PAT }}
 #         run: |
 #           TAG_VAL=$(echo ${{ github.REF }} | awk -F'refs/tags/' '{print $2}')
-#           gh release edit ${TAG_VAL} --draft=false --repo zedb0tl/jak-project
+#           gh release edit ${TAG_VAL} --draft=false --repo zedb0t/jak-project

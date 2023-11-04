@@ -5,8 +5,8 @@
 <p align="center">
   <a href="https://opengoal.dev/docs/intro" rel="nofollow"><img src="https://img.shields.io/badge/Documentation-Here-informational" alt="Documentation Badge" style="max-width:100%;"></a>
   <a title="Crowdin" target="_blank" href="https://crowdin.com/project/opengoal"><img src="https://badges.crowdin.net/opengoal/localized.svg"></a>
-  <a target="_blank" rel="noopener noreferrer" href="https://github.com/zedb0tl/jak-project/actions/workflows/build-matrix.yaml"><img src="https://github.com/zedb0tl/jak-project/actions/workflows/build-matrix.yaml/badge.svg" alt="Linux and Windows Build" style="max-width:100%;"></a>
-  <a href="https://www.codacy.com/gh/zedb0tl/jak-project/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=zedb0tl/jak-project&amp;utm_campaign=Badge_Grade" rel="nofollow"><img src="https://app.codacy.com/project/badge/Grade/29316d04a1644aa390c33be07289f3f5" alt="Codacy Badge" style="max-width:100%;"></a>
+  <a target="_blank" rel="noopener noreferrer" href="https://github.com/zedb0t/jak-project/actions/workflows/build-matrix.yaml"><img src="https://github.com/zedb0t/jak-project/actions/workflows/build-matrix.yaml/badge.svg" alt="Linux and Windows Build" style="max-width:100%;"></a>
+  <a href="https://www.codacy.com/gh/zedb0t/jak-project/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=zedb0t/jak-project&amp;utm_campaign=Badge_Grade" rel="nofollow"><img src="https://app.codacy.com/project/badge/Grade/29316d04a1644aa390c33be07289f3f5" alt="Codacy Badge" style="max-width:100%;"></a>
   <a href="https://discord.gg/VZbXMHXzWv"><img src="https://img.shields.io/discord/756287461377703987" alt="Discord"></a>
 </p>
 
@@ -221,7 +221,7 @@ scoop install git llvm nasm python task
 Clone the repository by running the following command in your folder of choice.
 
 ```sh
-git clone https://github.com/zedb0tl/jak-project.git
+git clone https://github.com/zedb0t/jak-project.git
 ```
 
 This will create a `jak-project` folder, open the project as a CMake project via Visual Studio.
