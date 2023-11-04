@@ -7,7 +7,7 @@ on:
 
 jobs:
   # Windows
-  build_windows_clang:
+  :
     name: "🖥️ Windows"
     uses: ./.github/workflows/windows-build-clang.yaml
     with:
@@ -25,7 +25,7 @@ jobs:
 
 # jobs:
 #   # Windows
-#   build_windows_clang:
+#   :
 #     name: "🖥️ Windows"
 #     uses: ./.github/workflows/windows-build-clang.yaml
 #     with:
@@ -58,7 +58,7 @@ jobs:
 #   upload_artifacts:
 #     if: github.repository == 'zedb0t/jak-project'
 #     needs:
-#       - build_windows_clang
+#       - 
 #       - build_linux_clang
 #       - build_macos_intel
 #     name: "Upload Artifacts"
