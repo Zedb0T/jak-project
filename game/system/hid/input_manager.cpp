@@ -249,24 +249,19 @@ void InputManager::register_command(const CommandBinding::Source source,
                                     const CommandBinding bind) {
   switch (source) {
     case CommandBinding::Source::CONTROLLER:
-      if (m_command_binds.controller_binds.find(bind.host_key) ==
-          m_command_binds.controller_binds.end()) {
-        m_command_binds.controller_binds[bind.host_key] = {};
-      }
-      m_command_binds.controller_binds[bind.host_key].push_back(bind);
+      m_command_binds.controller_binds[bind.host_keys.front()].push_back(bind);
       break;
-    case CommandBinding::Source::KEYBOARD:
-      if (m_command_binds.keyboard_binds.find(bind.host_key) ==
-          m_command_binds.keyboard_binds.end()) {
-        m_command_binds.keyboard_binds[bind.host_key] = {};
+        case CommandBinding::Source::KEYBOARD:
+      for (const auto& key : bind.host_keys) {
+        if (m_command_binds.keyboard_binds.find(key) == m_command_binds.keyboard_binds.end()) {
+          m_command_binds.keyboard_binds[key] = {};
+        }
+        m_command_binds.keyboard_binds[key].push_back(bind);
       }
-      m_command_binds.keyboard_binds[bind.host_key].push_back(bind);
       break;
+//undumb this later
     case CommandBinding::Source::MOUSE:
-      if (m_command_binds.mouse_binds.find(bind.host_key) == m_command_binds.mouse_binds.end()) {
-        m_command_binds.mouse_binds[bind.host_key] = {};
-      }
-      m_command_binds.mouse_binds[bind.host_key].push_back(bind);
+      m_command_binds.mouse_binds[bind.host_keys.front()].push_back(bind);
       break;
   }
 }

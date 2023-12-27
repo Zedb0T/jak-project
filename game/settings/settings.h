@@ -24,7 +24,8 @@ struct DebugSettings {
   bool text_check_range = false;
   float text_max_range = 0;
   u32 hide_imgui_key = SDLK_LALT;
-  u32 toggle_fullscreen_key = SDLK_F12;
+  u32 toggle_fullscreen_key_1 = SDLK_RETURN;
+  u32 toggle_fullscreen_key_2 = SDLK_F12;
 
   void save_settings();
 };

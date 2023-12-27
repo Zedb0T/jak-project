@@ -148,6 +148,14 @@ extern const std::vector<PadData::ButtonIndex> PAD_DATA_PRESSURE_INDEX_ORDER;
 struct InputModifiers {
   InputModifiers() = default;
   InputModifiers(const u16 sdl_mod_state);
+  InputModifiers(const bool _need_shift,
+                const bool _need_ctrl,
+                const bool _need_meta,
+                const bool _need_alt)
+      : need_shift(_need_shift),
+        need_ctrl(_need_ctrl),
+        need_meta(_need_meta),
+        need_alt(_need_alt){};
 
   bool need_shift = false;
   bool need_ctrl = false;
@@ -338,12 +346,17 @@ extern const InputBindingGroups DEFAULT_MOUSE_BINDS;
 struct CommandBinding {
   enum Source { CONTROLLER, KEYBOARD, MOUSE };
 
-  CommandBinding(const u32 _host_key, std::function<void()> _command)
-      : host_key(_host_key), command(_command){};
-  u32 host_key;
+  CommandBinding(const std::vector<u32>& _host_keys, std::function<void()> _command)
+      : host_keys(_host_keys), command(_command){};
+
+  CommandBinding(const std::vector<u32>& _host_keys, std::function<void()> _command, const InputModifiers _modifiers)
+      : host_keys(_host_keys), command(_command), modifiers(_modifiers){};
+
+  std::vector<u32> host_keys;
   std::function<void()> command;
   InputModifiers modifiers;
 };
+
 
 struct CommandBindingGroups {
   std::unordered_map<u32, std::vector<CommandBinding>> controller_binds;

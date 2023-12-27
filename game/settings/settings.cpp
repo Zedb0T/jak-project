@@ -18,7 +18,8 @@ void to_json(json& j, const DebugSettings& obj) {
   json_serialize(text_check_range);
   json_serialize(text_max_range);
   json_serialize(hide_imgui_key);
-  json_serialize(toggle_fullscreen_key);
+  json_serialize(toggle_fullscreen_key_1);
+  json_serialize(toggle_fullscreen_key_2);
 }
 
 void from_json(const json& j, DebugSettings& obj) {
@@ -32,7 +33,8 @@ void from_json(const json& j, DebugSettings& obj) {
   json_deserialize_if_exists(text_check_range);
   json_deserialize_if_exists(text_max_range);
   json_deserialize_if_exists(hide_imgui_key);
-  json_deserialize_if_exists(toggle_fullscreen_key);
+  json_deserialize_if_exists(toggle_fullscreen_key_1);
+  json_deserialize_if_exists(toggle_fullscreen_key_2);
 }
 
 DebugSettings::DebugSettings() {
