@@ -7,7 +7,7 @@
 
 ;; DECOMP BEGINS
 
-(defmethod draw ((this hud-rocketsensor))
+(defmethod draw hud-rocketsensor ((this hud-rocketsensor))
   (set-hud-piece-position!
     (the-as hud-sprite (-> this sprites))
     (the int (+ 457.0 (* 130.0 (-> this offset))))
@@ -20,14 +20,14 @@
   (none)
   )
 
-(defmethod update-values ((this hud-rocketsensor))
+(defmethod update-values hud-rocketsensor ((this hud-rocketsensor))
   (set! (-> this values 0 target) (the int (-> *game-info* counter)))
   ((method-of-type hud update-values) this)
   0
   (none)
   )
 
-(defmethod init-callback ((this hud-rocketsensor))
+(defmethod init-callback hud-rocketsensor ((this hud-rocketsensor))
   (set! (-> this level) (level-get *level* 'fordumpc))
   (set! (-> this gui-id)
         (add-process *gui-control* this (gui-channel hud-middle-right) (gui-action hidden) (-> this name) 81920.0 0)
@@ -45,11 +45,15 @@
   )
 
 (deftype fort-dump-bomb-a (process-drawable)
-  ((root  collide-shape :override)
+  ((root collide-shape  :override)
    )
-  (:state-methods
-    idle
-    die
+  :heap-base #x50
+  :method-count-assert 22
+  :size-assert         #xc8
+  :flag-assert         #x16005000c8
+  (:methods
+    (idle () _type_ :state 20)
+    (die () _type_ :state 21)
     )
   )
 
@@ -144,7 +148,7 @@
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this fort-dump-bomb-a) (arg0 entity-actor))
+(defmethod init-from-entity! fort-dump-bomb-a ((this fort-dump-bomb-a) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -186,13 +190,17 @@ This commonly includes things such as:
   )
 
 (deftype fort-missile-target (process-drawable)
-  ((root      collide-shape-moving :override)
-   (part-mat  matrix                2 :inline)
-   (sound-id  uint32)
+  ((root     collide-shape-moving           :override)
+   (part-mat matrix               2 :inline :offset-assert 208)
+   (sound-id uint32                         :offset-assert 336)
    )
-  (:state-methods
-    idle
-    die
+  :heap-base #xe0
+  :method-count-assert 22
+  :size-assert         #x154
+  :flag-assert         #x1600e00154
+  (:methods
+    (idle () _type_ :state 20)
+    (die () _type_ :state 21)
     )
   )
 
@@ -370,7 +378,7 @@ This commonly includes things such as:
     )
   )
 
-(defmethod deactivate ((this fort-missile-target))
+(defmethod deactivate fort-missile-target ((this fort-missile-target))
   (sound-stop (the-as sound-id (-> this sound-id)))
   (call-parent-method this)
   (none)
@@ -444,23 +452,27 @@ This commonly includes things such as:
   )
 
 (deftype fort-missile (process-drawable)
-  ((root                collide-shape :override)
-   (part-doom           sparticle-launch-control)
-   (hud                 handle)
-   (door-actor          entity-actor   2)
-   (tank-actor          entity-actor)
-   (bomb                handle         4)
-   (bomb-count          uint32)
-   (attack-id           uint32)
-   (explosion-sound-id  sound-id)
-   (alarm-sound-id      sound-id)
+  ((root               collide-shape              :override)
+   (part-doom          sparticle-launch-control   :offset-assert 200)
+   (hud                handle                     :offset-assert 208)
+   (door-actor         entity-actor             2 :offset-assert 216)
+   (tank-actor         entity-actor               :offset-assert 224)
+   (bomb               handle                   4 :offset-assert 232)
+   (bomb-count         uint32                     :offset-assert 264)
+   (attack-id          uint32                     :offset-assert 268)
+   (explosion-sound-id sound-id                   :offset-assert 272)
+   (alarm-sound-id     sound-id                   :offset-assert 276)
    )
-  (:state-methods
-    idle
-    targets-active
-    missile-countdown
-    die
-    dormant
+  :heap-base #xa0
+  :method-count-assert 25
+  :size-assert         #x118
+  :flag-assert         #x1900a00118
+  (:methods
+    (idle () _type_ :state 20)
+    (targets-active () _type_ :state 21)
+    (missile-countdown () _type_ :state 22)
+    (die () _type_ :state 23)
+    (dormant () _type_ :state 24)
     )
   )
 
@@ -898,7 +910,7 @@ This commonly includes things such as:
   :code sleep-code
   )
 
-(defmethod deactivate ((this fort-missile))
+(defmethod deactivate fort-missile ((this fort-missile))
   (set-fordumpc-light-flag! #f)
   (send-event (handle->process (-> this hud)) 'hide-and-die)
   (if (nonzero? (-> this part-doom))
@@ -909,7 +921,7 @@ This commonly includes things such as:
   (none)
   )
 
-(defmethod relocate ((this fort-missile) (arg0 int))
+(defmethod relocate fort-missile ((this fort-missile) (arg0 int))
   (if (nonzero? (-> this part-doom))
       (&+! (-> this part-doom) arg0)
       )
@@ -917,7 +929,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this fort-missile) (arg0 entity-actor))
+(defmethod init-from-entity! fort-missile ((this fort-missile) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size

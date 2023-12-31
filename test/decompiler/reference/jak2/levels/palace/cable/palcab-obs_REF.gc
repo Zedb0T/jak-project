@@ -3,16 +3,19 @@
 
 ;; definition of type pal-fan-ring
 (deftype pal-fan-ring (structure)
-  ((lightning       lightning-control)
-   (radius          float)
-   (dist            float)
-   (local-z-rotate  float)
+  ((lightning      lightning-control  :offset-assert   0)
+   (radius         float              :offset-assert   4)
+   (dist           float              :offset-assert   8)
+   (local-z-rotate float              :offset-assert  12)
    )
   :allow-misaligned
+  :method-count-assert 9
+  :size-assert         #x10
+  :flag-assert         #x900000010
   )
 
 ;; definition for method 3 of type pal-fan-ring
-(defmethod inspect ((this pal-fan-ring))
+(defmethod inspect pal-fan-ring ((this pal-fan-ring))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -28,14 +31,17 @@
 
 ;; definition of type pal-fan-pole
 (deftype pal-fan-pole (structure)
-  ((rings     pal-fan-ring  6 :inline)
-   (z-rotate  float         :offset  96)
+  ((rings    pal-fan-ring 6 :inline :offset-assert   0)
+   (z-rotate float                  :offset         96)
    )
   :allow-misaligned
+  :method-count-assert 9
+  :size-assert         #x64
+  :flag-assert         #x900000064
   )
 
 ;; definition for method 3 of type pal-fan-pole
-(defmethod inspect ((this pal-fan-pole))
+(defmethod inspect pal-fan-pole ((this pal-fan-pole))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -49,21 +55,25 @@
 
 ;; definition of type pal-electric-fan
 (deftype pal-electric-fan (process-drawable)
-  ((root                collide-shape-moving :override)
-   (poles               pal-fan-pole          3 :inline)
-   (no-collision-timer  time-frame            :offset 536)
-   (sound-timer         time-frame)
-   (rotate-speed        float)
-   (attack-id           uint32)
-   (sound-id            sound-id)
+  ((root               collide-shape-moving           :override)
+   (poles              pal-fan-pole         3 :inline :offset-assert 200)
+   (no-collision-timer time-frame                     :offset        536)
+   (sound-timer        time-frame                     :offset-assert 544)
+   (rotate-speed       float                          :offset-assert 552)
+   (attack-id          uint32                         :offset-assert 556)
+   (sound-id           sound-id                       :offset-assert 560)
    )
-  (:state-methods
-    idle
+  :heap-base #x1c0
+  :method-count-assert 21
+  :size-assert         #x234
+  :flag-assert         #x1501c00234
+  (:methods
+    (idle () _type_ :state 20)
     )
   )
 
 ;; definition for method 3 of type pal-electric-fan
-(defmethod inspect ((this pal-electric-fan))
+(defmethod inspect pal-electric-fan ((this pal-electric-fan))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -233,7 +243,7 @@
 
 ;; definition for method 7 of type pal-electric-fan
 ;; WARN: Return type mismatch process-drawable vs pal-electric-fan.
-(defmethod relocate ((this pal-electric-fan) (arg0 int))
+(defmethod relocate pal-electric-fan ((this pal-electric-fan) (arg0 int))
   (dotimes (v1-0 3)
     (dotimes (a2-0 6)
       (if (nonzero? (-> (the-as pal-electric-fan (&+ this (* 112 v1-0))) poles 0 rings a2-0 lightning))
@@ -246,7 +256,7 @@
 
 ;; definition for method 11 of type pal-electric-fan
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-electric-fan) (arg0 entity-actor))
+(defmethod init-from-entity! pal-electric-fan ((this pal-electric-fan) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -406,20 +416,24 @@ This commonly includes things such as:
 
 ;; definition of type pal-cable-nut
 (deftype pal-cable-nut (process-drawable)
-  ((root               collide-shape-moving :override)
-   (sync               sync-linear           :inline)
-   (init-quat          quaternion            :inline)
-   (sound-played?      symbol                2)
-   (hold-percentage    float)
-   (wiggle-percentage  float)
+  ((root              collide-shape-moving         :override)
+   (sync              sync-linear          :inline :offset-assert 200)
+   (init-quat         quaternion           :inline :offset-assert 224)
+   (sound-played?     symbol               2       :offset-assert 240)
+   (hold-percentage   float                        :offset-assert 248)
+   (wiggle-percentage float                        :offset-assert 252)
    )
-  (:state-methods
-    idle
+  :heap-base #x80
+  :method-count-assert 21
+  :size-assert         #x100
+  :flag-assert         #x1500800100
+  (:methods
+    (idle () _type_ :state 20)
     )
   )
 
 ;; definition for method 3 of type pal-cable-nut
-(defmethod inspect ((this pal-cable-nut))
+(defmethod inspect pal-cable-nut ((this pal-cable-nut))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -495,7 +509,7 @@ This commonly includes things such as:
 
 ;; definition for method 11 of type pal-cable-nut
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-cable-nut) (arg0 entity-actor))
+(defmethod init-from-entity! pal-cable-nut ((this pal-cable-nut) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -584,10 +598,14 @@ This commonly includes things such as:
 ;; definition of type pal-rot-gun-shot
 (deftype pal-rot-gun-shot (guard-shot)
   ()
+  :heap-base #x170
+  :method-count-assert 40
+  :size-assert         #x1f0
+  :flag-assert         #x28017001f0
   )
 
 ;; definition for method 3 of type pal-rot-gun-shot
-(defmethod inspect ((this pal-rot-gun-shot))
+(defmethod inspect pal-rot-gun-shot ((this pal-rot-gun-shot))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -602,7 +620,7 @@ This commonly includes things such as:
 ;; definition for method 25 of type pal-rot-gun-shot
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod spawn-impact-particles ((this pal-rot-gun-shot))
+(defmethod spawn-impact-particles pal-rot-gun-shot ((this pal-rot-gun-shot))
   "Spawns associated particles with the projectile if applicable"
   (let* ((gp-0 (-> this root trans))
          (a1-0 (-> this tail-pos))
@@ -653,7 +671,7 @@ This commonly includes things such as:
 ;; definition for method 26 of type pal-rot-gun-shot
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod spawn-shell-particles ((this pal-rot-gun-shot))
+(defmethod spawn-shell-particles pal-rot-gun-shot ((this pal-rot-gun-shot))
   "TODO - confirm"
   (let* ((s3-0 (-> this root))
          (s5-0 (vector-normalize! (vector-! (new 'stack-no-clear 'vector) (-> this tail-pos) (-> s3-0 trans)) 2048.0))
@@ -716,7 +734,7 @@ This commonly includes things such as:
 
 ;; definition for method 28 of type pal-rot-gun-shot
 ;; WARN: Return type mismatch int vs none.
-(defmethod play-impact-sound ((this pal-rot-gun-shot) (arg0 projectile-options))
+(defmethod play-impact-sound pal-rot-gun-shot ((this pal-rot-gun-shot) (arg0 projectile-options))
   (let ((v1-0 arg0))
     (cond
       ((zero? v1-0)
@@ -763,7 +781,7 @@ This commonly includes things such as:
 
 ;; definition for method 30 of type pal-rot-gun-shot
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-proj-collision! ((this pal-rot-gun-shot))
+(defmethod init-proj-collision! pal-rot-gun-shot ((this pal-rot-gun-shot))
   "Init the [[projectile]]'s [[collide-shape]]"
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
@@ -800,7 +818,7 @@ This commonly includes things such as:
 ;; definition for method 31 of type pal-rot-gun-shot
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-proj-settings! ((this pal-rot-gun-shot))
+(defmethod init-proj-settings! pal-rot-gun-shot ((this pal-rot-gun-shot))
   "Init relevant settings for the [[projectile]] such as gravity, speed, timeout, etc"
   (set! (-> this tail-pos quad) (-> this root trans quad))
   (set! (-> this attack-mode) 'pal-rot-gun-shot)
@@ -813,27 +831,29 @@ This commonly includes things such as:
 
 ;; definition of type pal-rot-gun
 (deftype pal-rot-gun (process-drawable)
-  ((init-quat        quaternion  :inline)
-   (fire-timer       time-frame)
-   (gun-index        int32)
-   (spin-rate        float)
-   (spin-rate-final  float)
-   (sound-id         sound-id)
-   (shot-sound-id    sound-id)
-   (prev-z-rot       float)
+  ((init-quat       quaternion :inline :offset-assert 208)
+   (fire-timer      time-frame         :offset-assert 224)
+   (gun-index       int32              :offset-assert 232)
+   (spin-rate       float              :offset-assert 236)
+   (spin-rate-final float              :offset-assert 240)
+   (sound-id        sound-id           :offset-assert 244)
+   (shot-sound-id   sound-id           :offset-assert 248)
+   (prev-z-rot      float              :offset-assert 252)
    )
-  (:state-methods
-    idle
-    spin
-    spin-down
-    )
+  :heap-base #x80
+  :method-count-assert 24
+  :size-assert         #x100
+  :flag-assert         #x1800800100
   (:methods
-    (pal-rot-gun-method-23 (_type_ matrix) none)
+    (idle () _type_ :state 20)
+    (spin () _type_ :state 21)
+    (spin-down () _type_ :state 22)
+    (pal-rot-gun-method-23 (_type_ matrix) none 23)
     )
   )
 
 ;; definition for method 3 of type pal-rot-gun
-(defmethod inspect ((this pal-rot-gun))
+(defmethod inspect pal-rot-gun ((this pal-rot-gun))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -987,7 +1007,7 @@ This commonly includes things such as:
 ;; definition for method 23 of type pal-rot-gun
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod pal-rot-gun-method-23 ((this pal-rot-gun) (arg0 matrix))
+(defmethod pal-rot-gun-method-23 pal-rot-gun ((this pal-rot-gun) (arg0 matrix))
   (let ((v1-0 (new 'stack-no-clear 'projectile-init-by-other-params)))
     (let ((a2-0 (-> arg0 vector))
           (a1-1 (-> arg0 vector 1))
@@ -1014,7 +1034,7 @@ This commonly includes things such as:
   )
 
 ;; definition for method 10 of type pal-rot-gun
-(defmethod deactivate ((this pal-rot-gun))
+(defmethod deactivate pal-rot-gun ((this pal-rot-gun))
   (sound-stop (-> this sound-id))
   (sound-stop (-> this shot-sound-id))
   (call-parent-method this)
@@ -1023,7 +1043,7 @@ This commonly includes things such as:
 
 ;; definition for method 11 of type pal-rot-gun
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-rot-gun) (arg0 entity-actor))
+(defmethod init-from-entity! pal-rot-gun ((this pal-rot-gun) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -1061,13 +1081,17 @@ This commonly includes things such as:
 ;; definition of type pal-windmill
 (deftype pal-windmill (process-drawable)
   ()
-  (:state-methods
-    idle
+  :heap-base #x50
+  :method-count-assert 21
+  :size-assert         #xc8
+  :flag-assert         #x15005000c8
+  (:methods
+    (idle () _type_ :state 20)
     )
   )
 
 ;; definition for method 3 of type pal-windmill
-(defmethod inspect ((this pal-windmill))
+(defmethod inspect pal-windmill ((this pal-windmill))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -1104,7 +1128,7 @@ This commonly includes things such as:
 
 ;; definition for method 11 of type pal-windmill
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-windmill) (arg0 entity-actor))
+(defmethod init-from-entity! pal-windmill ((this pal-windmill) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -1126,17 +1150,21 @@ This commonly includes things such as:
 
 ;; definition of type pal-flip-step
 (deftype pal-flip-step (process-drawable)
-  ((task-node  game-task-node-info)
+  ((task-node game-task-node-info  :offset-assert 200)
    )
-  (:state-methods
-    idle
-    fall
-    fallen
+  :heap-base #x50
+  :method-count-assert 23
+  :size-assert         #xcc
+  :flag-assert         #x17005000cc
+  (:methods
+    (idle () _type_ :state 20)
+    (fall () _type_ :state 21)
+    (fallen () _type_ :state 22)
     )
   )
 
 ;; definition for method 3 of type pal-flip-step
-(defmethod inspect ((this pal-flip-step))
+(defmethod inspect pal-flip-step ((this pal-flip-step))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -1198,7 +1226,7 @@ This commonly includes things such as:
 
 ;; definition for method 11 of type pal-flip-step
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-flip-step) (arg0 entity-actor))
+(defmethod init-from-entity! pal-flip-step ((this pal-flip-step) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size

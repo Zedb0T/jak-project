@@ -11,10 +11,14 @@
 (declare-file (debug))
 
 (deftype scene-looper (process)
-  ((scene-name  symbol)
+  ((scene-name symbol  :offset-assert 128)
    )
-  (:state-methods
-    idle
+  :heap-base #x10
+  :method-count-assert 15
+  :size-assert         #x84
+  :flag-assert         #xf00100084
+  (:methods
+    (idle () _type_ :state 14)
     )
   )
 

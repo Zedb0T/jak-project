@@ -10,28 +10,28 @@ static s16 ApplyVolume(s16 sample, s32 volume) {
   return (sample * volume) >> 15;
 }
 
-s16Output Synth::Tick() {
-  s16Output out{};
+s16_output synth::tick() {
+  s16_output out{};
 
-  mVoices.remove_if([](std::shared_ptr<Voice>& v) { return v->Dead(); });
-  for (auto& v : mVoices) {
-    out += v->Run();
+  m_voices.remove_if([](std::shared_ptr<voice>& v) { return v->dead(); });
+  for (auto& v : m_voices) {
+    out += v->run();
   }
 
-  out.left = ApplyVolume(out.left, mVolume.left.Get());
-  out.right = ApplyVolume(out.right, mVolume.right.Get());
+  out.left = ApplyVolume(out.left, m_Volume.left.Get());
+  out.right = ApplyVolume(out.right, m_Volume.right.Get());
 
-  mVolume.Run();
+  m_Volume.Run();
 
   return out;
 }
 
-void Synth::AddVoice(std::shared_ptr<Voice> voice) {
-  mVoices.emplace_front(voice);
+void synth::add_voice(std::shared_ptr<voice> voice) {
+  m_voices.emplace_front(voice);
 }
 
-void Synth::SetMasterVol(u32 volume) {
-  mVolume.left.Set(volume);
-  mVolume.right.Set(volume);
+void synth::set_master_vol(u32 volume) {
+  m_Volume.left.Set(volume);
+  m_Volume.right.Set(volume);
 }
 }  // namespace snd

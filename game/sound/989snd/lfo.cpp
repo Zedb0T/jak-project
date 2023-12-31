@@ -7,79 +7,79 @@
 namespace snd {
 #include "lfo_sine.c.inc"
 
-void LFOTracker::Init() {
-  if (m_type == LFOType::RAND) {
+void LFOTracker::init() {
+  if (m_type == lfo_type::RAND) {
     m_state_hold1 = -(rand() & 0x7fff) * (rand() & 1);
     m_state_hold2 = 1;
   }
 
-  CalcDepth();
-  Tick();
+  calc_depth();
+  tick();
 }
 
-void LFOTracker::CalcDepth() {
-  if (m_target == LFOTarget::VOLUME) {
-    m_range = (m_handler.m_sfx.Vol * m_depth) >> 10;
+void LFOTracker::calc_depth() {
+  if (m_target == lfo_target::VOLUME) {
+    m_range = (m_handler.m_sfx.d.Vol * m_depth) >> 10;
   }
-  if (m_target == LFOTarget::PAN) {
+  if (m_target == lfo_target::PAN) {
     m_range = (180 * m_depth) >> 10;
   }
-  if (m_target == LFOTarget::PMOD) {
+  if (m_target == lfo_target::PMOD) {
     m_range = (6096 * m_depth) >> 10;
   }
-  if (m_target == LFOTarget::PBEND) {
+  if (m_target == lfo_target::PBEND) {
     m_range = (0x7fff * m_depth) >> 10;
   }
 
   m_last_lfo = 0;
 }
 
-void LFOTracker::Tick() {
+void LFOTracker::tick() {
   m_tick++;
 
-  if (m_target == LFOTarget::NONE || (m_tick & 1) == 0) {
+  if (m_target == lfo_target::NONE || (m_tick & 1) == 0) {
     return;
   }
 
   switch (m_target) {
-    case LFOTarget::VOLUME: {
-      s32 vol = (m_range * (GetLFO(2) - 0x7fff)) >> 16;
+    case lfo_target::VOLUME: {
+      s32 vol = (m_range * (get_lfo(2) - 0x7fff)) >> 16;
       if (m_handler.m_lfo_volume != vol) {
         m_handler.m_lfo_volume = vol;
-        m_handler.SetVolPan(VOLUME_DONT_CHANGE, PAN_DONT_CHANGE);
+        m_handler.set_vol_pan(VOLUME_DONT_CHANGE, PAN_DONT_CHANGE);
       }
     } break;
-    case LFOTarget::PAN: {
-      s32 pan = (m_range * GetLFO(2)) >> 15;
+    case lfo_target::PAN: {
+      s32 pan = (m_range * get_lfo(2)) >> 15;
       if (m_handler.m_lfo_pan != pan) {
         m_handler.m_lfo_pan = pan;
-        m_handler.SetVolPan(VOLUME_DONT_CHANGE, PAN_DONT_CHANGE);
+        m_handler.set_vol_pan(VOLUME_DONT_CHANGE, PAN_DONT_CHANGE);
       }
     } break;
-    case LFOTarget::PMOD: {
-      s32 pm = (GetLFO(2) * m_range) >> 15;
+    case lfo_target::PMOD: {
+      s32 pm = (get_lfo(2) * m_range) >> 15;
       if (m_handler.m_lfo_pm != pm) {
         m_handler.m_lfo_pm = pm;
-        m_handler.UpdatePitch();
+        m_handler.update_pitch();
       }
     } break;
-    case LFOTarget::PBEND: {
-      s32 pb = (GetLFO(2) * m_range) >> 15;
+    case lfo_target::PBEND: {
+      s32 pb = (get_lfo(2) * m_range) >> 15;
       if (m_handler.m_lfo_pb != pb) {
         m_handler.m_lfo_pb = pb;
-        m_handler.UpdatePitch();
+        m_handler.update_pitch();
       }
     } break;
-    case LFOTarget::UNK1: {
+    case lfo_target::UNK1: {
     } break;
-    case LFOTarget::UNK2: {
+    case lfo_target::UNK2: {
     } break;
     default:
       break;
   }
 }
 
-s32 LFOTracker::GetLFO(s32 step_mult) {
+s32 LFOTracker::get_lfo(s32 step_mult) {
   s32 step = m_next_step >> 16;
   m_next_step += step_mult * m_step_size;
   if (m_next_step > 0x7ffffff) {
@@ -89,20 +89,20 @@ s32 LFOTracker::GetLFO(s32 step_mult) {
   s32 ret = 0;
 
   switch (m_type) {
-    case LFOType::OFF:
+    case lfo_type::OFF:
       ret = 0;
       break;
-    case LFOType::SINE:
+    case lfo_type::SINE:
       ret = gLFO_sine.at(step);
       break;
-    case LFOType::SQUARE:
+    case lfo_type::SQUARE:
       if (step >= m_state_hold1) {
         ret = -32767;
       } else {
         ret = 32767;
       }
       break;
-    case LFOType::TRIANGLE:
+    case lfo_type::TRIANGLE:
       if (step < 512) {
         ret = 0x7fff * step / 512;
       } else if (step >= 1536) {
@@ -111,14 +111,14 @@ s32 LFOTracker::GetLFO(s32 step_mult) {
         ret = 0x7fff - 65534 * (step - 512) / 1024;
       }
       break;
-    case LFOType::SAW:
+    case lfo_type::SAW:
       if (step >= 1024) {
         ret = 0x7fff * (step - 1024) / 1024 - 0x7fff;
       } else {
         ret = 0x7fff * step / 1023;
       }
       break;
-    case LFOType::RAND:
+    case lfo_type::RAND:
       if (step >= 1024 && m_state_hold2 == 1) {
         m_state_hold2 = 0;
         m_state_hold1 = 2 * ((rand() & 0x7fff) - 0x3fff);

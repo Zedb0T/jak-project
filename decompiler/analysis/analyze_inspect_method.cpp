@@ -1643,59 +1643,31 @@ std::string TypeInspectorResult::print_as_deftype(
   }
 
   if (type_method_count > 9) {
-    std::string methods_list;
-    std::string state_methods_list;
-
+    result.append("(:methods\n    ");
     MethodInfo old_new_method;
     if (old_game_type && old_game_type->get_my_new_method(&old_new_method)) {
-      methods_list.append("    ");
-      methods_list.append(old_method_string(old_new_method));
-      methods_list.push_back('\n');
+      result.append(old_method_string(old_new_method));
+      result.append("\n    ");
     }
-    bool done_with_state_methods = false;
     for (int i = parent_method_count; i < type_method_count; i++) {
-      bool print_as_state_method = false;
+      // If the method is actually a state, skip it!
       if (method_states.count(i) != 0) {
-        if (!done_with_state_methods) {
-          print_as_state_method = true;
-          state_methods_list.append(fmt::format("    {}", method_states.at(i)));
-        } else {
-          methods_list.append(
-              fmt::format("    ({} () _type_ :state) ;; {}", method_states.at(i), i));
-        }
+        result.append(fmt::format("({} () _type_ :state {})", method_states.at(i), i));
       } else {
-        done_with_state_methods = true;
-        methods_list.append(fmt::format("    ({}-method-{} () none) ;; {}", type_name, i, i));
+        result.append(fmt::format("({}-method-{} () none {})", type_name, i, i));
       }
       if (old_game_type) {
         MethodInfo info;
         if (old_game_type->get_my_method(i, &info)) {
-          if (print_as_state_method) {
-            state_methods_list += old_method_string(info);
-          } else {
-            methods_list += old_method_string(info);
-          }
+          result += old_method_string(info);
         }
       }
-      if (print_as_state_method) {
-        state_methods_list.push_back('\n');
-      } else {
-        methods_list.push_back('\n');
-      }
+      result.append("\n    ");
     }
-    if (!state_methods_list.empty()) {
-      result.append("(:state-methods\n");
-      result.append(state_methods_list);
-      result.append("    )\n  ");
-    }
-    if (!methods_list.empty()) {
-      result.append("(:methods");
-      result.append(methods_list);
-      result.append("    )\n  ");
-    }
+    result.append(")\n  ");
   }
 
-  // Print out (normal) states if we have em
+  // Print out states if we have em
   // - Could probably assume the process name comes first and associate it with the right type
   // but that may or may not be risky so, edit the types yourself...
   if (method_states.size() > 0) {

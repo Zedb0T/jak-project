@@ -172,6 +172,9 @@
 
 (deftype float-type (uint32)
   ()
+  :method-count-assert 9
+  :size-assert         #x4
+  :flag-assert         #x900000004
   )
 
 (define exp-slead (new 'static 'array float 32
@@ -419,6 +422,9 @@
    (b uint8 :offset  16 :size   8)
    (a uint8 :offset  24 :size   8)
    )
+  :method-count-assert 9
+  :size-assert         #x4
+  :flag-assert         #x900000004
   )
 
 (defmacro static-rgba (r g b a)
@@ -434,10 +440,16 @@
 
 (deftype xyzw (uint128)
   ()
+  :method-count-assert 9
+  :size-assert         #x10
+  :flag-assert         #x900000010
   )
 
 (deftype xyzwh (uint128)
   ()
+  :method-count-assert 9
+  :size-assert         #x10
+  :flag-assert         #x900000010
   )
 
 (defun print-time ((arg0 object) (arg1 time-frame))
@@ -616,11 +628,6 @@
   `(set! ,place (seekl ,place ,target ,rate))
   )
 
-(defmacro seek-ease! (place target rate min-threshold rate-min)
-  "Macro to use seek-ease in-place. place is the base, and where the result is stored."
-  `(set! ,place (seek-ease ,place ,target ,rate ,min-threshold ,rate-min))
-  )
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; random vu hardware
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -761,8 +768,11 @@
   )
 
 (deftype random-generator (basic)
-  ((seed uint32)
+  ((seed uint32  :offset-assert   4)
    )
+  :method-count-assert 9
+  :size-assert         #x8
+  :flag-assert         #x900000008
   )
 
 

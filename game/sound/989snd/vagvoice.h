@@ -4,6 +4,8 @@
 #include <list>
 #include <memory>
 
+#include "locator.h"
+
 #include "common/common_types.h"
 
 #include "game/sound/common/synth.h"
@@ -17,27 +19,28 @@ enum class toneflag : u16 {
 };
 
 struct Tone {
-  s8 Priority;
-  s8 Vol;
-  s8 CenterNote;
-  s8 CenterFine;
-  s16 Pan;
-  s8 MapLow;
-  s8 MapHigh;
-  s8 PBLow;
-  s8 PBHigh;
-  u16 ADSR1;
-  u16 ADSR2;
-  u16 Flags;
-  u8* Sample;
+  /*   0 */ s8 Priority;
+  /*   1 */ s8 Vol;
+  /*   2 */ s8 CenterNote;
+  /*   3 */ s8 CenterFine;
+  /*   4 */ s16 Pan;
+  /*   6 */ s8 MapLow;
+  /*   7 */ s8 MapHigh;
+  /*   8 */ s8 PBLow;
+  /*   9 */ s8 PBHigh;
+  /*   a */ s16 ADSR1;
+  /*   c */ s16 ADSR2;
+  /*   e */ s16 Flags;
+  /*  10 */ /*void**/ u32 VAGInSR;
+  /*  14 */ u32 reserved1;
 };
 
-class VagVoice : public Voice {
+class vag_voice : public voice {
  public:
-  VagVoice(Tone& t) : tone(t) {}
+  vag_voice(Tone& t) : tone(t) {}
   Tone& tone;
   u8 group{0};
-  VolPair basevol{};
+  vol_pair basevol{};
   s32 current_pm{0};
   s32 current_pb{0};
   s32 start_note{0};
@@ -45,43 +48,44 @@ class VagVoice : public Voice {
   bool paused{false};
 };
 
-class VoiceManager {
+class voice_manager {
  public:
-  VoiceManager(Synth& synth);
-  void StartTone(std::shared_ptr<VagVoice> voice);
-  void Pause(std::shared_ptr<VagVoice> voice);
-  void Unpause(std::shared_ptr<VagVoice> voice);
-  void SetPanTable(VolPair* table) { mPanTable = table; };
+  voice_manager(synth& synth, locator& loc);
+  void start_tone(std::shared_ptr<vag_voice> voice, u32 bank);
+  void pause(std::shared_ptr<vag_voice> voice);
+  void unpause(std::shared_ptr<vag_voice> voice);
+  void set_pan_table(vol_pair* table) { m_pan_table = table; };
 
-  VolPair MakeVolume(int vol1, int pan1, int vol2, int pan2, int vol3, int pan3);
+  vol_pair make_volume(int vol1, int pan1, int vol2, int pan2, int vol3, int pan3);
 
   // This is super silly, but it's what 989snd does
-  VolPair MakeVolumeB(int sound_vol,
-                      int velocity_volume,
-                      int pan,
-                      int prog_vol,
-                      int prog_pan,
-                      int tone_vol,
-                      int tone_pan);
+  vol_pair make_volume_b(int sound_vol,
+                         int velocity_volume,
+                         int pan,
+                         int prog_vol,
+                         int prog_pan,
+                         int tone_vol,
+                         int tone_pan);
 
-  void SetMasterVol(u8 group, s32 volume);
-  void SetPlaybackMode(s32 mode) { mStereoOrMono = mode; }
-  s16 AdjustVolToGroup(s16 involume, int group);
+  void set_master_vol(u8 group, s32 volume);
+  void set_playback_mode(s32 mode) { m_stereo_or_mono = mode; }
+  s16 adjust_vol_to_group(s16 involume, int group);
 
  private:
-  Synth& mSynth;
+  synth& m_synth;
+  locator& m_locator;
 
-  std::list<std::weak_ptr<VagVoice>> mVoices;
-  void CleanVoices() {
-    mVoices.remove_if([](auto& v) { return v.expired(); });
+  std::list<std::weak_ptr<vag_voice>> m_voices;
+  void clean_voices() {
+    m_voices.remove_if([](auto& v) { return v.expired(); });
   }
 
-  s32 mStereoOrMono{0};
+  s32 m_stereo_or_mono{0};
 
-  std::array<s32, 32> mMasterVol;
-  std::array<s32, 32> mGroupDuck;
+  std::array<s32, 32> m_master_vol;
+  std::array<s32, 32> m_group_duck;
 
-  const VolPair* mPanTable{nullptr};
+  const vol_pair* m_pan_table{nullptr};
 };
 
 }  // namespace snd

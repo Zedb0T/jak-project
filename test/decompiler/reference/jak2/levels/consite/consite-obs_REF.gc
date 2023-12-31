@@ -10,13 +10,17 @@
 ;; definition of type consite-break-scaffold
 (deftype consite-break-scaffold (process-drawable)
   ()
-  (:state-methods
-    idle
+  :heap-base #x50
+  :method-count-assert 21
+  :size-assert         #xc8
+  :flag-assert         #x15005000c8
+  (:methods
+    (idle () _type_ :state 20)
     )
   )
 
 ;; definition for method 3 of type consite-break-scaffold
-(defmethod inspect ((this consite-break-scaffold))
+(defmethod inspect consite-break-scaffold ((this consite-break-scaffold))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -36,7 +40,7 @@
 
 ;; definition for method 11 of type consite-break-scaffold
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this consite-break-scaffold) (arg0 entity-actor))
+(defmethod init-from-entity! consite-break-scaffold ((this consite-break-scaffold) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -70,13 +74,17 @@ This commonly includes things such as:
 ;; definition of type consite-bomb-elevator-hinges
 (deftype consite-bomb-elevator-hinges (process-drawable)
   ()
-  (:state-methods
-    idle
+  :heap-base #x50
+  :method-count-assert 21
+  :size-assert         #xc8
+  :flag-assert         #x15005000c8
+  (:methods
+    (idle () _type_ :state 20)
     )
   )
 
 ;; definition for method 3 of type consite-bomb-elevator-hinges
-(defmethod inspect ((this consite-bomb-elevator-hinges))
+(defmethod inspect consite-bomb-elevator-hinges ((this consite-bomb-elevator-hinges))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -113,7 +121,7 @@ This commonly includes things such as:
 
 ;; definition for method 11 of type consite-bomb-elevator-hinges
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this consite-bomb-elevator-hinges) (arg0 entity-actor))
+(defmethod init-from-entity! consite-bomb-elevator-hinges ((this consite-bomb-elevator-hinges) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -154,13 +162,17 @@ This commonly includes things such as:
 ;; definition of type consite-bomb-elevator
 (deftype consite-bomb-elevator (process-drawable)
   ()
-  (:state-methods
-    idle
+  :heap-base #x50
+  :method-count-assert 21
+  :size-assert         #xc8
+  :flag-assert         #x15005000c8
+  (:methods
+    (idle () _type_ :state 20)
     )
   )
 
 ;; definition for method 3 of type consite-bomb-elevator
-(defmethod inspect ((this consite-bomb-elevator))
+(defmethod inspect consite-bomb-elevator ((this consite-bomb-elevator))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -197,7 +209,7 @@ This commonly includes things such as:
 
 ;; definition for method 11 of type consite-bomb-elevator
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this consite-bomb-elevator) (arg0 entity-actor))
+(defmethod init-from-entity! consite-bomb-elevator ((this consite-bomb-elevator) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -244,13 +256,17 @@ This commonly includes things such as:
 ;; definition of type consite-silo-doors
 (deftype consite-silo-doors (process-drawable)
   ()
-  (:state-methods
-    idle
+  :heap-base #x50
+  :method-count-assert 21
+  :size-assert         #xc8
+  :flag-assert         #x15005000c8
+  (:methods
+    (idle () _type_ :state 20)
     )
   )
 
 ;; definition for method 3 of type consite-silo-doors
-(defmethod inspect ((this consite-silo-doors))
+(defmethod inspect consite-silo-doors ((this consite-silo-doors))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -287,7 +303,7 @@ This commonly includes things such as:
 
 ;; definition for method 11 of type consite-silo-doors
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this consite-silo-doors) (arg0 entity-actor))
+(defmethod init-from-entity! consite-silo-doors ((this consite-silo-doors) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -345,10 +361,14 @@ This commonly includes things such as:
 ;; definition of type baron-npc
 (deftype baron-npc (process-taskable)
   ()
+  :heap-base #xa0
+  :method-count-assert 38
+  :size-assert         #x120
+  :flag-assert         #x2600a00120
   )
 
 ;; definition for method 3 of type baron-npc
-(defmethod inspect ((this baron-npc))
+(defmethod inspect baron-npc ((this baron-npc))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -361,7 +381,7 @@ This commonly includes things such as:
   )
 
 ;; definition for method 35 of type baron-npc
-(defmethod get-art-elem ((this baron-npc))
+(defmethod get-art-elem baron-npc ((this baron-npc))
   "Checks various things such the current actor, task status, etc to determine the right art-group data to use
 @returns the appropriate [[art-element]] for the given NPC"
   (case (-> this task actor)
@@ -376,7 +396,7 @@ This commonly includes things such as:
 
 ;; definition for method 33 of type baron-npc
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-art! ((this baron-npc))
+(defmethod init-art! baron-npc ((this baron-npc))
   "@see [[initialize-skeleton]]"
   (initialize-skeleton
     this

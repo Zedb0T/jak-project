@@ -106,10 +106,13 @@
    (z float :offset  64 :size  32)
    (w float :offset  96 :size  32)
    )
+  :method-count-assert 9
+  :size-assert         #x10
+  :flag-assert         #x900000010
   )
 
 ;; definition for method 3 of type vec4s
-(defmethod inspect ((this vec4s))
+(defmethod inspect vec4s ((this vec4s))
   (format #t "[~8x] ~A~%" this 'vec4s)
   (format #t "~Tx: ~f~%" (-> this x))
   (format #t "~Ty: ~f~%" (-> this y))
@@ -119,33 +122,36 @@
   )
 
 ;; definition for method 2 of type vec4s
-(defmethod print ((this vec4s))
+(defmethod print vec4s ((this vec4s))
   (format #t "#<vector ~F ~F ~F ~F @ #x~X>" (-> this x) (-> this y) (-> this z) (-> this w) this)
   this
   )
 
 ;; definition of type bfloat
 (deftype bfloat (basic)
-  ((data  float)
+  ((data float  :offset-assert   4)
    )
+  :method-count-assert 9
+  :size-assert         #x8
+  :flag-assert         #x900000008
   )
 
 ;; definition for method 3 of type bfloat
-(defmethod inspect ((this bfloat))
+(defmethod inspect bfloat ((this bfloat))
   (format #t "[~8x] ~A~%" this (-> this type))
   (format #t "~Tdata: ~f~%" (-> this data))
   this
   )
 
 ;; definition for method 2 of type bfloat
-(defmethod print ((this bfloat))
+(defmethod print bfloat ((this bfloat))
   (format #t "~f" (-> this data))
   this
   )
 
 ;; definition for method 5 of type type
 ;; INFO: Return type mismatch uint vs int.
-(defmethod asize-of ((this type))
+(defmethod asize-of type ((this type))
   (the-as int (logand (the-as uint #xfffffff0) (+ (* (-> this allocated-length) 4) 43)))
   )
 
@@ -206,7 +212,7 @@
   )
 
 ;; definition for method 4 of type pair
-(defmethod length ((this pair))
+(defmethod length pair ((this pair))
   (local-vars (result int))
   (cond
     ((null? this)
@@ -227,7 +233,7 @@
 
 ;; definition for method 5 of type pair
 ;; INFO: Return type mismatch uint vs int.
-(defmethod asize-of ((this pair))
+(defmethod asize-of pair ((this pair))
   (the-as int (-> pair size))
   )
 
@@ -427,17 +433,20 @@
 
 ;; definition of type inline-array-class
 (deftype inline-array-class (basic)
-  ((length            int32)
-   (allocated-length  int32)
-   (_data             uint8  :dynamic :offset  16)
+  ((length           int32          :offset-assert   4)
+   (allocated-length int32          :offset-assert   8)
+   (_data            uint8 :dynamic :offset         16)
    )
+  :method-count-assert 9
+  :size-assert         #x10
+  :flag-assert         #x900000010
   (:methods
-    (new (symbol type int) _type_)
+    (new (symbol type int) _type_ 0)
     )
   )
 
 ;; definition for method 3 of type inline-array-class
-(defmethod inspect ((this inline-array-class))
+(defmethod inspect inline-array-class ((this inline-array-class))
   (format #t "[~8x] ~A~%" this (-> this type))
   (format #t "~Tlength: ~D~%" (-> this length))
   (format #t "~Tallocated-length: ~D~%" (-> this allocated-length))
@@ -462,13 +471,13 @@
   )
 
 ;; definition for method 4 of type inline-array-class
-(defmethod length ((this inline-array-class))
+(defmethod length inline-array-class ((this inline-array-class))
   (-> this length)
   )
 
 ;; definition for method 5 of type inline-array-class
 ;; INFO: Return type mismatch uint vs int.
-(defmethod asize-of ((this inline-array-class))
+(defmethod asize-of inline-array-class ((this inline-array-class))
   (the-as int (+ (-> this type size) (* (-> this allocated-length) (the-as int (-> this type heap-base)))))
   )
 
@@ -496,7 +505,7 @@
 
 ;; definition for method 2 of type array
 ;; INFO: Used lq/sq
-(defmethod print ((this array))
+(defmethod print array ((this array))
   (format #t "#(")
   (cond
     ((type-type? (-> this content-type) integer)
@@ -646,7 +655,7 @@
 
 ;; definition for method 3 of type array
 ;; INFO: Used lq/sq
-(defmethod inspect ((this array))
+(defmethod inspect array ((this array))
   (format #t "[~8x] ~A~%" this (-> this type))
   (format #t "~Tallocated-length: ~D~%" (-> this allocated-length))
   (format #t "~Tlength: ~D~%" (-> this length))
@@ -722,13 +731,13 @@
   )
 
 ;; definition for method 4 of type array
-(defmethod length ((this array))
+(defmethod length array ((this array))
   (-> this length)
   )
 
 ;; definition for method 5 of type array
 ;; INFO: Return type mismatch uint vs int.
-(defmethod asize-of ((this array))
+(defmethod asize-of array ((this array))
   (the-as int (+ (-> array size) (* (-> this allocated-length) (if (type-type? (-> this content-type) number)
                                                                    (the-as int (-> this content-type size))
                                                                    4

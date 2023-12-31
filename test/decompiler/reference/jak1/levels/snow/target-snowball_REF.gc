@@ -3,12 +3,15 @@
 
 ;; definition of type snowball-info
 (deftype snowball-info (basic)
-  ((entity  basic)
+  ((entity basic  :offset-assert   4)
    )
+  :method-count-assert 9
+  :size-assert         #x8
+  :flag-assert         #x900000008
   )
 
 ;; definition for method 3 of type snowball-info
-(defmethod inspect ((this snowball-info))
+(defmethod inspect snowball-info ((this snowball-info))
   (format #t "[~8x] ~A~%" this (-> this type))
   (format #t "~Tentity: ~A~%" (-> this entity))
   this
@@ -17,10 +20,13 @@
 ;; definition of type snowball-bank
 (deftype snowball-bank (basic)
   ()
+  :method-count-assert 9
+  :size-assert         #x4
+  :flag-assert         #x900000004
   )
 
 ;; definition for method 3 of type snowball-bank
-(defmethod inspect ((this snowball-bank))
+(defmethod inspect snowball-bank ((this snowball-bank))
   (format #t "[~8x] ~A~%" this (-> this type))
   this
   )

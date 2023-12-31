@@ -8,8 +8,11 @@
 ;; DECOMP BEGINS
 
 (deftype kor-anim-info (structure)
-  ((anim-index  int32)
+  ((anim-index int32  :offset-assert   0)
    )
+  :method-count-assert 9
+  :size-assert         #x4
+  :flag-assert         #x900000004
   )
 
 
@@ -186,7 +189,7 @@
 
 (set! (-> *kor-nav-enemy-info* fact-defaults) *fact-info-enemy-defaults*)
 
-(defmethod general-event-handler ((this kor) (arg0 process) (arg1 int) (arg2 symbol) (arg3 event-message-block))
+(defmethod general-event-handler kor ((this kor) (arg0 process) (arg1 int) (arg2 symbol) (arg3 event-message-block))
   "Handles various events for the enemy
 @TODO - unsure if there is a pattern for the events and this should have a more specific name"
   (case arg2
@@ -229,7 +232,7 @@
     )
   )
 
-(defmethod enemy-method-97 ((this kor))
+(defmethod enemy-method-97 kor ((this kor))
   (let* ((s4-0 (handle->process (-> this attacker-handle)))
          (s5-0 (if (type? s4-0 process-focusable)
                    s4-0
@@ -346,7 +349,7 @@
     )
   )
 
-(defmethod alive? ((this kor))
+(defmethod alive? kor ((this kor))
   (let ((t9-0 (method-of-type bot alive?)))
     (and (t9-0 this)
          (not (and (-> this next-state) (let ((v1-4 (-> this next-state name)))
@@ -359,7 +362,7 @@
     )
   )
 
-(defmethod init-enemy-collision! ((this kor))
+(defmethod init-enemy-collision! kor ((this kor))
   "Initializes the [[collide-shape-moving]] and any ancillary tasks to make the enemy collide properly"
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-others))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
@@ -432,7 +435,7 @@
   (none)
   )
 
-(defmethod init! ((this kor))
+(defmethod init! kor ((this kor))
   "Set defaults for various fields."
   (let ((t9-0 (method-of-type bot init!)))
     (t9-0 this)
@@ -450,7 +453,7 @@
   (none)
   )
 
-(defmethod init-enemy! ((this kor))
+(defmethod init-enemy! kor ((this kor))
   "Common method called to initialize the enemy, typically sets up default field values and calls ancillary helper methods"
   (init! this)
   (initialize-skeleton
@@ -474,29 +477,29 @@
   (none)
   )
 
-(defmethod bot-method-214 ((this kor))
+(defmethod bot-method-214 kor ((this kor))
   #f
   )
 
 ;; WARN: Return type mismatch none vs object.
-(defmethod go-hostile ((this kor))
+(defmethod go-hostile kor ((this kor))
   (kor-method-232 this)
   )
 
 ;; WARN: Return type mismatch none vs object.
-(defmethod react-to-focus ((this kor))
+(defmethod react-to-focus kor ((this kor))
   "@TODO - flesh out docs"
   (kor-method-232 this)
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod kor-method-233 ((this kor))
+(defmethod kor-method-233 kor ((this kor))
   (go (method-of-object this waiting-turn))
   (none)
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod kor-method-232 ((this kor))
+(defmethod kor-method-232 kor ((this kor))
   (let ((s5-0 (handle->process (-> this arrestor-handle))))
     (cond
       ((if (type? s5-0 process-focusable)
@@ -515,7 +518,7 @@
   (none)
   )
 
-(defmethod kor-method-234 ((this kor))
+(defmethod kor-method-234 kor ((this kor))
   (with-pp
     (let ((f30-0 (-> this nav state speed)))
       (let ((f0-1 (lerp-scale 0.0 1.0 f30-0 6144.0 20889.6)))
@@ -572,16 +575,16 @@
     )
   )
 
-(defmethod damage-amount-from-attack ((this kor) (arg0 process) (arg1 event-message-block))
+(defmethod damage-amount-from-attack kor ((this kor) (arg0 process) (arg1 event-message-block))
   "@returns the amount of damage taken from an attack.  This can come straight off the [[attack-info]] or via [[penetrate-using->damage]]"
   0
   )
 
-(defmethod bot-method-190 ((this kor))
+(defmethod bot-method-190 kor ((this kor))
   #t
   )
 
-(defmethod enemy-method-78 ((this kor) (arg0 (pointer float)))
+(defmethod enemy-method-78 kor ((this kor) (arg0 (pointer float)))
   (ja-channel-push! 1 (seconds 0.1))
   (let ((a1-2 (-> this draw art-group data (-> this enemy-info knocked-land-anim)))
         (a0-4 (-> this skel root-channel 0))
@@ -596,7 +599,7 @@
   )
 
 ;; WARN: Return type mismatch float vs meters.
-(defmethod set-cam-height! ((this kor) (arg0 vector))
+(defmethod set-cam-height! kor ((this kor) (arg0 vector))
   (the-as
     meters
     (cond
@@ -614,7 +617,7 @@
     )
   )
 
-(defmethod enemy-method-102 ((this kor))
+(defmethod enemy-method-102 kor ((this kor))
   (if (logtest? (bot-flags bf20) (-> this bot-flags))
       #f
       ((method-of-type bot enemy-method-102) this)
@@ -622,7 +625,7 @@
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod go-idle ((this kor))
+(defmethod go-idle kor ((this kor))
   (cond
     ((= (-> this course course-id) 8)
      (cond

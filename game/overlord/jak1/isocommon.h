@@ -58,7 +58,7 @@ struct IsoFs {
   uint32_t (*begin_read)(LoadStackEntry*, void*, int32_t);  // 1c
   uint32_t (*sync_read)();                                  // 20
   uint32_t (*load_sound_bank)(char*, SoundBank*);           // 24
-  uint32_t (*load_music)(char*, snd::BankHandle*);
+  uint32_t (*load_music)(char*, s32*);
   void (*poll_drive)();
 };
 
@@ -173,7 +173,7 @@ struct SoundBankLoadCommand : public IsoMessage {
 
 struct MusicLoadCommand : public IsoMessage {
   char music_name[16];
-  snd::BankHandle* music_handle;
+  s32* music_handle;
 };
 
 /*!

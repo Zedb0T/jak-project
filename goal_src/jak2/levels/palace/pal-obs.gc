@@ -8,11 +8,15 @@
 ;; DECOMP BEGINS
 
 (deftype pal-falling-plat (process-drawable)
-  ((root  collide-shape-moving :override)
+  ((root collide-shape-moving  :override)
    )
-  (:state-methods
-    idle
-    fall
+  :heap-base #x50
+  :method-count-assert 22
+  :size-assert         #xc8
+  :flag-assert         #x16005000c8
+  (:methods
+    (idle () _type_ :state 20)
+    (fall () _type_ :state 21)
     )
   )
 
@@ -85,7 +89,7 @@
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-falling-plat) (arg0 entity-actor))
+(defmethod init-from-entity! pal-falling-plat ((this pal-falling-plat) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -160,11 +164,15 @@ This commonly includes things such as:
 
 (deftype pal-ent-door (com-airlock)
   ()
+  :heap-base #x100
+  :method-count-assert 28
+  :size-assert         #x174
+  :flag-assert         #x1c01000174
   )
 
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-ent-door) (arg0 entity-actor))
+(defmethod init-from-entity! pal-ent-door ((this pal-ent-door) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -207,15 +215,17 @@ This commonly includes things such as:
   )
 
 (deftype pal-grind-ring-center (process-focusable)
-  ((speed-y            float)
-   (hit-sound-played?  basic)
+  ((speed-y           float  :offset-assert 204)
+   (hit-sound-played? basic  :offset-assert 208)
    )
-  (:state-methods
-    idle
-    die
-    )
+  :heap-base #x60
+  :method-count-assert 30
+  :size-assert         #xd4
+  :flag-assert         #x1e006000d4
   (:methods
-    (pal-grind-ring-center-method-29 (_type_) none)
+    (idle () _type_ :state 27)
+    (die () _type_ :state 28)
+    (pal-grind-ring-center-method-29 (_type_) none 29)
     )
   )
 
@@ -315,7 +325,7 @@ This commonly includes things such as:
   :post #f
   )
 
-(defmethod pal-grind-ring-center-method-29 ((this pal-grind-ring-center))
+(defmethod pal-grind-ring-center-method-29 pal-grind-ring-center ((this pal-grind-ring-center))
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s5-0 reaction) cshape-reaction-default)
@@ -342,7 +352,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-grind-ring-center) (arg0 entity-actor))
+(defmethod init-from-entity! pal-grind-ring-center ((this pal-grind-ring-center) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -371,15 +381,17 @@ This commonly includes things such as:
   )
 
 (deftype pal-grind-ring (process-focusable)
-  ((speed-y            float)
-   (hit-sound-played?  basic)
+  ((speed-y           float  :offset-assert 204)
+   (hit-sound-played? basic  :offset-assert 208)
    )
-  (:state-methods
-    idle
-    fall
-    )
+  :heap-base #x60
+  :method-count-assert 30
+  :size-assert         #xd4
+  :flag-assert         #x1e006000d4
   (:methods
-    (pal-grind-ring-method-29 (_type_) none)
+    (idle () _type_ :state 27)
+    (fall () _type_ :state 28)
+    (pal-grind-ring-method-29 (_type_) none 29)
     )
   )
 
@@ -484,7 +496,7 @@ This commonly includes things such as:
   :post transform-post
   )
 
-(defmethod pal-grind-ring-method-29 ((this pal-grind-ring))
+(defmethod pal-grind-ring-method-29 pal-grind-ring ((this pal-grind-ring))
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s5-0 reaction) cshape-reaction-default)
@@ -512,7 +524,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-grind-ring) (arg0 entity-actor))
+(defmethod init-from-entity! pal-grind-ring ((this pal-grind-ring) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -574,13 +586,15 @@ This commonly includes things such as:
 
 (deftype pal-ent-glass (process-focusable)
   ()
-  (:state-methods
-    idle
-    die
-    )
+  :heap-base #x50
+  :method-count-assert 31
+  :size-assert         #xcc
+  :flag-assert         #x1f005000cc
   (:methods
-    (pal-ent-glass-method-29 (_type_) none)
-    (pal-ent-glass-method-30 (_type_) none)
+    (idle () _type_ :state 27)
+    (die () _type_ :state 28)
+    (pal-ent-glass-method-29 (_type_) none 29)
+    (pal-ent-glass-method-30 (_type_) none 30)
     )
   )
 
@@ -641,7 +655,7 @@ This commonly includes things such as:
     )
   )
 
-(defmethod pal-ent-glass-method-29 ((this pal-ent-glass))
+(defmethod pal-ent-glass-method-29 pal-ent-glass ((this pal-ent-glass))
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s5-0 reaction) cshape-reaction-default)
@@ -668,14 +682,14 @@ This commonly includes things such as:
   (none)
   )
 
-(defmethod pal-ent-glass-method-30 ((this pal-ent-glass))
+(defmethod pal-ent-glass-method-30 pal-ent-glass ((this pal-ent-glass))
   (logior! (-> this mask) (process-mask crate))
   0
   (none)
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-ent-glass) (arg0 entity-actor))
+(defmethod init-from-entity! pal-ent-glass ((this pal-ent-glass) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -697,10 +711,14 @@ This commonly includes things such as:
 
 (deftype palent-turret-shot (guard-shot)
   ()
+  :heap-base #x170
+  :method-count-assert 40
+  :size-assert         #x1f0
+  :flag-assert         #x28017001f0
   )
 
 
-(defmethod play-impact-sound ((this palent-turret-shot) (arg0 projectile-options))
+(defmethod play-impact-sound palent-turret-shot ((this palent-turret-shot) (arg0 projectile-options))
   (let ((v1-0 arg0))
     (cond
       ((zero? v1-0)
@@ -721,13 +739,15 @@ This commonly includes things such as:
               )
 
 (deftype palent-turret (process-focusable)
-  ((next-shoot  uint64)
+  ((next-shoot uint64  :offset-assert 208)
    )
-  (:state-methods
-    idle
-    )
+  :heap-base #x60
+  :method-count-assert 29
+  :size-assert         #xd8
+  :flag-assert         #x1d006000d8
   (:methods
-    (palent-turret-method-28 (_type_) none)
+    (idle () _type_ :state 27)
+    (palent-turret-method-28 (_type_) none 28)
     )
   )
 
@@ -799,7 +819,7 @@ This commonly includes things such as:
     )
   )
 
-(defmethod palent-turret-method-28 ((this palent-turret))
+(defmethod palent-turret-method-28 palent-turret ((this palent-turret))
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s5-0 reaction) cshape-reaction-default)
@@ -847,7 +867,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this palent-turret) (arg0 entity-actor))
+(defmethod init-from-entity! palent-turret ((this palent-turret) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -921,13 +941,15 @@ This commonly includes things such as:
 
 (deftype pal-breakable-window (process-focusable)
   ()
-  (:state-methods
-    idle
-    die
-    )
+  :heap-base #x50
+  :method-count-assert 31
+  :size-assert         #xcc
+  :flag-assert         #x1f005000cc
   (:methods
-    (pal-breakable-window-method-29 (_type_) none)
-    (pal-breakable-window-method-30 (_type_) none)
+    (idle () _type_ :state 27)
+    (die () _type_ :state 28)
+    (pal-breakable-window-method-29 (_type_) none 29)
+    (pal-breakable-window-method-30 (_type_) none 30)
     )
   )
 
@@ -986,7 +1008,7 @@ This commonly includes things such as:
     )
   )
 
-(defmethod pal-breakable-window-method-29 ((this pal-breakable-window))
+(defmethod pal-breakable-window-method-29 pal-breakable-window ((this pal-breakable-window))
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s5-0 reaction) cshape-reaction-default)
@@ -1013,14 +1035,14 @@ This commonly includes things such as:
   (none)
   )
 
-(defmethod pal-breakable-window-method-30 ((this pal-breakable-window))
+(defmethod pal-breakable-window-method-30 pal-breakable-window ((this pal-breakable-window))
   (logior! (-> this mask) (process-mask crate))
   0
   (none)
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this pal-breakable-window) (arg0 entity-actor))
+(defmethod init-from-entity! pal-breakable-window ((this pal-breakable-window) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size

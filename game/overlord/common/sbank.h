@@ -1,31 +1,31 @@
 #pragma once
 
-#include <array>
-#include <string>
-#include <vector>
-
 #include "common/common_types.h"
 
-#include "game/sound/sndshim.h"
-
 struct SoundRecord {
-  std::array<char, 16> name;
+  char name[16];
   u32 fallof_params;
 };
 
 struct SoundBank {
-  std::array<char, 16> name;
-  snd::BankHandle bank_handle;
+  char name[16];
+  u32 bank_handle;
   u32 sound_count;
 
-  // name list, only for jak1
-  std::vector<SoundRecord> sound;
+  union {
+    SoundRecord sound[1];
 
-  // jak2 additions
-  u32 spu_loc;
-  u32 spu_size;
-  u32 unk4;
-  bool in_use;
+    // Needs to fit the biggest bank (common.sbk)
+    u8 buffer[10 * 2048];
+
+    // Jak 2 additions go here
+    struct {
+      u32 spu_loc;
+      u32 spu_size;
+      u32 unk4;
+      bool in_use;
+    };
+  };
 };
 
 void sbank_init_globals();

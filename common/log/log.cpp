@@ -153,9 +153,7 @@ void set_file(const std::string& filename,
       }
     }
   } else {
-    if (!str_util::ends_with(complete_filename, ".log")) {
-      complete_filename += ".log";
-    }
+    complete_filename += ".log";
   }
 
   if (append) {

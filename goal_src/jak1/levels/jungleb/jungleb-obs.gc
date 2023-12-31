@@ -9,10 +9,14 @@
 ;; DECOMP BEGINS
 
 (deftype eggtop (process-drawable)
-  ((root         collide-shape-moving :override)
-   (cam-tracker  handle)
-   (sound-id     sound-id)
+  ((root-override collide-shape-moving  :offset        112)
+   (cam-tracker   handle                :offset-assert 176)
+   (sound-id      sound-id              :offset-assert 184)
    )
+  :heap-base #x50
+  :method-count-assert 20
+  :size-assert         #xbc
+  :flag-assert         #x14005000bc
   (:states
     (eggtop-close symbol)
     eggtop-idle
@@ -190,12 +194,12 @@
     (if (and (not (-> self child)) (task-complete? *game-info* (-> self entity extra perm task)))
         (go eggtop-close #f)
         )
-    (spawn (-> self part) (-> self root trans))
+    (spawn (-> self part) (-> self root-override trans))
     (sound-play "electric-loop" :id (-> self sound-id))
     )
   :code (behavior ()
     (suspend)
-    (update-transforms! (-> self root))
+    (update-transforms! (-> self root-override))
     (anim-loop)
     )
   :post ja-post
@@ -217,7 +221,7 @@
         #f
         #f
         #f
-        (-> self root trans)
+        (-> self root-override trans)
         :to *entity-pool*
         )
       (set! (-> self cam-tracker)
@@ -285,7 +289,7 @@
   :post rider-post
   )
 
-(defmethod init-from-entity! ((this eggtop) (arg0 entity-actor))
+(defmethod init-from-entity! eggtop ((this eggtop) (arg0 entity-actor))
   (let ((s4-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s4-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s4-0 reaction) default-collision-reaction)
@@ -304,12 +308,12 @@
       )
     (set! (-> s4-0 nav-radius) (* 0.75 (-> s4-0 root-prim local-sphere w)))
     (backup-collide-with-as s4-0)
-    (set! (-> this root) s4-0)
+    (set! (-> this root-override) s4-0)
     )
   (process-drawable-from-entity! this arg0)
   (initialize-skeleton this *eggtop-sg* '())
   (logior! (-> this skel status) (janim-status inited))
-  (update-transforms! (-> this root))
+  (update-transforms! (-> this root-override))
   (set! (-> this part) (create-launch-control (-> *part-group-id-table* 189) this))
   (set! (-> this sound-id) (new-sound-id))
   (cond
@@ -318,7 +322,7 @@
      )
     (else
       (birth-pickup-at-point
-        (vector+! (new 'stack-no-clear 'vector) (-> this root trans) (new 'static 'vector :y 6144.0 :w 1.0))
+        (vector+! (new 'stack-no-clear 'vector) (-> this root-override trans) (new 'static 'vector :y 6144.0 :w 1.0))
         (pickup-type fuel-cell)
         (the float (-> this entity extra perm task))
         #f
@@ -333,6 +337,10 @@
 
 (deftype jng-iris-door (eco-door)
   ()
+  :heap-base #xa0
+  :method-count-assert 27
+  :size-assert         #x104
+  :flag-assert         #x1b00a00104
   )
 
 
@@ -341,7 +349,7 @@
               :bounds (static-spherem 0 0 0 8)
               )
 
-(defmethod eco-door-method-24 ((this jng-iris-door))
+(defmethod eco-door-method-24 jng-iris-door ((this jng-iris-door))
   (let ((s5-0 (new 'process 'collide-shape this (collide-list-enum hit-by-others))))
     (let ((s4-0 (new 'process 'collide-shape-prim-mesh s5-0 (the-as uint 0) (the-as uint 0))))
       (set! (-> s4-0 prim-core collide-as) (collide-kind wall-object))
@@ -354,17 +362,17 @@
       )
     (set! (-> s5-0 nav-radius) (* 0.75 (-> s5-0 root-prim local-sphere w)))
     (backup-collide-with-as s5-0)
-    (set! (-> this root) s5-0)
+    (set! (-> this root-override) s5-0)
     )
   0
   (none)
   )
 
-(defmethod eco-door-method-25 ((this jng-iris-door))
+(defmethod eco-door-method-25 jng-iris-door ((this jng-iris-door))
   (initialize-skeleton this *jng-iris-door-sg* '())
   (set! (-> this open-distance) 32768.0)
   (set! (-> this close-distance) 49152.0)
-  (update-transforms! (-> this root))
+  (update-transforms! (-> this root-override))
   0
   (none)
   )

@@ -9,41 +9,42 @@
 #include "../common/voice.h"
 
 namespace snd {
-VoiceManager::VoiceManager(Synth& synth) : mSynth(synth) {
-  mPanTable = normalPanTable;
-  mMasterVol.fill(0x400);
-  mGroupDuck.fill(0x10000);
+voice_manager::voice_manager(synth& synth, locator& loc) : m_synth(synth), m_locator(loc) {
+  m_pan_table = normalPanTable;
+  m_master_vol.fill(0x400);
+  m_group_duck.fill(0x10000);
 }
 
-void VoiceManager::StartTone(std::shared_ptr<VagVoice> voice) {
-  s16 left = AdjustVolToGroup(voice->basevol.left, voice->group);
-  s16 right = AdjustVolToGroup(voice->basevol.right, voice->group);
+void voice_manager::start_tone(std::shared_ptr<vag_voice> voice, u32 bank) {
+  s16 left = adjust_vol_to_group(voice->basevol.left, voice->group);
+  s16 right = adjust_vol_to_group(voice->basevol.right, voice->group);
 
-  voice->SetVolume(left >> 1, right >> 1);
+  voice->set_volume(left >> 1, right >> 1);
 
   if ((voice->tone.Flags & 0x10) != 0x0) {
     throw std::runtime_error("reverb only voice not handler");
   }
 
-  std::pair<s16, s16> note = PitchBend(voice->tone, voice->current_pb, voice->current_pm,
+  std::pair<s16, s16> note = pitchbend(voice->tone, voice->current_pb, voice->current_pm,
                                        voice->start_note, voice->start_fine);
 
   auto pitch =
       PS1Note2Pitch(voice->tone.CenterNote, voice->tone.CenterFine, note.first, note.second);
 
-  voice->SetPitch(pitch);
-  voice->SetAsdr1(voice->tone.ADSR1);
-  voice->SetAsdr2(voice->tone.ADSR2);
+  voice->set_pitch(pitch);
+  voice->set_asdr1(voice->tone.ADSR1);
+  voice->set_asdr2(voice->tone.ADSR2);
 
-  voice->SetSample((u16*)(voice->tone.Sample));
+  u8* sbuf = m_locator.get_bank_samples(bank);
+  voice->set_sample((u16*)(sbuf + voice->tone.VAGInSR));
 
-  voice->KeyOn();
+  voice->key_on();
 
-  CleanVoices();
-  mVoices.emplace_front(voice);
-  mSynth.AddVoice(voice);
+  clean_voices();
+  m_voices.emplace_front(voice);
+  m_synth.add_voice(voice);
 }
-VolPair VoiceManager::MakeVolume(int vol1, int pan1, int vol2, int pan2, int vol3, int pan3) {
+vol_pair voice_manager::make_volume(int vol1, int pan1, int vol2, int pan2, int vol3, int pan3) {
   // Scale up as close as we can to max positive 16bit volume
   // I'd have just used shifting but I guess this does get closer
 
@@ -56,7 +57,7 @@ VolPair VoiceManager::MakeVolume(int vol1, int pan1, int vol2, int pan2, int vol
     return {0, 0};
   }
 
-  if (mStereoOrMono == 1) {
+  if (m_stereo_or_mono == 1) {
     return {(s16)vol, (s16)vol};
   }
 
@@ -84,11 +85,11 @@ VolPair VoiceManager::MakeVolume(int vol1, int pan1, int vol2, int pan2, int vol
   // it. (For surround audio positioning?)
 
   if (total_pan < 180) {
-    lvol = (mPanTable[total_pan].left * vol) / 0x3fff;
-    rvol = (mPanTable[total_pan].right * vol) / 0x3fff;
+    lvol = (m_pan_table[total_pan].left * vol) / 0x3fff;
+    rvol = (m_pan_table[total_pan].right * vol) / 0x3fff;
   } else {
-    rvol = (mPanTable[total_pan - 180].left * vol) / 0x3fff;
-    lvol = (mPanTable[total_pan - 180].right * vol) / 0x3fff;
+    rvol = (m_pan_table[total_pan - 180].left * vol) / 0x3fff;
+    lvol = (m_pan_table[total_pan - 180].right * vol) / 0x3fff;
   }
 
   // TODO rest of this function
@@ -97,13 +98,13 @@ VolPair VoiceManager::MakeVolume(int vol1, int pan1, int vol2, int pan2, int vol
   return {lvol, rvol};
 }
 
-VolPair VoiceManager::MakeVolumeB(int sound_vol,
-                                  int velocity_volume,
-                                  int pan,
-                                  int prog_vol,
-                                  int prog_pan,
-                                  int tone_vol,
-                                  int tone_pan) {
+vol_pair voice_manager::make_volume_b(int sound_vol,
+                                      int velocity_volume,
+                                      int pan,
+                                      int prog_vol,
+                                      int prog_pan,
+                                      int tone_vol,
+                                      int tone_pan) {
   // Scale up as close as we can to max positive 16bit volume
   // I'd have just used shifting but I guess this does get closer
 
@@ -117,7 +118,7 @@ VolPair VoiceManager::MakeVolumeB(int sound_vol,
     return {0, 0};
   }
 
-  if (mStereoOrMono == 1) {
+  if (m_stereo_or_mono == 1) {
     return {(s16)vol, (s16)vol};
   }
 
@@ -145,11 +146,11 @@ VolPair VoiceManager::MakeVolumeB(int sound_vol,
   // it. (For surround audio positioning?)
 
   if (total_pan < 180) {
-    lvol = (mPanTable[total_pan].left * vol) / 0x3fff;
-    rvol = (mPanTable[total_pan].right * vol) / 0x3fff;
+    lvol = (m_pan_table[total_pan].left * vol) / 0x3fff;
+    rvol = (m_pan_table[total_pan].right * vol) / 0x3fff;
   } else {
-    rvol = (mPanTable[total_pan - 180].left * vol) / 0x3fff;
-    lvol = (mPanTable[total_pan - 180].right * vol) / 0x3fff;
+    rvol = (m_pan_table[total_pan - 180].left * vol) / 0x3fff;
+    lvol = (m_pan_table[total_pan - 180].right * vol) / 0x3fff;
   }
 
   // TODO rest of this function
@@ -158,7 +159,7 @@ VolPair VoiceManager::MakeVolumeB(int sound_vol,
   return {lvol, rvol};
 }
 
-s16 VoiceManager::AdjustVolToGroup(s16 involume, int group) {
+s16 voice_manager::adjust_vol_to_group(s16 involume, int group) {
   s32 volume = involume;
   // NOTE grou >= 7 in version 2
   if (group >= 15)
@@ -168,7 +169,7 @@ s16 VoiceManager::AdjustVolToGroup(s16 involume, int group) {
     volume = 0x7ffe;
 
   // NOTE no duckers in version 2
-  s32 modifier = (mMasterVol[group] * mGroupDuck[group]) / 0x10000;
+  s32 modifier = (m_master_vol[group] * m_group_duck[group]) / 0x10000;
   volume = (volume * modifier) / 0x400;
   int sign = 1;
   if (volume < 0) {
@@ -180,43 +181,43 @@ s16 VoiceManager::AdjustVolToGroup(s16 involume, int group) {
   return retval;
 }
 
-void VoiceManager::SetMasterVol(u8 group, s32 volume) {
-  mMasterVol[group] = volume;
+void voice_manager::set_master_vol(u8 group, s32 volume) {
+  m_master_vol[group] = volume;
 
-  for (auto& p : mVoices) {
+  for (auto& p : m_voices) {
     auto voice = p.lock();
     if (voice == nullptr || voice->paused) {
       continue;
     }
 
     if (voice->group == group) {
-      s16 left = AdjustVolToGroup(voice->basevol.left, voice->group);
-      s16 right = AdjustVolToGroup(voice->basevol.right, voice->group);
+      s16 left = adjust_vol_to_group(voice->basevol.left, voice->group);
+      s16 right = adjust_vol_to_group(voice->basevol.right, voice->group);
 
-      voice->SetVolume(left >> 1, right >> 1);
+      voice->set_volume(left >> 1, right >> 1);
     }
   }
 }
 
-void VoiceManager::Pause(std::shared_ptr<VagVoice> voice) {
-  voice->SetVolume(0, 0);
-  voice->SetPitch(0);
+void voice_manager::pause(std::shared_ptr<vag_voice> voice) {
+  voice->set_volume(0, 0);
+  voice->set_pitch(0);
   voice->paused = true;
 }
 
-void VoiceManager::Unpause(std::shared_ptr<VagVoice> voice) {
-  s16 left = AdjustVolToGroup(voice->basevol.left, voice->group);
-  s16 right = AdjustVolToGroup(voice->basevol.right, voice->group);
+void voice_manager::unpause(std::shared_ptr<vag_voice> voice) {
+  s16 left = adjust_vol_to_group(voice->basevol.left, voice->group);
+  s16 right = adjust_vol_to_group(voice->basevol.right, voice->group);
 
-  voice->SetVolume(left >> 1, right >> 1);
+  voice->set_volume(left >> 1, right >> 1);
 
-  std::pair<s16, s16> note = PitchBend(voice->tone, voice->current_pb, voice->current_pm,
+  std::pair<s16, s16> note = pitchbend(voice->tone, voice->current_pb, voice->current_pm,
                                        voice->start_note, voice->start_fine);
 
   auto pitch =
       PS1Note2Pitch(voice->tone.CenterNote, voice->tone.CenterFine, note.first, note.second);
 
-  voice->SetPitch(pitch);
+  voice->set_pitch(pitch);
   voice->paused = false;
 }
 

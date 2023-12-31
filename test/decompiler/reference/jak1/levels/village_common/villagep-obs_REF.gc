@@ -4,10 +4,13 @@
 ;; definition of type warpgate
 (deftype warpgate (process-hidden)
   ()
+  :method-count-assert 15
+  :size-assert         #x70
+  :flag-assert         #xf00000070
   )
 
 ;; definition for method 3 of type warpgate
-(defmethod inspect ((this warpgate))
+(defmethod inspect warpgate ((this warpgate))
   (format #t "[~8x] ~A~%" this (-> this type))
   (format #t "~Tname: ~A~%" (-> this name))
   (format #t "~Tmask: ~D~%" (-> this mask))
@@ -474,15 +477,19 @@
 
 ;; definition of type warp-gate-switch
 (deftype warp-gate-switch (basebutton)
-  ((warp  handle)
+  ((warp handle  :offset-assert 256)
    )
+  :heap-base #xa0
+  :method-count-assert 33
+  :size-assert         #x108
+  :flag-assert         #x2100a00108
   (:methods
-    (pressable? (_type_) symbol)
+    (pressable? (_type_) symbol 32)
     )
   )
 
 ;; definition for method 3 of type warp-gate-switch
-(defmethod inspect ((this warp-gate-switch))
+(defmethod inspect warp-gate-switch ((this warp-gate-switch))
   (let ((t9-0 (method-of-type basebutton inspect)))
     (t9-0 this)
     )
@@ -497,7 +504,7 @@
               )
 
 ;; definition for method 27 of type warp-gate-switch
-(defmethod basebutton-method-27 ((this warp-gate-switch))
+(defmethod basebutton-method-27 warp-gate-switch ((this warp-gate-switch))
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s5-0 reaction) default-collision-reaction)
@@ -523,13 +530,13 @@
       )
     (set! (-> s5-0 nav-radius) (* 0.75 (-> s5-0 root-prim local-sphere w)))
     (backup-collide-with-as s5-0)
-    (set! (-> this root) s5-0)
+    (set! (-> this root-override) s5-0)
     s5-0
     )
   )
 
 ;; definition for method 32 of type warp-gate-switch
-(defmethod pressable? ((this warp-gate-switch))
+(defmethod pressable? warp-gate-switch ((this warp-gate-switch))
   (let ((v1-2 (-> this entity extra perm task)))
     (cond
       ((logtest? (-> *target* control root-prim prim-core action)
@@ -566,7 +573,7 @@
   )
 
 ;; definition for method 26 of type warp-gate-switch
-(defmethod basebutton-method-26 ((this warp-gate-switch))
+(defmethod basebutton-method-26 warp-gate-switch ((this warp-gate-switch))
   (set! (-> this warp) (the-as handle #f))
   (let ((v1-2 (-> this entity extra perm task)))
     (cond
@@ -613,13 +620,13 @@
       )
     )
   (set! (-> this anim-speed) 2.0)
-  (update-transforms! (-> this root))
+  (update-transforms! (-> this root-override))
   (ja-post)
   (none)
   )
 
 ;; definition for method 31 of type warp-gate-switch
-(defmethod press! ((this warp-gate-switch) (arg0 symbol))
+(defmethod press! warp-gate-switch ((this warp-gate-switch) (arg0 symbol))
   (with-pp
     (when arg0
       (let ((s4-0 (-> this entity extra perm task)))
@@ -889,18 +896,22 @@
 
 ;; definition of type village-cam
 (deftype village-cam (process)
-  ((root-override  trsq)
-   (range          meters)
-   (index          int32)
-   (state-time     time-frame)
+  ((root-override trsq        :offset-assert 112)
+   (range         meters      :offset-assert 116)
+   (index         int32       :offset-assert 120)
+   (state-time    time-frame  :offset-assert 128)
    )
-  (:state-methods
-    idle
+  :heap-base #x20
+  :method-count-assert 15
+  :size-assert         #x88
+  :flag-assert         #xf00200088
+  (:methods
+    (idle () _type_ :state 14)
     )
   )
 
 ;; definition for method 3 of type village-cam
-(defmethod inspect ((this village-cam))
+(defmethod inspect village-cam ((this village-cam))
   (let ((t9-0 (method-of-type process inspect)))
     (t9-0 this)
     )
@@ -913,7 +924,7 @@
 
 ;; definition for method 7 of type village-cam
 ;; INFO: Return type mismatch process vs village-cam.
-(defmethod relocate ((this village-cam) (arg0 int))
+(defmethod relocate village-cam ((this village-cam) (arg0 int))
   (if (nonzero? (-> this root-override))
       (&+! (-> this root-override) arg0)
       )
@@ -1172,7 +1183,7 @@
 ;; definition for method 11 of type village-cam
 ;; INFO: Used lq/sq
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this village-cam) (arg0 entity-actor))
+(defmethod init-from-entity! village-cam ((this village-cam) (arg0 entity-actor))
   "Copy defaults from the entity."
   (logior! (-> this mask) (process-mask actor-pause))
   (set! (-> this root-override) (new 'process 'trsq))

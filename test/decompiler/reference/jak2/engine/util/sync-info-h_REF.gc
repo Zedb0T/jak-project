@@ -3,20 +3,23 @@
 
 ;; definition of type sync-info-params
 (deftype sync-info-params (structure)
-  ((sync-type   symbol)
-   (sync-flags  sync-flags)
-   (entity      basic)
-   (period      uint32)
-   (percent     float)
-   (ease-in     float)
-   (ease-out    float)
-   (pause-in    float)
-   (pause-out   float)
+  ((sync-type  symbol      :offset-assert   0)
+   (sync-flags sync-flags  :offset-assert   8)
+   (entity     basic       :offset-assert  16)
+   (period     uint32      :offset-assert  20)
+   (percent    float       :offset-assert  24)
+   (ease-in    float       :offset-assert  28)
+   (ease-out   float       :offset-assert  32)
+   (pause-in   float       :offset-assert  36)
+   (pause-out  float       :offset-assert  40)
    )
+  :method-count-assert 9
+  :size-assert         #x2c
+  :flag-assert         #x90000002c
   )
 
 ;; definition for method 3 of type sync-info-params
-(defmethod inspect ((this sync-info-params))
+(defmethod inspect sync-info-params ((this sync-info-params))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -37,23 +40,26 @@
 
 ;; definition of type sync-info
 (deftype sync-info (structure)
-  ((sync-flags  sync-flags)
-   (offset      float)
-   (period      uint32)
+  ((sync-flags sync-flags  :offset-assert   0)
+   (offset     float       :offset-assert   8)
+   (period     uint32      :offset-assert  12)
    )
+  :method-count-assert 16
+  :size-assert         #x10
+  :flag-assert         #x1000000010
   (:methods
-    (get-current-phase-no-mod (_type_) float)
-    (get-phase-offset (_type_) float)
-    (get-norm! (_type_ int) float)
-    (get-scaled-val! (_type_ float int) float)
-    (initialize! (_type_ sync-info-params) none)
-    (get-timeframe-offset! (_type_ time-frame) time-frame)
-    (sync-now! (_type_ float) none)
+    (get-current-phase-no-mod (_type_) float 9)
+    (get-phase-offset (_type_) float 10)
+    (get-norm! (_type_ int) float 11)
+    (get-scaled-val! (_type_ float int) float 12)
+    (initialize! (_type_ sync-info-params) none 13)
+    (get-timeframe-offset! (_type_ time-frame) time-frame 14)
+    (sync-now! (_type_ float) none 15)
     )
   )
 
 ;; definition for method 3 of type sync-info
-(defmethod inspect ((this sync-info))
+(defmethod inspect sync-info ((this sync-info))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -70,10 +76,13 @@
 (deftype sync-linear (sync-info)
   ()
   :pack-me
+  :method-count-assert 16
+  :size-assert         #x10
+  :flag-assert         #x1000000010
   )
 
 ;; definition for method 3 of type sync-linear
-(defmethod inspect ((this sync-linear))
+(defmethod inspect sync-linear ((this sync-linear))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -88,19 +97,22 @@
 
 ;; definition of type sync-eased
 (deftype sync-eased (sync-info)
-  ((tlo        float)
-   (thi        float)
-   (ylo        float)
-   (m2         float)
-   (yend       float)
-   (pause-in   float)
-   (pause-out  float)
+  ((tlo       float  :offset-assert  16)
+   (thi       float  :offset-assert  20)
+   (ylo       float  :offset-assert  24)
+   (m2        float  :offset-assert  28)
+   (yend      float  :offset-assert  32)
+   (pause-in  float  :offset-assert  36)
+   (pause-out float  :offset-assert  40)
    )
   :pack-me
+  :method-count-assert 16
+  :size-assert         #x2c
+  :flag-assert         #x100000002c
   )
 
 ;; definition for method 3 of type sync-eased
-(defmethod inspect ((this sync-eased))
+(defmethod inspect sync-eased ((this sync-eased))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -122,13 +134,16 @@
 
 ;; definition of type sync-paused
 (deftype sync-paused (sync-info)
-  ((pause-in   float)
-   (pause-out  float)
+  ((pause-in  float  :offset-assert  16)
+   (pause-out float  :offset-assert  20)
    )
+  :method-count-assert 16
+  :size-assert         #x18
+  :flag-assert         #x1000000018
   )
 
 ;; definition for method 3 of type sync-paused
-(defmethod inspect ((this sync-paused))
+(defmethod inspect sync-paused ((this sync-paused))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -145,24 +160,27 @@
 
 ;; definition of type delayed-rand-float
 (deftype delayed-rand-float (structure)
-  ((min-time    int32)
-   (max-time    int32)
-   (max-val     float)
-   (timer       int32)
-   (start-time  time-frame)
-   (value       float)
+  ((min-time   int32       :offset-assert   0)
+   (max-time   int32       :offset-assert   4)
+   (max-val    float       :offset-assert   8)
+   (timer      int32       :offset-assert  12)
+   (start-time time-frame  :offset-assert  16)
+   (value      float       :offset-assert  24)
    )
   :pack-me
+  :method-count-assert 13
+  :size-assert         #x1c
+  :flag-assert         #xd0000001c
   (:methods
-    (set-params! (_type_ int int float) float)
-    (reset! (_type_) float)
-    (update! (_type_) float)
-    (update-and-clear! (_type_) none)
+    (set-params! (_type_ int int float) float 9)
+    (reset! (_type_) float 10)
+    (update! (_type_) float 11)
+    (update-and-clear! (_type_) none 12)
     )
   )
 
 ;; definition for method 3 of type delayed-rand-float
-(defmethod inspect ((this delayed-rand-float))
+(defmethod inspect delayed-rand-float ((this delayed-rand-float))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -180,22 +198,25 @@
 
 ;; definition of type oscillating-float
 (deftype oscillating-float (structure)
-  ((value    float)
-   (target   float)
-   (vel      float)
-   (max-vel  float)
-   (damping  float)
-   (accel    float)
+  ((value   float  :offset-assert   0)
+   (target  float  :offset-assert   4)
+   (vel     float  :offset-assert   8)
+   (max-vel float  :offset-assert  12)
+   (damping float  :offset-assert  16)
+   (accel   float  :offset-assert  20)
    )
   :allow-misaligned
+  :method-count-assert 11
+  :size-assert         #x18
+  :flag-assert         #xb00000018
   (:methods
-    (set-params! (_type_ float float float float) float)
-    (update! (_type_ float) float)
+    (set-params! (_type_ float float float float) float 9)
+    (update! (_type_ float) float 10)
     )
   )
 
 ;; definition for method 3 of type oscillating-float
-(defmethod inspect ((this oscillating-float))
+(defmethod inspect oscillating-float ((this oscillating-float))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -213,23 +234,26 @@
 
 ;; definition of type bouncing-float
 (deftype bouncing-float (structure)
-  ((osc         oscillating-float  :inline)
-   (max-value   float)
-   (min-value   float)
-   (elasticity  float)
-   (state       int32)
+  ((osc        oscillating-float :inline :offset-assert   0)
+   (max-value  float                     :offset-assert  24)
+   (min-value  float                     :offset-assert  28)
+   (elasticity float                     :offset-assert  32)
+   (state      int32                     :offset-assert  36)
    )
   :allow-misaligned
+  :method-count-assert 13
+  :size-assert         #x28
+  :flag-assert         #xd00000028
   (:methods
-    (set-params! (_type_ float float float float float float float) float)
-    (update! (_type_ float) float)
-    (at-min? (_type_) symbol)
-    (at-max? (_type_) symbol)
+    (set-params! (_type_ float float float float float float float) float 9)
+    (update! (_type_ float) float 10)
+    (at-min? (_type_) symbol 11)
+    (at-max? (_type_) symbol 12)
     )
   )
 
 ;; definition for method 3 of type bouncing-float
-(defmethod inspect ((this bouncing-float))
+(defmethod inspect bouncing-float ((this bouncing-float))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -246,24 +270,27 @@
 
 ;; definition of type delayed-rand-vector
 (deftype delayed-rand-vector (structure)
-  ((min-time    int32)
-   (max-time    int32)
-   (xz-max      float)
-   (y-max       float)
-   (timer       int32)
-   (start-time  time-frame)
-   (value       vector  :inline)
+  ((min-time   int32              :offset-assert   0)
+   (max-time   int32              :offset-assert   4)
+   (xz-max     float              :offset-assert   8)
+   (y-max      float              :offset-assert  12)
+   (timer      int32              :offset-assert  16)
+   (start-time time-frame         :offset-assert  24)
+   (value      vector     :inline :offset-assert  32)
    )
+  :method-count-assert 13
+  :size-assert         #x30
+  :flag-assert         #xd00000030
   (:methods
-    (set-params! (_type_ int int float float) vector)
-    (update-now! (_type_) vector)
-    (update-with-delay! (_type_) vector)
-    (update-with-delay-or-reset! (_type_) vector)
+    (set-params! (_type_ int int float float) vector 9)
+    (update-now! (_type_) vector 10)
+    (update-with-delay! (_type_) vector 11)
+    (update-with-delay-or-reset! (_type_) vector 12)
     )
   )
 
 ;; definition for method 3 of type delayed-rand-vector
-(defmethod inspect ((this delayed-rand-vector))
+(defmethod inspect delayed-rand-vector ((this delayed-rand-vector))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -282,21 +309,24 @@
 
 ;; definition of type oscillating-vector
 (deftype oscillating-vector (structure)
-  ((value    vector  :inline)
-   (target   vector  :inline)
-   (vel      vector  :inline)
-   (max-vel  float)
-   (damping  float)
-   (accel    float)
+  ((value   vector :inline :offset-assert   0)
+   (target  vector :inline :offset-assert  16)
+   (vel     vector :inline :offset-assert  32)
+   (max-vel float          :offset-assert  48)
+   (damping float          :offset-assert  52)
+   (accel   float          :offset-assert  56)
    )
+  :method-count-assert 11
+  :size-assert         #x3c
+  :flag-assert         #xb0000003c
   (:methods
-    (set-params! (_type_ vector float float float) vector)
-    (update! (_type_ vector) vector)
+    (set-params! (_type_ vector float float float) vector 9)
+    (update! (_type_ vector) vector 10)
     )
   )
 
 ;; definition for method 3 of type oscillating-vector
-(defmethod inspect ((this oscillating-vector))
+(defmethod inspect oscillating-vector ((this oscillating-vector))
   (when (not this)
     (set! this this)
     (goto cfg-4)

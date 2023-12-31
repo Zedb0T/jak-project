@@ -6,15 +6,19 @@
 
 ;; definition of type scene-looper
 (deftype scene-looper (process)
-  ((scene-name  symbol)
+  ((scene-name symbol  :offset-assert 128)
    )
-  (:state-methods
-    idle
+  :heap-base #x10
+  :method-count-assert 15
+  :size-assert         #x84
+  :flag-assert         #xf00100084
+  (:methods
+    (idle () _type_ :state 14)
     )
   )
 
 ;; definition for method 3 of type scene-looper
-(defmethod inspect ((this scene-looper))
+(defmethod inspect scene-looper ((this scene-looper))
   (when (not this)
     (set! this this)
     (goto cfg-4)

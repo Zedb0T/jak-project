@@ -9,6 +9,10 @@
 
 (deftype test-bike (bikec)
   ()
+  :heap-base #x320
+  :method-count-assert 144
+  :size-assert         #x39c
+  :flag-assert         #x900320039c
   )
 
 
@@ -219,7 +223,7 @@
     )
   )
 
-(defmethod init-skel-and-rigid-body ((this test-bike))
+(defmethod init-skel-and-rigid-body test-bike ((this test-bike))
   (initialize-skeleton
     this
     (the-as skeleton-group (art-group-get-by-name *level* "skel-bikec" (the-as (pointer uint32) #f)))
@@ -243,6 +247,10 @@
 
 (deftype evan-test-bike (bikea)
   ()
+  :heap-base #x310
+  :method-count-assert 144
+  :size-assert         #x38c
+  :flag-assert         #x900310038c
   )
 
 
@@ -451,7 +459,7 @@
     )
   )
 
-(defmethod init-skel-and-rigid-body ((this evan-test-bike))
+(defmethod init-skel-and-rigid-body evan-test-bike ((this evan-test-bike))
   (initialize-skeleton
     this
     (the-as skeleton-group (art-group-get-by-name *level* "skel-bikea" (the-as (pointer uint32) #f)))

@@ -25,10 +25,14 @@
   )
 
 (deftype part-tester (process)
-  ((root       trsqv)
-   (part       sparticle-launch-control)
-   (old-group  sparticle-launch-group)
+  ((root      trsqv                     :offset-assert 128)
+   (part      sparticle-launch-control  :offset-assert 132)
+   (old-group sparticle-launch-group    :offset-assert 136)
    )
+  :heap-base #x10
+  :method-count-assert 14
+  :size-assert         #x8c
+  :flag-assert         #xe0010008c
   (:states
     part-tester-idle
     )
@@ -37,7 +41,7 @@
 
 (define *part-tester-name* (the-as string #f))
 
-(defmethod deactivate ((this part-tester))
+(defmethod deactivate part-tester ((this part-tester))
   (if (nonzero? (-> this part))
       (kill-and-free-particles (-> this part))
       )

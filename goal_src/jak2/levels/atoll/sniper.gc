@@ -8,8 +8,12 @@
 ;; DECOMP BEGINS
 
 (deftype sniper (spyder)
-  ((next-pick-time  time-frame)
+  ((next-pick-time time-frame  :offset-assert 944)
    )
+  :heap-base #x340
+  :method-count-assert 186
+  :size-assert         #x3b8
+  :flag-assert         #xba034003b8
   )
 
 
@@ -188,13 +192,13 @@
 
 (set! (-> *sniper-nav-enemy-info* fact-defaults) *fact-info-enemy-defaults*)
 
-(defmethod run-logic? ((this sniper))
+(defmethod run-logic? sniper ((this sniper))
   (let ((f0-0 573440.0))
     (>= (* f0-0 f0-0) (vector-vector-distance-squared (-> this root trans) (camera-pos)))
     )
   )
 
-(defmethod enemy-method-129 ((this sniper))
+(defmethod enemy-method-129 sniper ((this sniper))
   (let ((a0-1 *target*))
     (if a0-1
         (set! (-> this focus handle) (process->handle a0-1))
@@ -210,7 +214,7 @@
   (none)
   )
 
-(defmethod nav-enemy-method-156 ((this sniper))
+(defmethod nav-enemy-method-156 sniper ((this sniper))
   (let ((s4-0 (-> this path curve num-cverts)))
     (if (<= s4-0 0)
         (go process-drawable-art-error "no path")
@@ -277,7 +281,7 @@
     )
   )
 
-(defmethod init-enemy! ((this sniper))
+(defmethod init-enemy! sniper ((this sniper))
   "Common method called to initialize the enemy, typically sets up default field values and calls ancillary helper methods"
   (let ((t9-0 (method-of-type spyder init-enemy!)))
     (t9-0 this)
@@ -290,7 +294,7 @@
   (none)
   )
 
-(defmethod init-enemy-collision! ((this sniper))
+(defmethod init-enemy-collision! sniper ((this sniper))
   "Initializes the [[collide-shape-moving]] and any ancillary tasks to make the enemy collide properly"
   (let ((t9-0 (method-of-type spyder init-enemy-collision!)))
     (t9-0 this)
@@ -307,7 +311,7 @@
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod go-idle ((this sniper))
+(defmethod go-idle sniper ((this sniper))
   (cond
     ((script-eval (res-lump-struct (-> this entity) 'on-activate pair))
      (cleanup-for-death this)

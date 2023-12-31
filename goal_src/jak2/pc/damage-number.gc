@@ -27,10 +27,8 @@
    (font          font-context)
    (y-ofs         float)
    )
-  (:state-methods
-    active
-    )
   (:methods
+    (active () _type_ :state 14)
     (initialize-font (_type_) font-context))
   )
 
@@ -77,14 +75,14 @@
     )
   )
 
-(defmethod relocate ((this damage-number) (diff int))
-  (if (nonzero? (-> this font))
-      (&+! (-> this font) diff)
+(defmethod relocate damage-number ((obj damage-number) (diff int))
+  (if (nonzero? (-> obj font))
+      (&+! (-> obj font) diff)
       )
-  (call-parent-method this diff)
+  (the-as damage-number ((the-as (function process int process) (find-parent-method damage-number 7)) obj diff))
   )
 
-(defmethod initialize-font ((self damage-number))
+(defmethod initialize-font damage-number ((self damage-number))
   "create the font that will be used used."
 
   (if (zero? (-> self font))
@@ -174,32 +172,30 @@
 
 
 
-(defun draw-health-bar ((x int) (y int) (width int) (height int) (hit-points float) (hit-points-max float) (bucket bucket-id))
+(defun draw-health-bar ((x int) (y int) (width int) (height int) (percentage float) (bucket bucket-id))
   "Draw a rectangular health bar at the given location. color fades from green to yellow to red."
   
   (let* ((color (static-rgba 0 0 0 #x80))
-        (bar-w (the int (* (/ hit-points hit-points-max) (max 0 (+ width -4)))))
+        (bar-w (the int (* percentage (max 0 (+ width -4)))))
         (x2 (+ x width))
-        (bx2 (+ x 2 bar-w))
-        (color-fade (if (<= hit-points-max 1.0)
-                        (/ hit-points hit-points-max)
-                        (/ (1- hit-points) (1- hit-points-max)))))
+        (bx2 (+ x 2 bar-w)))
     (cond
-      ((>= color-fade 0.5)
+      ((>= percentage 0.6)
         ;; fade from green -> yellow
-        (set! (-> color r) (the int (lerp-scale (the float (-> *color-green* r)) (the float (-> *color-yellow* r)) color-fade 1.0 0.5)))
-        (set! (-> color g) (the int (lerp-scale (the float (-> *color-green* g)) (the float (-> *color-yellow* g)) color-fade 1.0 0.5)))
-        (set! (-> color b) (the int (lerp-scale (the float (-> *color-green* b)) (the float (-> *color-yellow* b)) color-fade 1.0 0.5)))
+        (set! (-> color r) (the int (lerp-scale (the float (-> *color-green* r)) (the float (-> *color-yellow* r)) percentage 1.0 0.55)))
+        (set! (-> color g) (the int (lerp-scale (the float (-> *color-green* g)) (the float (-> *color-yellow* g)) percentage 1.0 0.55)))
+        (set! (-> color b) (the int (lerp-scale (the float (-> *color-green* b)) (the float (-> *color-yellow* b)) percentage 1.0 0.55)))
         )
       (else
         ;; fade from yellow -> red
-        (set! (-> color r) (the int (lerp-scale (the float (-> *color-yellow* r)) (the float (-> *color-red* r)) color-fade 0.5 0.0)))
-        (set! (-> color g) (the int (lerp-scale (the float (-> *color-yellow* g)) (the float (-> *color-red* g)) color-fade 0.5 0.0)))
-        (set! (-> color b) (the int (lerp-scale (the float (-> *color-yellow* b)) (the float (-> *color-red* b)) color-fade 0.5 0.0)))
+        (set! (-> color r) (the int (lerp-scale (the float (-> *color-yellow* r)) (the float (-> *color-red* r)) percentage 0.55 0.1)))
+        (set! (-> color g) (the int (lerp-scale (the float (-> *color-yellow* g)) (the float (-> *color-red* g)) percentage 0.55 0.1)))
+        (set! (-> color b) (the int (lerp-scale (the float (-> *color-yellow* b)) (the float (-> *color-red* b)) percentage 0.55 0.1)))
         )
       )
     (with-dma-buffer-add-bucket ((buf (-> *display* frames (-> *display* on-screen) global-buf))
-                                  bucket)
+                                  bucket
+                                  )
       (cond
         ((< x -2)
           (+! width x)
@@ -245,16 +241,15 @@
    (prev-bar  (pointer health-bar))
    (next-bar  (pointer health-bar))
    )
-  (:state-methods
-    idle
-    )
+  (:methods
+    (idle () _type_ :state 14))
   )
 
-(defmethod relocate health-bar ((this health-bar) (diff int))
-  (if (nonzero? (-> this font))
-      (&+! (-> this font) diff)
+(defmethod relocate health-bar ((obj health-bar) (diff int))
+  (if (nonzero? (-> obj font))
+      (&+! (-> obj font) diff)
       )
-  (call-parent-method this diff)
+  (the-as health-bar ((the-as (function process int process) (find-parent-method health-bar 7)) obj diff))
   )
 
 
@@ -274,37 +269,37 @@
 
 (defmethod new health-bar-manager ((allocation symbol) (type-to-make type))
   
-  (let ((this (object-new allocation type-to-make (the-as int (-> type-to-make size)))))
-    (set! (-> this head) #f)
-    (set! (-> this tail) #f)
-    this)
+  (let ((obj (object-new allocation type-to-make (the-as int (-> type-to-make size)))))
+    (set! (-> obj head) #f)
+    (set! (-> obj tail) #f)
+    obj)
   )
 
 
-(defmethod append-to-list ((this health-bar-manager) (bar-ptr (pointer health-bar)))
+(defmethod append-to-list health-bar-manager ((obj health-bar-manager) (bar-ptr (pointer health-bar)))
   "add a health bar to the end of the linked list"
-  (set! (-> bar-ptr 0 prev-bar) (-> this tail))
+  (set! (-> bar-ptr 0 prev-bar) (-> obj tail))
   (cond
-    ((-> this tail)
+    ((-> obj tail)
       ;; list has stuff
-      (set! (-> this tail 0 next-bar) bar-ptr)
+      (set! (-> obj tail 0 next-bar) bar-ptr)
       )
     (else
       ;; no tail means list is empty. fill head.
-      (set! (-> this head) bar-ptr)
+      (set! (-> obj head) bar-ptr)
       )
     )
-  (set! (-> this tail) bar-ptr)
+  (set! (-> obj tail) bar-ptr)
   
   bar-ptr)
 
-(defmethod remove-from-list ((this health-bar-manager) (bar-ptr (pointer health-bar)))
+(defmethod remove-from-list health-bar-manager ((obj health-bar-manager) (bar-ptr (pointer health-bar)))
   "remove a health bar from the linked list. call this when deactivating it"
 
-  (if (= (-> this head) bar-ptr)
-      (set! (-> this head) (-> bar-ptr 0 next-bar)))
-  (if (= (-> this tail) bar-ptr)
-      (set! (-> this tail) (-> bar-ptr 0 prev-bar)))
+  (if (= (-> obj head) bar-ptr)
+      (set! (-> obj head) (-> bar-ptr 0 next-bar)))
+  (if (= (-> obj tail) bar-ptr)
+      (set! (-> obj tail) (-> bar-ptr 0 prev-bar)))
   (if (-> bar-ptr 0 next-bar)
       (set! (-> bar-ptr 0 next-bar 0 prev-bar) (-> bar-ptr 0 prev-bar)))
   (if (-> bar-ptr 0 prev-bar)
@@ -313,10 +308,10 @@
   bar-ptr)
 
 
-(defmethod get-bar-for-process ((this health-bar-manager) (proc process-drawable))
+(defmethod get-bar-for-process health-bar-manager ((obj health-bar-manager) (proc process-drawable))
   "return the health bar associated with that process. #f = not found"
 
-  (let ((cur-bar (-> this head)))
+  (let ((cur-bar (-> obj head)))
     (while cur-bar
       (if (= (handle->process (-> cur-bar 0 owner)) proc)
           (return cur-bar))
@@ -371,7 +366,7 @@
                (> (meters 160) (vector-vector-distance (-> (the process-drawable (handle->process (-> self owner))) root trans) (math-camera-pos))))
       (draw-health-bar (the int (-> self font origin x)) (the int (-> self font origin y))
                        (the int (-> self width)) (the int (-> self height))
-                       (-> self hit-points) (-> self hit-points-max)
+                       (/ (-> self hit-points) (-> self hit-points-max))
                        (bucket-id debug-no-zbuf1))
       ;(print-game-text (string-format "~,,0f/~,,0f" (-> self hit-points) (-> self hit-points-max)) (-> self font) #f 44 (bucket-id debug-no-zbuf1))
       )
@@ -379,7 +374,7 @@
   )
 
 
-(defmethod deactivate ((self health-bar))
+(defmethod deactivate health-bar ((self health-bar))
 
   (remove-from-list *health-bar-manager* (process->ppointer self))
 
@@ -421,9 +416,9 @@
 
 
 
-(defmethod send-damage-to-bar ((this health-bar-manager) (from process-drawable) (damage int) (hit-points-old int))
+(defmethod send-damage-to-bar health-bar-manager ((obj health-bar-manager) (from process-drawable) (damage int) (hit-points-old int))
   "send damage and hit point information of an enemy to its health bar. creates one if needed."
-  (let ((the-bar (get-bar-for-process this from)))
+  (let ((the-bar (get-bar-for-process obj from)))
       (cond
         (the-bar
           (send-event (ppointer->process the-bar) 'damage damage)
@@ -435,10 +430,10 @@
       the-bar)
   )
 
-(defmethod set-proc-bar-hit-points ((this health-bar-manager) (proc process-drawable) (hit-points int))
+(defmethod set-proc-bar-hit-points health-bar-manager ((obj health-bar-manager) (proc process-drawable) (hit-points int))
   "simply set the hit points (not max hit points) of a process's health bar"
   
-  (let ((the-bar (get-bar-for-process this proc)))
+  (let ((the-bar (get-bar-for-process obj proc)))
     (send-event (ppointer->process the-bar) 'set-hit-points hit-points)
     the-bar)
   )

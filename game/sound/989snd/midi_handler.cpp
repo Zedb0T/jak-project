@@ -22,13 +22,19 @@ namespace snd {
 **
 */
 
-MidiHandler::MidiHandler(Midi* block,
-                         VoiceManager& vm,
-                         MusicBank::MIDISound& sound,
-                         s32 vol,
-                         s32 pan,
-                         SoundBank& bank)
-    : m_sound(sound), m_repeats(sound.Repeats), m_bank(bank), m_header(block), m_vm(vm) {
+midi_handler::midi_handler(MIDIBlockHeader* block,
+                           voice_manager& vm,
+                           MIDISound& sound,
+                           s32 vol,
+                           s32 pan,
+                           locator& loc,
+                           SoundBank& bank)
+    : m_sound(sound),
+      m_locator(loc),
+      m_repeats(sound.Repeats),
+      m_bank(bank),
+      m_header(block),
+      m_vm(vm) {
   if (vol == VOLUME_DONT_CHANGE) {
     vol = 1024;
   }
@@ -44,29 +50,31 @@ MidiHandler::MidiHandler(Midi* block,
     m_pan = pan;
   }
 
-  InitMidi();
+  init_midi();
 }
 
-MidiHandler::MidiHandler(Midi* block,
-                         VoiceManager& vm,
-                         MusicBank::MIDISound& sound,
-                         s32 vol,
-                         s32 pan,
-                         SoundBank& bank,
-                         std::optional<AmeHandler*> parent)
+midi_handler::midi_handler(MIDIBlockHeader* block,
+                           voice_manager& vm,
+                           MIDISound& sound,
+                           s32 vol,
+                           s32 pan,
+                           locator& loc,
+                           SoundBank& bank,
+                           std::optional<ame_handler*> parent)
     : m_parent(parent),
       m_sound(sound),
+      m_locator(loc),
       m_vol(vol),
       m_pan(pan),
       m_repeats(sound.Repeats),
       m_bank(bank),
       m_header(block),
       m_vm(vm) {
-  InitMidi();
+  init_midi();
 }
 
-void MidiHandler::InitMidi() {
-  m_seq_data_start = m_header->DataStart;
+void midi_handler::init_midi() {
+  m_seq_data_start = (u8*)((uintptr_t)m_header + (uintptr_t)m_header->DataStart);
   m_seq_ptr = m_seq_data_start;
   m_tempo = m_header->Tempo;
   m_ppq = m_header->PPQ;
@@ -74,7 +82,7 @@ void MidiHandler::InitMidi() {
   m_chanpan.fill(0);
 }
 
-std::pair<size_t, u32> MidiHandler::ReadVLQ(u8* value) {
+std::pair<size_t, u32> midi_handler::read_vlq(u8* value) {
   size_t len = 1;
   u32 out = *value & 0x7f;
   // fmt::print("starting with {:x}\n", *value);
@@ -90,7 +98,7 @@ std::pair<size_t, u32> MidiHandler::ReadVLQ(u8* value) {
   return {len, out};
 }
 
-void MidiHandler::Pause() {
+void midi_handler::pause() {
   m_paused = true;
 
   for (auto& p : m_voices) {
@@ -99,11 +107,11 @@ void MidiHandler::Pause() {
       continue;
     }
 
-    m_vm.Pause(voice);
+    m_vm.pause(voice);
   }
 }
 
-void MidiHandler::Unpause() {
+void midi_handler::unpause() {
   m_paused = false;
 
   for (auto& p : m_voices) {
@@ -112,11 +120,11 @@ void MidiHandler::Unpause() {
       continue;
     }
 
-    m_vm.Unpause(voice);
+    m_vm.unpause(voice);
   }
 }
 
-void MidiHandler::Stop() {
+void midi_handler::stop() {
   m_track_complete = true;
 
   for (auto& p : m_voices) {
@@ -125,11 +133,11 @@ void MidiHandler::Stop() {
       continue;
     }
 
-    voice->KeyOff();
+    voice->key_off();
   }
 }
 
-void MidiHandler::SetVolPan(s32 vol, s32 pan) {
+void midi_handler::set_vol_pan(s32 vol, s32 pan) {
   if (vol != VOLUME_DONT_CHANGE) {
     if (vol >= 0) {
       m_vol = (m_sound.Vol * vol) >> 10;
@@ -162,16 +170,16 @@ void MidiHandler::SetVolPan(s32 vol, s32 pan) {
     }
 
     voice->basevol =
-        m_vm.MakeVolumeB(m_vol, voice->velocity * m_chanvol[voice->channel] / 127, pan,
-                         voice->prog.Vol, voice->prog.Pan, voice->tone.Vol, voice->tone.Pan);
+        m_vm.make_volume_b(m_vol, voice->velocity * m_chanvol[voice->channel] / 127, pan,
+                           voice->prog.Vol, voice->prog.Pan, voice->tone.Vol, voice->tone.Pan);
 
-    auto left = m_vm.AdjustVolToGroup(voice->basevol.left, voice->group);
-    auto right = m_vm.AdjustVolToGroup(voice->basevol.right, voice->group);
-    voice->SetVolume(left >> 1, right >> 1);
+    auto left = m_vm.adjust_vol_to_group(voice->basevol.left, voice->group);
+    auto right = m_vm.adjust_vol_to_group(voice->basevol.right, voice->group);
+    voice->set_volume(left >> 1, right >> 1);
   }
 }
 
-void MidiHandler::SetPMod(s32 mod) {
+void midi_handler::set_pmod(s32 mod) {
   m_cur_pm = mod;
 
   for (auto& v : m_voices) {
@@ -181,31 +189,31 @@ void MidiHandler::SetPMod(s32 mod) {
     }
 
     voice->current_pm = m_cur_pm;
-    auto note = PitchBend(voice->tone, voice->current_pb, voice->current_pm, voice->start_note,
+    auto note = pitchbend(voice->tone, voice->current_pb, voice->current_pm, voice->start_note,
                           voice->start_fine);
     auto pitch =
         PS1Note2Pitch(voice->tone.CenterNote, voice->tone.CenterFine, note.first, note.second);
-    voice->SetPitch(pitch);
+    voice->set_pitch(pitch);
   }
 }
 
-void MidiHandler::MuteChannel(u8 channel) {
+void midi_handler::mute_channel(u8 channel) {
   // fmt::print("{:x} ame muting channel {}\n", (u64)this, channel);
   m_mute_state[channel] = true;
 }
 
-void MidiHandler::UnmuteChannel(u8 channel) {
+void midi_handler::unmute_channel(u8 channel) {
   // fmt::print("{:x} ame unmuting channel {}\n", (u64)this, channel);
   m_mute_state[channel] = false;
 }
 
-void MidiHandler::NoteOn() {
+void midi_handler::note_on() {
   u8 channel = m_status & 0xf;
   u8 note = m_seq_ptr[0];
   u8 velocity = m_seq_ptr[1];
 
   if (velocity == 0) {
-    NoteOff();
+    note_off();
     return;
   }
 
@@ -218,21 +226,19 @@ void MidiHandler::NoteOn() {
   //            velocity);
 
   // Key on all the applicable tones for the program
-  // FIXME bank from midi
-  // auto bank = dynamic_cast<MusicBank*>(m_locator.get_bank_by_id(m_header->BankID));
-  auto bank = static_cast<MusicBank*>(&m_bank);
-  auto& program = bank->Progs[m_programs[channel]];
+  auto bank = dynamic_cast<MusicBank*>(m_locator.get_bank_by_id(m_header->BankID));
+  auto& program = bank->m_programs[m_programs[channel]];
 
-  for (auto& t : program.Tones) {
+  for (auto& t : program.tones) {
     if (note >= t.MapLow && note <= t.MapHigh) {
       s16 pan = m_chanpan[channel] + m_pan;
       if (pan >= 360) {
         pan -= 360;
       }
 
-      auto voice = std::make_shared<midi_voice>(t, program);
-      voice->basevol = m_vm.MakeVolumeB(m_vol, (velocity * m_chanvol[channel]) / 0x7f, pan,
-                                        program.Vol, program.Pan, t.Vol, t.Pan);
+      auto voice = std::make_shared<midi_voice>(t, program.d);
+      voice->basevol = m_vm.make_volume_b(m_vol, (velocity * m_chanvol[channel]) / 0x7f, pan,
+                                          program.d.Vol, program.d.Pan, t.Vol, t.Pan);
 
       voice->note = note;
       voice->channel = channel;
@@ -245,7 +251,7 @@ void MidiHandler::NoteOn() {
       voice->current_pb = m_cur_pm;
 
       voice->group = m_sound.VolGroup;
-      m_vm.StartTone(voice);
+      m_vm.start_tone(voice, m_bank.bank_id);
       m_voices.emplace_front(voice);
     }
   }
@@ -253,7 +259,7 @@ void MidiHandler::NoteOn() {
   m_seq_ptr += 2;
 }
 
-void MidiHandler::NoteOff() {
+void midi_handler::note_off() {
   u8 channel = m_status & 0xf;
   u8 note = m_seq_ptr[0];
   // Yep, no velocity for note-offs
@@ -269,14 +275,14 @@ void MidiHandler::NoteOff() {
     }
 
     if (voice->channel == channel && voice->note == note) {
-      voice->KeyOff();
+      voice->key_off();
     }
   }
 
   m_seq_ptr += 2;
 }
 
-void MidiHandler::ProgramChange() {
+void midi_handler::program_change() {
   u8 channel = m_status & 0xf;
   u8 program = m_seq_ptr[0];
 
@@ -287,7 +293,7 @@ void MidiHandler::ProgramChange() {
   m_seq_ptr += 1;
 }
 
-void MidiHandler::ChannelPressure() {
+void midi_handler::channel_pressure() {
   u8 channel = m_status & 0xf;
   u8 note = m_seq_ptr[0];
   // fmt::print("{}: channel pressure {:02x} {:02x}\n", m_time, m_status, m_seq_ptr[0]);
@@ -299,14 +305,14 @@ void MidiHandler::ChannelPressure() {
     }
 
     if (voice->channel == channel && voice->note == note) {
-      voice->KeyOff();
+      voice->key_off();
     }
   }
 
   m_seq_ptr += 1;
 }
 
-void MidiHandler::ChannelPitch() {
+void midi_handler::channel_pitch() {
   u8 channel = m_status & 0xF;
   s32 pitch = 0xFFFF * ((m_seq_ptr[0] & 0x7f) | ((m_seq_ptr[1] & 0x7f) << 7)) / 0x3FFF;
   // lg::debug("{}: pitch ch{:01x} {:04x}", m_time, channel, pitch);
@@ -320,18 +326,18 @@ void MidiHandler::ChannelPitch() {
 
     if (voice->channel == channel) {
       voice->current_pb = m_pitch_bend[channel];
-      auto note = PitchBend(voice->tone, voice->current_pb, voice->current_pm, voice->start_note,
+      auto note = pitchbend(voice->tone, voice->current_pb, voice->current_pm, voice->start_note,
                             voice->start_fine);
       auto pitch =
           PS1Note2Pitch(voice->tone.CenterNote, voice->tone.CenterFine, note.first, note.second);
-      voice->SetPitch(pitch);
+      voice->set_pitch(pitch);
     }
   }
 
   m_seq_ptr += 2;
 }
 
-void MidiHandler::MetaEvent() {
+void midi_handler::meta_event() {
   // fmt::print("{}: meta event {:02x}\n", m_time, *m_seq_ptr);
   size_t len = m_seq_ptr[1];
 
@@ -367,7 +373,7 @@ static s16 midiTo360Pan(u8 pan) {
   }
 }
 
-void MidiHandler::ControllerChange() {
+void midi_handler::controller_change() {
   u8 channel = m_status & 0xf;
   u8 controller = m_seq_ptr[0];
   u8 value = m_seq_ptr[1];
@@ -382,21 +388,21 @@ void MidiHandler::ControllerChange() {
     } break;
     // case 0x40: {} break; // TODO damper
     default:
-      throw MidiError(fmt::format("invalid midi controller change {}", controller));
+      throw midi_error(fmt::format("invalid midi controller change {}", controller));
       break;
   }
 
   m_seq_ptr += 2;
 }
 
-void MidiHandler::SystemEvent() {
+void midi_handler::system_event() {
   // fmt::print("{}: system event {:02x}\n", m_time, *m_seq_ptr);
 
   switch (*m_seq_ptr) {
     case 0x75:
       m_seq_ptr++;
       if (m_parent.has_value()) {
-        auto [cont, ptr] = m_parent.value()->RunAME(*this, m_seq_ptr);
+        auto [cont, ptr] = m_parent.value()->run_ame(*this, m_seq_ptr);
         m_seq_ptr = ptr;
 
         if (!cont) {
@@ -404,23 +410,23 @@ void MidiHandler::SystemEvent() {
           m_track_complete = true;
         }
       } else {
-        throw MidiError("MIDI tried to run AME without an AME handler");
+        throw midi_error("MIDI tried to run AME without an AME handler");
       }
       break;
     default:
-      throw MidiError(fmt::format("Unknown system message {:02x}", *m_seq_ptr));
+      throw midi_error(fmt::format("Unknown system message {:02x}", *m_seq_ptr));
   }
 }
 
-bool MidiHandler::Tick() {
+bool midi_handler::tick() {
   if (m_paused) {
     return m_track_complete;
   }
 
   try {
     m_voices.remove_if([](auto& v) { return v.expired(); });
-    Step();
-  } catch (MidiError& e) {
+    step();
+  } catch (midi_error& e) {
     m_track_complete = true;
     lg::error("MIDI Error: {}", e.what());
     fmt::print("Sequence following: ");
@@ -433,8 +439,8 @@ bool MidiHandler::Tick() {
   return m_track_complete;
 }
 
-void MidiHandler::NewDelta() {
-  auto [len, delta] = ReadVLQ(m_seq_ptr);
+void midi_handler::new_delta() {
+  auto [len, delta] = read_vlq(m_seq_ptr);
 
   m_seq_ptr += len;
   m_time += delta;
@@ -451,9 +457,9 @@ void MidiHandler::NewDelta() {
   }
 }
 
-void MidiHandler::Step() {
+void midi_handler::step() {
   if (m_get_delta) {
-    NewDelta();
+    new_delta();
     m_get_delta = false;
   } else {
     m_tick_countdown--;
@@ -468,40 +474,40 @@ void MidiHandler::Step() {
 
     switch (m_status >> 4) {
       case 0x8:
-        NoteOff();
+        note_off();
         break;
       case 0x9:
-        NoteOn();
+        note_on();
         break;
       case 0xB:
-        ControllerChange();
+        controller_change();
         break;
       case 0xD:
-        ChannelPressure();
+        channel_pressure();
         break;
       case 0xC:
-        ProgramChange();
+        program_change();
         break;
       case 0xE:
-        ChannelPitch();
+        channel_pitch();
         break;
       case 0xF:
         // normal meta-event
         if (m_status == 0xFF) {
-          MetaEvent();
+          meta_event();
           break;
         }
         if (m_status == 0xF0) {
-          SystemEvent();
+          system_event();
           break;
         }
         [[fallthrough]];
       default:
-        throw MidiError(fmt::format("invalid status {}", m_status));
+        throw midi_error(fmt::format("invalid status {}", m_status));
         return;
     }
 
-    NewDelta();
+    new_delta();
   }
 }
 

@@ -9,8 +9,12 @@
 
 (deftype citb-bunny (snow-bunny)
   ()
+  :heap-base #x190
+  :method-count-assert 77
+  :size-assert         #x200
+  :flag-assert         #x4d01900200
   (:methods
-    (nav-enemy-method-48 (_type_ object) none :replace)
+    (citb-bunny-method-48 (_type_ object) none :replace 48)
     )
   )
 
@@ -72,15 +76,15 @@
                                       )
         )
 
-(defmethod nav-enemy-method-60 ((this citb-bunny))
+(defmethod snow-bunny-method-60 citb-bunny ((this citb-bunny))
   (initialize-skeleton this *citb-bunny-sg* '())
   (set! (-> this draw origin-joint-index) (the-as uint 3))
   0
   (none)
   )
 
-(defmethod nav-enemy-method-48 ((this citb-bunny) (arg0 object))
-  (nav-enemy-method-60 this)
+(defmethod citb-bunny-method-48 citb-bunny ((this citb-bunny) (arg0 object))
+  (snow-bunny-method-60 this)
   (init-defaults! this *citb-bunny-nav-enemy-info*)
   (logclear! (-> this draw shadow-ctrl settings flags) (shadow-flags shdf03))
   (cond
@@ -108,7 +112,7 @@
   (none)
   )
 
-(defmethod set-jump-height-factor! ((this citb-bunny) (arg0 int))
+(defmethod set-jump-height-factor! citb-bunny ((this citb-bunny) (arg0 int))
   (let ((v1-0 arg0))
     (cond
       ((zero? v1-0)

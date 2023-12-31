@@ -9,7 +9,7 @@
 #include <utility>
 
 #include "ame_handler.h"
-#include "musicbank.h"
+#include "loader.h"
 #include "sound_handler.h"
 #include "vagvoice.h"
 
@@ -17,72 +17,87 @@
 
 namespace snd {
 
-class midi_voice : public VagVoice {
+struct ProgData {
+  /*   0 */ s8 NumTones;
+  /*   1 */ s8 Vol;
+  /*   2 */ s16 Pan;
+  /*   4 */ /*Tone**/ u32 FirstTone;
+};
+
+struct Prog {
+  ProgData d;
+  std::vector<Tone> tones;
+};
+
+class midi_voice : public vag_voice {
  public:
-  midi_voice(Tone& t, MusicBank::Prog& _prog) : VagVoice(t), prog(_prog) {}
+  midi_voice(Tone& t, ProgData& prog) : vag_voice(t), prog(prog) {}
   u8 note{0};
   u8 channel{0};
   u8 velocity{0};
-  MusicBank::Prog& prog;
+  ProgData& prog;
 };
 
-class AmeHandler;
-class MidiHandler : public SoundHandler {
+class ame_handler;
+class midi_handler : public sound_handler {
  public:
-  MidiHandler(Midi* block,
-              VoiceManager& vm,
-              MusicBank::MIDISound& sound,
-              s32 vol,
-              s32 pan,
-              SoundBank& bank);
+  midi_handler(MIDIBlockHeader* block,
+               voice_manager& vm,
+               MIDISound& sound,
+               s32 vol,
+               s32 pan,
+               locator& loc,
+               SoundBank& bank);
 
-  MidiHandler(Midi* block,
-              VoiceManager& vm,
-              MusicBank::MIDISound& sound,
-              s32 vol,
-              s32 pan,
-              SoundBank& bank,
-              std::optional<AmeHandler*> parent);
+  midi_handler(MIDIBlockHeader* block,
+               voice_manager& vm,
+               MIDISound& sound,
+               s32 vol,
+               s32 pan,
+               locator& loc,
+               SoundBank& bank,
+               std::optional<ame_handler*> parent);
 
-  ~MidiHandler() override {
+  ~midi_handler() override {
     for (auto& p : m_voices) {
       auto v = p.lock();
       if (v != nullptr) {
-        v->Stop();
+        v->stop();
       }
     }
   }
-  void InitMidi();
-  void Start();
-  bool Tick() override;
-  void MuteChannel(u8 channel);
-  void UnmuteChannel(u8 channel);
-  SoundBank& Bank() override { return m_bank; };
+  void init_midi();
+  void start();
+  bool tick() override;
+  void mute_channel(u8 channel);
+  void unmute_channel(u8 channel);
+  SoundBank& bank() override { return m_bank; };
 
-  void Pause() override;
-  void Stop() override;
-  void Unpause() override;
-  u8 Group() override { return m_sound.VolGroup; }
-  void SetVolPan(s32 vol, s32 pan) override;
+  void pause() override;
+  void stop() override;
+  void unpause() override;
+  u8 group() override { return m_sound.VolGroup; }
+  void set_vol_pan(s32 vol, s32 pan) override;
 
-  bool Complete() { return m_track_complete; };
-  void SetPMod(s32 mod) override;
+  bool complete() { return m_track_complete; };
+  void set_pmod(s32 mod) override;
 
  private:
   static constexpr int tickrate = 240;
   static constexpr int mics_per_tick = 1000000 / tickrate;
-  struct MidiError : public std::exception {
-    MidiError(std::string text) : msg(std::move(text)) {}
-    MidiError() : msg("Unknown MIDI error") {}
+  struct midi_error : public std::exception {
+    midi_error(std::string text) : msg(std::move(text)) {}
+    midi_error() : msg("Unknown MIDI error") {}
     std::string msg;
     const char* what() const noexcept override { return msg.c_str(); }
   };
 
-  std::optional<AmeHandler*> m_parent;
+  std::optional<ame_handler*> m_parent;
 
   std::list<std::weak_ptr<midi_voice>> m_voices;
 
-  MusicBank::MIDISound& m_sound;
+  MIDISound& m_sound;
+  locator& m_locator;
   s32 m_vol{0x7f};
   s32 m_pan{0};
   s32 m_cur_pm{0};
@@ -91,7 +106,7 @@ class MidiHandler : public SoundHandler {
 
   bool m_paused{false};
 
-  Midi* m_header{nullptr};
+  MIDIBlockHeader* m_header{nullptr};
 
   std::array<bool, 16> m_mute_state{};
   std::array<s8, 16> m_chanvol{};
@@ -115,20 +130,20 @@ class MidiHandler : public SoundHandler {
 
   std::array<u8, 16> m_programs{};
 
-  VoiceManager& m_vm;
+  voice_manager& m_vm;
 
-  void Step();
-  void NewDelta();
+  void step();
+  void new_delta();
 
-  void NoteOn();
-  void NoteOff();
-  void ControllerChange();
-  void ChannelPressure();
-  void ProgramChange();
-  void MetaEvent();
-  void SystemEvent();
-  void ChannelPitch();
+  void note_on();
+  void note_off();
+  void controller_change();
+  void channel_pressure();
+  void program_change();
+  void meta_event();
+  void system_event();
+  void channel_pitch();
 
-  static std::pair<size_t, u32> ReadVLQ(u8* value);
+  static std::pair<size_t, u32> read_vlq(u8* value);
 };
 }  // namespace snd

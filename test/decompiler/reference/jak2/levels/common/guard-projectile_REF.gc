@@ -324,13 +324,17 @@
 
 ;; definition of type guard-shot
 (deftype guard-shot (projectile)
-  ((hit-actor?  symbol)
-   (tail-pos    vector  :inline)
+  ((hit-actor? symbol         :offset-assert 472)
+   (tail-pos   vector :inline :offset-assert 480)
    )
+  :heap-base #x170
+  :method-count-assert 40
+  :size-assert         #x1f0
+  :flag-assert         #x28017001f0
   )
 
 ;; definition for method 3 of type guard-shot
-(defmethod inspect ((this guard-shot))
+(defmethod inspect guard-shot ((this guard-shot))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -345,7 +349,7 @@
   )
 
 ;; definition for method 37 of type guard-shot
-(defmethod deal-damage! ((this guard-shot) (arg0 process) (arg1 event-message-block))
+(defmethod deal-damage! guard-shot ((this guard-shot) (arg0 process) (arg1 event-message-block))
   "Constructs an [[attack-info]] according to the projectile's `options`"
   (let ((t9-0 (method-of-type projectile deal-damage!)))
     (when (t9-0 this arg0 arg1)
@@ -358,7 +362,7 @@
 ;; definition for method 24 of type guard-shot
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod draw-laser-sight ((this guard-shot))
+(defmethod draw-laser-sight guard-shot ((this guard-shot))
   "TODO - confirm If applicable, draw the laser sight particles"
   (draw-beam (-> *part-id-table* 610) (-> this tail-pos) (-> this starting-dir) #f #t)
   (let* ((a0-3 (vector-normalize-copy! (new 'stack-no-clear 'vector) (-> this starting-dir) 2048.0))
@@ -378,7 +382,7 @@
 ;; definition for method 25 of type guard-shot
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod spawn-impact-particles ((this guard-shot))
+(defmethod spawn-impact-particles guard-shot ((this guard-shot))
   "Spawns associated particles with the projectile if applicable"
   (rlet ((acc :class vf)
          (vf0 :class vf)
@@ -438,7 +442,7 @@
 ;; definition for method 26 of type guard-shot
 ;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs none.
-(defmethod spawn-shell-particles ((this guard-shot))
+(defmethod spawn-shell-particles guard-shot ((this guard-shot))
   "TODO - confirm"
   (let* ((s4-0 (-> this root))
          (v1-1 (vector-normalize! (vector-! (new 'stack-no-clear 'vector) (-> this tail-pos) (-> s4-0 trans)) 2048.0))
@@ -529,7 +533,7 @@
 
 ;; definition for method 28 of type guard-shot
 ;; WARN: Return type mismatch int vs none.
-(defmethod play-impact-sound ((this guard-shot) (arg0 projectile-options))
+(defmethod play-impact-sound guard-shot ((this guard-shot) (arg0 projectile-options))
   (let ((v1-0 arg0))
     (cond
       ((zero? v1-0)
@@ -596,7 +600,7 @@
   )
 
 ;; definition for method 38 of type guard-shot
-(defmethod made-impact? ((this guard-shot))
+(defmethod made-impact? guard-shot ((this guard-shot))
   "TODO - queries the collision cache, return true/false"
   (let ((v1-0 (-> this root))
         (t1-0 (new 'stack-no-clear 'collide-query))
@@ -620,7 +624,7 @@
 
 ;; definition for method 30 of type guard-shot
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-proj-collision! ((this guard-shot))
+(defmethod init-proj-collision! guard-shot ((this guard-shot))
   "Init the [[projectile]]'s [[collide-shape]]"
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
@@ -675,7 +679,7 @@
 
 ;; definition for method 31 of type guard-shot
 ;; INFO: Used lq/sq
-(defmethod init-proj-settings! ((this guard-shot))
+(defmethod init-proj-settings! guard-shot ((this guard-shot))
   "Init relevant settings for the [[projectile]] such as gravity, speed, timeout, etc"
   (set! (-> this hit-actor?) #f)
   (set! (-> this tail-pos quad) (-> this root trans quad))
@@ -691,12 +695,16 @@
 
 ;; definition of type vehicle-grenade
 (deftype vehicle-grenade (projectile-bounce)
-  ((blast-radius  float)
+  ((blast-radius float  :offset-assert 496)
    )
+  :heap-base #x180
+  :method-count-assert 42
+  :size-assert         #x1f4
+  :flag-assert         #x2a018001f4
   )
 
 ;; definition for method 3 of type vehicle-grenade
-(defmethod inspect ((this vehicle-grenade))
+(defmethod inspect vehicle-grenade ((this vehicle-grenade))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -718,7 +726,7 @@
 
 ;; definition for method 28 of type vehicle-grenade
 ;; WARN: Return type mismatch int vs none.
-(defmethod play-impact-sound ((this vehicle-grenade) (arg0 projectile-options))
+(defmethod play-impact-sound vehicle-grenade ((this vehicle-grenade) (arg0 projectile-options))
   (let ((v1-0 arg0))
     (cond
       ((zero? v1-0)
@@ -735,7 +743,7 @@
 
 ;; definition for method 30 of type vehicle-grenade
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-proj-collision! ((this vehicle-grenade))
+(defmethod init-proj-collision! vehicle-grenade ((this vehicle-grenade))
   "Init the [[projectile]]'s [[collide-shape]]"
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
@@ -772,7 +780,7 @@
 
 ;; definition for method 31 of type vehicle-grenade
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-proj-settings! ((this vehicle-grenade))
+(defmethod init-proj-settings! vehicle-grenade ((this vehicle-grenade))
   "Init relevant settings for the [[projectile]] such as gravity, speed, timeout, etc"
   (set! (-> this attack-mode) 'eco-dark)
   (initialize-skeleton
@@ -793,7 +801,7 @@
 
 ;; definition for method 25 of type vehicle-grenade
 ;; WARN: Return type mismatch int vs none.
-(defmethod spawn-impact-particles ((this vehicle-grenade))
+(defmethod spawn-impact-particles vehicle-grenade ((this vehicle-grenade))
   "Spawns associated particles with the projectile if applicable"
   (spawn (-> this part) (-> this root trans))
   (ja-post)
@@ -803,7 +811,7 @@
 
 ;; definition for method 41 of type vehicle-grenade
 ;; WARN: Return type mismatch int vs none.
-(defmethod noop ((this vehicle-grenade))
+(defmethod noop vehicle-grenade ((this vehicle-grenade))
   "Does nothing"
   (spawn (-> this part) (-> this root trans))
   0
@@ -812,7 +820,7 @@
 
 ;; definition for method 39 of type vehicle-grenade
 ;; WARN: Return type mismatch sound-id vs none.
-(defmethod play-impact-sound! ((this vehicle-grenade))
+(defmethod play-impact-sound! vehicle-grenade ((this vehicle-grenade))
   "Plays impact sound"
   (let* ((a2-0 (-> this root))
          (v1-0 (-> a2-0 status))
@@ -958,10 +966,14 @@
 ;; definition of type guard-lazer-shot
 (deftype guard-lazer-shot (projectile)
   ()
+  :heap-base #x160
+  :method-count-assert 40
+  :size-assert         #x1d8
+  :flag-assert         #x28016001d8
   )
 
 ;; definition for method 3 of type guard-lazer-shot
-(defmethod inspect ((this guard-lazer-shot))
+(defmethod inspect guard-lazer-shot ((this guard-lazer-shot))
   (when (not this)
     (set! this this)
     (goto cfg-4)
@@ -982,7 +994,7 @@
   )
 
 ;; definition for method 38 of type guard-lazer-shot
-(defmethod made-impact? ((this guard-lazer-shot))
+(defmethod made-impact? guard-lazer-shot ((this guard-lazer-shot))
   "TODO - queries the collision cache, return true/false"
   (let ((gp-0 (-> this root))
         (s5-0 (new 'stack-no-clear 'collide-query))
@@ -1020,7 +1032,7 @@
 
 ;; definition for method 30 of type guard-lazer-shot
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-proj-collision! ((this guard-lazer-shot))
+(defmethod init-proj-collision! guard-lazer-shot ((this guard-lazer-shot))
   "Init the [[projectile]]'s [[collide-shape]]"
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
@@ -1069,7 +1081,7 @@
 
 ;; definition for method 31 of type guard-lazer-shot
 ;; WARN: Return type mismatch int vs none.
-(defmethod init-proj-settings! ((this guard-lazer-shot))
+(defmethod init-proj-settings! guard-lazer-shot ((this guard-lazer-shot))
   "Init relevant settings for the [[projectile]] such as gravity, speed, timeout, etc"
   (set! (-> this attack-mode) 'shock)
   (set! (-> this max-speed) 131072.0)

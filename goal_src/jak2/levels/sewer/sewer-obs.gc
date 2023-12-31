@@ -8,20 +8,24 @@
 ;; DECOMP BEGINS
 
 (deftype sew-blade (process-drawable)
-  ((y-min         float)
-   (y-max         float)
-   (snd-water     sound-name)
-   (snd-no-water  sound-name)
-   (last-sound    int32)
-   (attack-id     uint32)
+  ((y-min        float       :offset-assert 200)
+   (y-max        float       :offset-assert 204)
+   (snd-water    sound-name  :offset-assert 208)
+   (snd-no-water sound-name  :offset-assert 224)
+   (last-sound   int32       :offset-assert 240)
+   (attack-id    uint32      :offset-assert 244)
    )
+  :heap-base #x80
+  :method-count-assert 21
+  :size-assert         #xf8
+  :flag-assert         #x15008000f8
   (:methods
-    (update-sound! (_type_) none)
+    (update-sound! (_type_) none 20)
     )
   )
 
 
-(defmethod update-sound! ((this sew-blade))
+(defmethod update-sound! sew-blade ((this sew-blade))
   "Updates the sound of the [[sew-blade]] based on if it's under or above the water"
   (when (nonzero? (-> this sound))
     (let ((f30-0 (+ (-> this root trans y) (-> this y-max)))
@@ -54,10 +58,14 @@
   )
 
 (deftype sew-single-blade (sew-blade)
-  ((quat  quaternion  :inline)
+  ((quat quaternion :inline :offset-assert 256)
    )
-  (:state-methods
-    idle
+  :heap-base #x90
+  :method-count-assert 22
+  :size-assert         #x110
+  :flag-assert         #x1600900110
+  (:methods
+    (idle () _type_ :state 21)
     )
   )
 
@@ -114,7 +122,7 @@
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this sew-single-blade) (arg0 entity-actor))
+(defmethod init-from-entity! sew-single-blade ((this sew-single-blade) (arg0 entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -171,12 +179,16 @@ This commonly includes things such as:
   )
 
 (deftype sew-tri-blade (sew-blade)
-  ((anim-time     float)
-   (anim-offset   float)
-   (switch-state  int32)
+  ((anim-time    float  :offset-assert 248)
+   (anim-offset  float  :offset-assert 252)
+   (switch-state int32  :offset-assert 256)
    )
-  (:state-methods
-    idle
+  :heap-base #x90
+  :method-count-assert 22
+  :size-assert         #x104
+  :flag-assert         #x1600900104
+  (:methods
+    (idle () _type_ :state 21)
     )
   )
 
@@ -297,7 +309,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this sew-tri-blade) (entity entity-actor))
+(defmethod init-from-entity! sew-tri-blade ((this sew-tri-blade) (entity entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -381,8 +393,12 @@ This commonly includes things such as:
 
 (deftype sew-arm-blade (sew-blade)
   ()
-  (:state-methods
-    idle
+  :heap-base #x80
+  :method-count-assert 22
+  :size-assert         #xf8
+  :flag-assert         #x16008000f8
+  (:methods
+    (idle () _type_ :state 21)
     )
   )
 
@@ -432,7 +448,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this sew-arm-blade) (entity entity-actor))
+(defmethod init-from-entity! sew-arm-blade ((this sew-arm-blade) (entity entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -489,8 +505,12 @@ This commonly includes things such as:
 
 (deftype sew-multi-blade (sew-blade)
   ()
-  (:state-methods
-    idle
+  :heap-base #x80
+  :method-count-assert 22
+  :size-assert         #xf8
+  :flag-assert         #x16008000f8
+  (:methods
+    (idle () _type_ :state 21)
     )
   )
 
@@ -547,7 +567,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this sew-multi-blade) (entity entity-actor))
+(defmethod init-from-entity! sew-multi-blade ((this sew-multi-blade) (entity entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -603,11 +623,15 @@ This commonly includes things such as:
   )
 
 (deftype sew-twist-blade (sew-blade)
-  ((root-overide        collide-shape-moving  :overlay-at root)
-   (no-collision-timer  uint64)
+  ((root-overide       collide-shape-moving  :offset        128)
+   (no-collision-timer uint64                :offset-assert 248)
    )
-  (:state-methods
-    idle
+  :heap-base #x80
+  :method-count-assert 22
+  :size-assert         #x100
+  :flag-assert         #x1600800100
+  (:methods
+    (idle () _type_ :state 21)
     )
   )
 
@@ -691,7 +715,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this sew-twist-blade) (entity entity-actor))
+(defmethod init-from-entity! sew-twist-blade ((this sew-twist-blade) (entity entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -747,33 +771,37 @@ This commonly includes things such as:
   )
 
 (deftype sew-light-switch (process-drawable)
-  ((light-state        symbol)
-   (actor-group        (pointer actor-group))
-   (actor-group-count  int32)
+  ((light-state       symbol                 :offset-assert 200)
+   (actor-group       (pointer actor-group)  :offset-assert 204)
+   (actor-group-count int32                  :offset-assert 208)
    )
-  (:state-methods
-    idle
-    pressed
-    )
+  :heap-base #x60
+  :method-count-assert 24
+  :size-assert         #xd4
+  :flag-assert         #x18006000d4
   (:methods
-    (init-switch-collision! (_type_) none)
-    (broadcast-to-actors (_type_ symbol) none)
+    (idle () _type_ :state 20)
+    (pressed () _type_ :state 21)
+    (init-switch-collision! (_type_) none 22)
+    (broadcast-to-actors (_type_ symbol) none 23)
     )
   )
 
 
 (deftype sew-light-control (process)
-  ((search-switches  basic)
-   (search-turrets   basic)
-   (switch-ent       entity-actor)
-   (turret-ent       entity-actor)
+  ((search-switches basic         :offset-assert 128)
+   (search-turrets  basic         :offset-assert 132)
+   (switch-ent      entity-actor  :offset-assert 136)
+   (turret-ent      entity-actor  :offset-assert 140)
    )
-  (:state-methods
-    idle
-    )
+  :heap-base #x10
+  :method-count-assert 17
+  :size-assert         #x90
+  :flag-assert         #x1100100090
   (:methods
-    (press! (_type_ symbol symbol) float)
-    (sew-light-control-method-16 (_type_ object vector float) symbol)
+    (idle () _type_ :state 14)
+    (press! (_type_ symbol symbol) float 15)
+    (sew-light-control-method-16 (_type_ object vector float) symbol 16)
     )
   )
 
@@ -847,7 +875,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch collide-shape-moving vs none.
-(defmethod init-switch-collision! ((this sew-light-switch))
+(defmethod init-switch-collision! sew-light-switch ((this sew-light-switch))
   "Initializes the collision on the switch"
   (let ((cshape (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
     (set! (-> cshape dynam) (copy *standard-dynamics* 'process))
@@ -875,7 +903,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod broadcast-to-actors ((this sew-light-switch) (event-type symbol))
+(defmethod broadcast-to-actors sew-light-switch ((this sew-light-switch) (event-type symbol))
   "Broadcast event to all associated [[entity]]s via the `actor-group`s
 @param `event-type` the symbol to broadcast"
   (with-pp
@@ -908,7 +936,7 @@ This commonly includes things such as:
   )
 
 ;; WARN: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this sew-light-switch) (entity entity-actor))
+(defmethod init-from-entity! sew-light-switch ((this sew-light-switch) (entity entity-actor))
   "Typically the method that does the initial setup on the process, potentially using the [[entity-actor]] provided as part of that.
 This commonly includes things such as:
 - stack size
@@ -1017,7 +1045,7 @@ This commonly includes things such as:
     )
   )
 
-(defmethod press! ((this sew-light-control) (switched-on? symbol) (should-turret-flash? symbol))
+(defmethod press! sew-light-control ((this sew-light-control) (switched-on? symbol) (should-turret-flash? symbol))
   "Turns the lights on (or off)
 @param switched-on? Should the sewer lights be turned on or off?
 @param should-turret-flash? Should the turret have it's `flash` set as well"

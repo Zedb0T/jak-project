@@ -3,12 +3,16 @@
 
 ;; definition of type snowcam
 (deftype snowcam (pov-camera)
-  ((seq  uint64)
+  ((seq uint64  :offset-assert 224)
    )
+  :heap-base #x80
+  :method-count-assert 30
+  :size-assert         #xe8
+  :flag-assert         #x1e008000e8
   )
 
 ;; definition for method 3 of type snowcam
-(defmethod inspect ((this snowcam))
+(defmethod inspect snowcam ((this snowcam))
   (let ((t9-0 (method-of-type pov-camera inspect)))
     (t9-0 this)
     )
@@ -23,7 +27,7 @@
               )
 
 ;; definition for method 29 of type snowcam
-(defmethod set-stack-size! ((this snowcam))
+(defmethod set-stack-size! snowcam ((this snowcam))
   (stack-size-set! (-> this main-thread) 512)
   (none)
   )
@@ -111,10 +115,14 @@
 
 ;; definition of type snow-eggtop
 (deftype snow-eggtop (process-drawable)
-  ((root         collide-shape-moving :override)
-   (spawn-trans  vector                :inline)
-   (play-sound?  symbol)
+  ((root-override collide-shape-moving         :offset        112)
+   (spawn-trans   vector               :inline :offset-assert 176)
+   (play-sound?   symbol                       :offset-assert 192)
    )
+  :heap-base #x60
+  :method-count-assert 20
+  :size-assert         #xc4
+  :flag-assert         #x14006000c4
   (:states
     snow-eggtop-activate
     snow-eggtop-idle-down
@@ -123,7 +131,7 @@
   )
 
 ;; definition for method 3 of type snow-eggtop
-(defmethod inspect ((this snow-eggtop))
+(defmethod inspect snow-eggtop ((this snow-eggtop))
   (let ((t9-0 (method-of-type process-drawable inspect)))
     (t9-0 this)
     )
@@ -312,7 +320,7 @@
     (if (and (not (-> self child)) (task-complete? *game-info* (-> self entity extra perm task)))
         (go snow-eggtop-activate)
         )
-    (spawn (-> self part) (-> self root trans))
+    (spawn (-> self part) (-> self root-override trans))
     (update! (-> self sound))
     )
   :code (behavior ()
@@ -369,7 +377,7 @@
       #f
       #f
       #f
-      (-> self root trans)
+      (-> self root-override trans)
       :to *entity-pool*
       )
     (let ((v1-7
@@ -450,7 +458,7 @@
 ;; definition for method 11 of type snow-eggtop
 ;; INFO: Used lq/sq
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this snow-eggtop) (arg0 entity-actor))
+(defmethod init-from-entity! snow-eggtop ((this snow-eggtop) (arg0 entity-actor))
   (let ((s4-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s4-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s4-0 reaction) default-collision-reaction)
@@ -469,17 +477,17 @@
       )
     (set! (-> s4-0 nav-radius) (* 0.75 (-> s4-0 root-prim local-sphere w)))
     (backup-collide-with-as s4-0)
-    (set! (-> this root) s4-0)
+    (set! (-> this root-override) s4-0)
     )
   (process-drawable-from-entity! this arg0)
   (initialize-skeleton this *snow-eggtop-sg* '())
   (logior! (-> this skel status) (janim-status inited))
-  (set! (-> this spawn-trans quad) (-> this root trans quad))
-  (+! (-> this root trans y) -2662.4)
-  (update-transforms! (-> this root))
+  (set! (-> this spawn-trans quad) (-> this root-override trans quad))
+  (+! (-> this root-override trans y) -2662.4)
+  (update-transforms! (-> this root-override))
   (set! (-> this part) (create-launch-control (-> *part-group-id-table* 510) this))
   (set! (-> this sound)
-        (new 'process 'ambient-sound (static-sound-spec "electric-loop" :fo-max 40) (-> this root trans))
+        (new 'process 'ambient-sound (static-sound-spec "electric-loop" :fo-max 40) (-> this root-override trans))
         )
   (cond
     ((task-complete? *game-info* (-> this entity extra perm task))
@@ -487,7 +495,7 @@
      )
     (else
       (let ((a0-17 (new 'stack-no-clear 'vector)))
-        (set! (-> a0-17 quad) (-> this root trans quad))
+        (set! (-> a0-17 quad) (-> this root-override trans quad))
         (+! (-> a0-17 y) 3072.0)
         (birth-pickup-at-point
           a0-17
@@ -506,12 +514,16 @@
 
 ;; definition of type snowpusher
 (deftype snowpusher (process-drawable)
-  ((root         collide-shape-moving :override)
-   (max-frame    float)
-   (open-sound   sound-name)
-   (close-sound  sound-name)
-   (sync         sync-info-paused      :inline)
+  ((root-override collide-shape-moving         :offset        112)
+   (max-frame     float                        :offset-assert 176)
+   (open-sound    sound-name                   :offset-assert 192)
+   (close-sound   sound-name                   :offset-assert 208)
+   (sync          sync-info-paused     :inline :offset-assert 224)
    )
+  :heap-base #x80
+  :method-count-assert 20
+  :size-assert         #xf0
+  :flag-assert         #x14008000f0
   (:states
     snowpusher-idle
     )
@@ -519,7 +531,7 @@
 
 ;; definition for method 3 of type snowpusher
 ;; INFO: Used lq/sq
-(defmethod inspect ((this snowpusher))
+(defmethod inspect snowpusher ((this snowpusher))
   (let ((t9-0 (method-of-type process-drawable inspect)))
     (t9-0 this)
     )
@@ -576,7 +588,7 @@
 ;; definition for method 11 of type snowpusher
 ;; INFO: Used lq/sq
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this snowpusher) (arg0 entity-actor))
+(defmethod init-from-entity! snowpusher ((this snowpusher) (arg0 entity-actor))
   (local-vars (sv-16 res-tag))
   (logior! (-> this mask) (process-mask enemy platform))
   (let ((s3-0 0)
@@ -620,7 +632,7 @@
         )
       (set! (-> s3-1 nav-radius) (* 0.75 (-> s3-1 root-prim local-sphere w)))
       (backup-collide-with-as s3-1)
-      (set! (-> this root) s3-1)
+      (set! (-> this root-override) s3-1)
       )
     )
   (process-drawable-from-entity! this arg0)
@@ -642,16 +654,20 @@
 
 ;; definition of type snow-spatula
 (deftype snow-spatula (baseplat)
-  ((sync      sync-info  :inline)
-   (startmat  matrix     :inline)
+  ((sync     sync-info :inline :offset-assert 228)
+   (startmat matrix    :inline :offset-assert 240)
    )
+  :heap-base #xc0
+  :method-count-assert 27
+  :size-assert         #x130
+  :flag-assert         #x1b00c00130
   (:states
     snow-spatula-idle
     )
   )
 
 ;; definition for method 3 of type snow-spatula
-(defmethod inspect ((this snow-spatula))
+(defmethod inspect snow-spatula ((this snow-spatula))
   (let ((t9-0 (method-of-type baseplat inspect)))
     (t9-0 this)
     )
@@ -706,7 +722,7 @@
           (let ((s5-2 (new 'stack-no-clear 'matrix)))
             (matrix-rotate-y! s5-2 (* 16384.0 f30-0))
             (matrix*! s5-2 s5-2 (-> self startmat))
-            (matrix->quaternion (-> self root quat) s5-2)
+            (matrix->quaternion (-> self root-override quat) s5-2)
             )
           )
         (suspend)
@@ -718,7 +734,7 @@
 
 ;; definition for method 11 of type snow-spatula
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this snow-spatula) (arg0 entity-actor))
+(defmethod init-from-entity! snow-spatula ((this snow-spatula) (arg0 entity-actor))
   (logior! (-> this mask) (process-mask platform))
   (let ((s4-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s4-0 dynam) (copy *standard-dynamics* 'process))
@@ -738,13 +754,13 @@
       )
     (set! (-> s4-0 nav-radius) (* 0.75 (-> s4-0 root-prim local-sphere w)))
     (backup-collide-with-as s4-0)
-    (set! (-> this root) s4-0)
+    (set! (-> this root-override) s4-0)
     )
   (process-drawable-from-entity! this arg0)
   (initialize-skeleton this *snow-spatula-sg* '())
   (logior! (-> this skel status) (janim-status inited))
   (load-params! (-> this sync) this (the-as uint 1500) 0.0 0.15 0.15)
-  (quaternion->matrix (-> this startmat) (-> this root quat))
+  (quaternion->matrix (-> this startmat) (-> this root-override quat))
   (baseplat-method-21 this)
   (go snow-spatula-idle)
   (none)
@@ -752,12 +768,16 @@
 
 ;; definition of type snow-fort-gate
 (deftype snow-fort-gate (process-drawable)
-  ((root          collide-shape :override)
-   (part2         sparticle-launch-control)
-   (part3         sparticle-launch-control)
-   (open-trans    vector         :inline)
-   (closed-trans  vector         :inline)
+  ((root-override collide-shape                    :offset        112)
+   (part2         sparticle-launch-control         :offset-assert 176)
+   (part3         sparticle-launch-control         :offset-assert 180)
+   (open-trans    vector                   :inline :offset-assert 192)
+   (closed-trans  vector                   :inline :offset-assert 208)
    )
+  :heap-base #x70
+  :method-count-assert 20
+  :size-assert         #xe0
+  :flag-assert         #x14007000e0
   (:states
     snow-fort-gate-activate
     snow-fort-gate-idle-closed
@@ -766,7 +786,7 @@
   )
 
 ;; definition for method 3 of type snow-fort-gate
-(defmethod inspect ((this snow-fort-gate))
+(defmethod inspect snow-fort-gate ((this snow-fort-gate))
   (let ((t9-0 (method-of-type process-drawable inspect)))
     (t9-0 this)
     )
@@ -970,14 +990,14 @@
       )
     )
   :trans (behavior ()
-    (when (and *target* (>= 61440.0 (vector-vector-distance (-> self root trans) (-> *target* control trans))))
+    (when (and *target* (>= 61440.0 (vector-vector-distance (-> self root-override trans) (-> *target* control trans))))
       (level-hint-spawn (text-id snow-fort-hint) "sksp0345" (the-as entity #f) *entity-pool* (game-task none))
       (close-specific-task! (game-task snow-fort) (task-status need-hint))
       )
     )
   :code (behavior ()
     (ja :group! snow-fort-gate-idle-ja :num! min)
-    (set! (-> self root trans quad) (-> self closed-trans quad))
+    (set! (-> self root-override trans quad) (-> self closed-trans quad))
     (transform-post)
     (suspend)
     (loop
@@ -1006,7 +1026,7 @@
           (spawn (-> self part) a1-0)
           )
         (let ((s5-0 (new 'stack-no-clear 'vector)))
-          (set! (-> s5-0 quad) (-> self root trans quad))
+          (set! (-> s5-0 quad) (-> self root-override trans quad))
           (let ((f30-0 (vector-vector-distance-squared s5-0 (-> self open-trans))))
             (when (and (not gp-0) (>= 1048576.0 f30-0))
               (set! gp-0 #t)
@@ -1024,10 +1044,10 @@
               )
             )
           (vector-seek-3d-smooth! s5-0 (-> self open-trans) (* 16384.0 (seconds-per-frame)) 0.9)
-          (move-to-point! (-> self root) s5-0)
+          (move-to-point! (-> self root-override) s5-0)
           )
         (let ((a1-7 (new 'stack-no-clear 'vector)))
-          (set! (-> a1-7 quad) (-> self root trans quad))
+          (set! (-> a1-7 quad) (-> self root-override trans quad))
           (+! (-> a1-7 x) 20480.0)
           (+! (-> a1-7 y) 106496.0)
           (+! (-> a1-7 z) -32768.0)
@@ -1045,7 +1065,7 @@
 (defstate snow-fort-gate-idle-open (snow-fort-gate)
   :code (behavior ()
     (ja :group! snow-fort-gate-idle-ja :num! min)
-    (set! (-> self root trans quad) (-> self open-trans quad))
+    (set! (-> self root-override trans quad) (-> self open-trans quad))
     (transform-post)
     (suspend)
     (transform-post)
@@ -1057,7 +1077,7 @@
   )
 
 ;; definition for method 10 of type snow-fort-gate
-(defmethod deactivate ((this snow-fort-gate))
+(defmethod deactivate snow-fort-gate ((this snow-fort-gate))
   (if (nonzero? (-> this part2))
       (kill-and-free-particles (-> this part2))
       )
@@ -1069,7 +1089,7 @@
   )
 
 ;; definition for method 7 of type snow-fort-gate
-(defmethod relocate ((this snow-fort-gate) (arg0 int))
+(defmethod relocate snow-fort-gate ((this snow-fort-gate) (arg0 int))
   (if (nonzero? (-> this part2))
       (&+! (-> this part2) arg0)
       )
@@ -1082,7 +1102,7 @@
 ;; definition for method 11 of type snow-fort-gate
 ;; INFO: Used lq/sq
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this snow-fort-gate) (arg0 entity-actor))
+(defmethod init-from-entity! snow-fort-gate ((this snow-fort-gate) (arg0 entity-actor))
   (let ((s4-0 (new 'process 'collide-shape this (collide-list-enum hit-by-others))))
     (let ((s3-0 (new 'process 'collide-shape-prim-mesh s4-0 (the-as uint 0) (the-as uint 0))))
       (set! (-> s3-0 prim-core collide-as) (collide-kind ground-object))
@@ -1095,14 +1115,14 @@
       )
     (set! (-> s4-0 nav-radius) (* 0.75 (-> s4-0 root-prim local-sphere w)))
     (backup-collide-with-as s4-0)
-    (set! (-> this root) s4-0)
+    (set! (-> this root-override) s4-0)
     )
   (process-drawable-from-entity! this arg0)
   (initialize-skeleton this *snow-fort-gate-sg* '())
   (set! (-> this part) (create-launch-control (-> *part-group-id-table* 512) this))
   (set! (-> this part2) (create-launch-control (-> *part-group-id-table* 513) this))
   (set! (-> this part3) (create-launch-control (-> *part-group-id-table* 514) this))
-  (set! (-> this open-trans quad) (-> this root trans quad))
+  (set! (-> this open-trans quad) (-> this root-override trans quad))
   (set! (-> this closed-trans quad) (-> this open-trans quad))
   (+! (-> this open-trans y) -141312.0)
   (+! (-> this open-trans z) 32768.0)
@@ -1120,12 +1140,12 @@
     )
   (cond
     ((task-complete? *game-info* (game-task snow-ball))
-     (set! (-> this root trans quad) (-> this open-trans quad))
+     (set! (-> this root-override trans quad) (-> this open-trans quad))
      (transform-post)
      (go snow-fort-gate-idle-open)
      )
     (else
-      (set! (-> this root trans quad) (-> this closed-trans quad))
+      (set! (-> this root-override trans quad) (-> this closed-trans quad))
       (transform-post)
       (go snow-fort-gate-idle-closed)
       )
@@ -1136,8 +1156,12 @@
 ;; definition of type snow-gears
 (deftype snow-gears (process-drawable)
   ()
+  :heap-base #x40
+  :method-count-assert 21
+  :size-assert         #xb0
+  :flag-assert         #x15004000b0
   (:methods
-    (snow-gears-method-20 (_type_) none)
+    (snow-gears-method-20 (_type_) none 20)
     )
   (:states
     snow-gears-activate
@@ -1148,7 +1172,7 @@
   )
 
 ;; definition for method 3 of type snow-gears
-(defmethod inspect ((this snow-gears))
+(defmethod inspect snow-gears ((this snow-gears))
   (let ((t9-0 (method-of-type process-drawable inspect)))
     (t9-0 this)
     )
@@ -1233,7 +1257,7 @@
 ;; definition for method 20 of type snow-gears
 ;; INFO: Used lq/sq
 ;; INFO: Return type mismatch object vs none.
-(defmethod snow-gears-method-20 ((this snow-gears))
+(defmethod snow-gears-method-20 snow-gears ((this snow-gears))
   (let ((a1-0 (new 'stack-no-clear 'vector)))
     (set! (-> a1-0 quad) (-> this root trans quad))
     (+! (-> a1-0 y) 61440.0)
@@ -1333,7 +1357,7 @@
 
 ;; definition for method 11 of type snow-gears
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this snow-gears) (arg0 entity-actor))
+(defmethod init-from-entity! snow-gears ((this snow-gears) (arg0 entity-actor))
   (set! (-> this root) (new 'process 'trsqv))
   (process-drawable-from-entity! this arg0)
   (initialize-skeleton this *snow-gears-sg* '())
@@ -1347,11 +1371,15 @@
 
 ;; definition of type snow-switch
 (deftype snow-switch (process-drawable)
-  ((root          collide-shape-moving :override)
-   (pressed?      symbol)
-   (fcell-handle  handle)
-   (orig-trans    vector                :inline)
+  ((root-override collide-shape-moving         :offset        112)
+   (pressed?      symbol                       :offset-assert 176)
+   (fcell-handle  handle                       :offset-assert 184)
+   (orig-trans    vector               :inline :offset-assert 192)
    )
+  :heap-base #x60
+  :method-count-assert 20
+  :size-assert         #xd0
+  :flag-assert         #x14006000d0
   (:states
     snow-switch-activate
     snow-switch-idle-down
@@ -1360,7 +1388,7 @@
   )
 
 ;; definition for method 3 of type snow-switch
-(defmethod inspect ((this snow-switch))
+(defmethod inspect snow-switch ((this snow-switch))
   (let ((t9-0 (method-of-type process-drawable inspect)))
     (t9-0 this)
     )
@@ -1461,7 +1489,7 @@
         (let ((s5-1 (new 'stack-no-clear 'vector))
               (f0-1 (+ -1433.6 (-> self orig-trans y)))
               )
-          (set! (-> s5-1 quad) (-> self root trans quad))
+          (set! (-> s5-1 quad) (-> self root-override trans quad))
           (cond
             ((= (-> s5-1 y) f0-1)
              (when (not gp-2)
@@ -1470,8 +1498,10 @@
                )
              )
             (else
-              (set! (-> s5-1 y) (seek-with-smooth (-> self root trans y) f0-1 (* 6144.0 (seconds-per-frame)) 0.2 204.8))
-              (move-to-point! (-> self root) s5-1)
+              (set! (-> s5-1 y)
+                    (seek-with-smooth (-> self root-override trans y) f0-1 (* 6144.0 (seconds-per-frame)) 0.2 204.8)
+                    )
+              (move-to-point! (-> self root-override) s5-1)
               )
             )
           )
@@ -1487,8 +1517,8 @@
   :event snow-switch-event-handler
   :code (behavior ()
     (set! (-> self pressed?) #t)
-    (set! (-> self root trans quad) (-> self orig-trans quad))
-    (+! (-> self root trans y) -1433.6)
+    (set! (-> self root-override trans quad) (-> self orig-trans quad))
+    (+! (-> self root-override trans y) -1433.6)
     (transform-post)
     (loop
       (logior! (-> self mask) (process-mask sleep-code))
@@ -1500,7 +1530,7 @@
 ;; definition for method 11 of type snow-switch
 ;; INFO: Used lq/sq
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this snow-switch) (arg0 entity-actor))
+(defmethod init-from-entity! snow-switch ((this snow-switch) (arg0 entity-actor))
   (set! (-> this pressed?) #f)
   (set! (-> this fcell-handle) (the-as handle #f))
   (set! (-> this link) (new 'process 'actor-link-info this))
@@ -1522,7 +1552,7 @@
       )
     (set! (-> s4-0 nav-radius) (* 0.75 (-> s4-0 root-prim local-sphere w)))
     (backup-collide-with-as s4-0)
-    (set! (-> this root) s4-0)
+    (set! (-> this root-override) s4-0)
     )
   (process-drawable-from-entity! this arg0)
   (initialize-skeleton this *snow-switch-sg* '())
@@ -1537,7 +1567,7 @@
     (set! (-> s5-1 frame-num) 0.0)
     )
   (transform-post)
-  (set! (-> this orig-trans quad) (-> this root trans quad))
+  (set! (-> this orig-trans quad) (-> this root-override trans quad))
   (let ((s5-2 (task-complete? *game-info* (game-task snow-ball))))
     (set! (-> this pressed?) s5-2)
     (when (not s5-2)
@@ -1566,9 +1596,13 @@
 
 ;; definition of type snow-log
 (deftype snow-log (process-drawable)
-  ((root    collide-shape-moving :override)
-   (master  entity-actor)
+  ((root-override collide-shape-moving  :offset        112)
+   (master        entity-actor          :offset-assert 176)
    )
+  :heap-base #x50
+  :method-count-assert 20
+  :size-assert         #xb4
+  :flag-assert         #x14005000b4
   (:states
     snow-log-activate
     snow-log-active
@@ -1578,7 +1612,7 @@
   )
 
 ;; definition for method 3 of type snow-log
-(defmethod inspect ((this snow-log))
+(defmethod inspect snow-log ((this snow-log))
   (let ((t9-0 (method-of-type process-drawable inspect)))
     (t9-0 this)
     )
@@ -1727,7 +1761,7 @@
 
 ;; definition for method 11 of type snow-log
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this snow-log) (arg0 entity-actor))
+(defmethod init-from-entity! snow-log ((this snow-log) (arg0 entity-actor))
   (let ((s4-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s4-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s4-0 reaction) default-collision-reaction)
@@ -1746,16 +1780,16 @@
       )
     (set! (-> s4-0 nav-radius) 11264.0)
     (backup-collide-with-as s4-0)
-    (set! (-> this root) s4-0)
+    (set! (-> this root-override) s4-0)
     )
   (process-drawable-from-entity! this arg0)
   (initialize-skeleton this *snow-log-sg* '())
   (logior! (-> this skel status) (janim-status inited))
   (logior! (-> this draw status) (draw-status hidden))
-  (+! (-> this root trans x) -1024.0)
-  (+! (-> this root trans y) -4915.2)
-  (set-vector! (-> this root scale) 1.5 1.0 1.5 1.0)
-  (nav-mesh-connect this (-> this root) (the-as nav-control #f))
+  (+! (-> this root-override trans x) -1024.0)
+  (+! (-> this root-override trans y) -4915.2)
+  (set-vector! (-> this root-override scale) 1.5 1.0 1.5 1.0)
+  (nav-mesh-connect this (-> this root-override) (the-as nav-control #f))
   (set! (-> this master) (entity-actor-lookup arg0 'alt-actor 0))
   (set! (-> this draw origin-joint-index) (the-as uint 3))
   (go snow-log-wait-for-master)
@@ -1764,10 +1798,14 @@
 
 ;; definition of type snow-log-button
 (deftype snow-log-button (process-drawable)
-  ((root        collide-shape-moving :override)
-   (log         entity-actor)
-   (orig-trans  vector                :inline)
+  ((root-override collide-shape-moving         :offset        112)
+   (log           entity-actor                 :offset-assert 176)
+   (orig-trans    vector               :inline :offset-assert 192)
    )
+  :heap-base #x60
+  :method-count-assert 20
+  :size-assert         #xd0
+  :flag-assert         #x14006000d0
   (:states
     snow-log-button-activate
     snow-log-button-idle-down
@@ -1776,7 +1814,7 @@
   )
 
 ;; definition for method 3 of type snow-log-button
-(defmethod inspect ((this snow-log-button))
+(defmethod inspect snow-log-button ((this snow-log-button))
   (let ((t9-0 (method-of-type process-drawable inspect)))
     (t9-0 this)
     )
@@ -1793,7 +1831,7 @@
     (('touch 'bonk 'attack)
      (when (and (= (-> arg0 type) target)
                 (not (and (-> self entity) (logtest? (-> self entity extra perm status) (entity-perm-status complete))))
-                (>= 6553.6 (vector-vector-xz-distance (target-pos 0) (-> self root trans)))
+                (>= 6553.6 (vector-vector-xz-distance (target-pos 0) (-> self root-override trans)))
                 )
        (process-entity-status! self (entity-perm-status complete) #t)
        (logclear! (-> self mask) (process-mask actor-pause))
@@ -1839,7 +1877,7 @@
     (sound-play "prec-button1")
     (loop
       (let ((f30-0 (+ -1433.6 (-> self orig-trans y))))
-        (when (= (-> self root trans y) f30-0)
+        (when (= (-> self root-override trans y) f30-0)
           (let ((a1-1 (new 'stack-no-clear 'event-message-block)))
             (set! (-> a1-1 from) self)
             (set! (-> a1-1 num-params) 0)
@@ -1857,8 +1895,8 @@
             )
           (go snow-log-button-idle-down)
           )
-        (set! (-> self root trans y)
-              (seek-with-smooth (-> self root trans y) f30-0 (* 12288.0 (seconds-per-frame)) 0.2 204.8)
+        (set! (-> self root-override trans y)
+              (seek-with-smooth (-> self root-override trans y) f30-0 (* 12288.0 (seconds-per-frame)) 0.2 204.8)
               )
         )
       (suspend)
@@ -1871,8 +1909,8 @@
 (defstate snow-log-button-idle-down (snow-log-button)
   :event snow-log-button-event-handler
   :code (behavior ()
-    (set! (-> self root trans quad) (-> self orig-trans quad))
-    (+! (-> self root trans y) -1433.6)
+    (set! (-> self root-override trans quad) (-> self orig-trans quad))
+    (+! (-> self root-override trans y) -1433.6)
     (transform-post)
     (loop
       (logior! (-> self mask) (process-mask sleep-code))
@@ -1884,7 +1922,7 @@
 ;; definition for method 11 of type snow-log-button
 ;; INFO: Used lq/sq
 ;; INFO: Return type mismatch object vs none.
-(defmethod init-from-entity! ((this snow-log-button) (arg0 entity-actor))
+(defmethod init-from-entity! snow-log-button ((this snow-log-button) (arg0 entity-actor))
   (let ((s4-0 (new 'process 'collide-shape-moving this (collide-list-enum hit-by-player))))
     (set! (-> s4-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s4-0 reaction) default-collision-reaction)
@@ -1903,7 +1941,7 @@
       )
     (set! (-> s4-0 nav-radius) (* 0.75 (-> s4-0 root-prim local-sphere w)))
     (backup-collide-with-as s4-0)
-    (set! (-> this root) s4-0)
+    (set! (-> this root-override) s4-0)
     )
   (process-drawable-from-entity! this arg0)
   (initialize-skeleton this *snow-switch-sg* '())
@@ -1918,7 +1956,7 @@
     (set! (-> s4-1 frame-num) 0.0)
     )
   (transform-post)
-  (set! (-> this orig-trans quad) (-> this root trans quad))
+  (set! (-> this orig-trans quad) (-> this root-override trans quad))
   (set! (-> this log) (entity-actor-lookup arg0 'alt-actor 0))
   (if (and (-> this entity) (logtest? (-> this entity extra perm status) (entity-perm-status complete)))
       (go snow-log-button-idle-down)

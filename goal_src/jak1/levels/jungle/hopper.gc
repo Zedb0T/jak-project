@@ -8,9 +8,13 @@
 ;; DECOMP BEGINS
 
 (deftype hopper (nav-enemy)
-  ((jump-length   float)
-   (shadow-min-y  float)
+  ((jump-length  float  :offset-assert 400)
+   (shadow-min-y float  :offset-assert 404)
    )
+  :heap-base #x130
+  :method-count-assert 76
+  :size-assert         #x198
+  :flag-assert         #x4c01300198
   )
 
 
@@ -23,7 +27,7 @@
 
 nav-enemy-default-event-handler
 
-(defmethod common-post ((this hopper))
+(defmethod common-post hopper ((this hopper))
   (let ((v1-1 (-> this draw shadow-ctrl)))
     (set! (-> v1-1 settings bot-plane w) (- (- (-> this shadow-min-y) (-> this collide-info trans y))))
     )
@@ -298,7 +302,7 @@ nav-enemy-default-event-handler
                                   )
         )
 
-(defmethod initialize-collision ((this hopper))
+(defmethod initialize-collision hopper ((this hopper))
   (let ((s5-0 (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
     (set! (-> s5-0 dynam) (copy *standard-dynamics* 'process))
     (set! (-> s5-0 reaction) default-collision-reaction)
@@ -337,7 +341,7 @@ nav-enemy-default-event-handler
   (none)
   )
 
-(defmethod nav-enemy-method-48 ((this hopper))
+(defmethod nav-enemy-method-48 hopper ((this hopper))
   (initialize-skeleton this *hopper-sg* '())
   (init-defaults! this *hopper-nav-enemy-info*)
   (set! (-> this shadow-min-y) (+ (-> this collide-info trans y) (-> this nav-info shadow-min-y)))

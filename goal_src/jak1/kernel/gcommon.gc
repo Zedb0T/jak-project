@@ -236,9 +236,12 @@
    (y float :offset 32)
    (z float :offset 64)
    (w float :offset 96))
+  :method-count-assert 9
+  :size-assert         #x10
+  :flag-assert         #x900000010
   )
 
-(defmethod inspect ((this vec4s))
+(defmethod inspect vec4s ((this vec4s))
   (format #t "[~8x] ~A~%" this 'vec4s)
   (format #t "~Tx: ~f~%" (-> this x))
   (format #t "~Ty: ~f~%" (-> this y))
@@ -247,7 +250,7 @@
   this
   )
 
-(defmethod print ((this vec4s))
+(defmethod print vec4s ((this vec4s))
   (format #t "#<vector ~F ~F ~F ~F @ #x~X>"
           (-> this x)
           (-> this y)
@@ -279,10 +282,13 @@
 
 ;; A "boxed float" type. Simply a float with type information.
 (deftype bfloat (basic)
-  ((data float))
+  ((data float :offset-assert 4))
+  :size-assert 8
+  :method-count-assert 9
+  :flag-assert #x900000008
   )
 
-(defmethod print ((this bfloat))
+(defmethod print bfloat ((this bfloat))
   "Override the default print method to print a bfloat like a normal float"
   (format #t "~f" (-> this data))
   this
@@ -292,7 +298,7 @@
 ;; Type System
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defmethod asize-of ((this type))
+(defmethod asize-of type ((this type))
   "Get the size in memory of a type"
   ;; The 28 is 8 bytes too large. It's also strange that types have a 16-byte aligned size always,
   ;; but this matches what the runtime does as well. There's no reason that I can see for this,
@@ -383,7 +389,7 @@
   (car lst)
   )
 
-(defmethod length ((this pair))
+(defmethod length pair ((this pair))
   "Get the length of a proper list"
   (local-vars (result int))
   (cond
@@ -404,8 +410,10 @@
   )
 
 
-(defmethod asize-of ((this pair))
-  "Get the size in memory of pair."
+(defmethod asize-of pair ((this pair))
+  "Get the size in memory of pair.
+  Note: if you make a child type of pair,
+  you must override this. (nobody does this?)"
   (the-as int (-> pair size))
   )
 
@@ -655,15 +663,18 @@
 ;; however, as far as we've seen, nothing actually reads the stride.
 
 (deftype inline-array-class (basic)
-  ((length           int32)
-   (allocated-length int32)
+  ((length           int32  :offset-assert 4)
+   (allocated-length int32  :offset-assert 8)
    ;; this is 16-byte aligned.
    ;; children of inline-array-class should define their own data which overlays this one.
    (_data            uint8  :dynamic :offset 16)
    )
 
-  (:methods
-    (new (symbol type int) _type_))
+  (:methods (new (symbol type int) _type_ 0))
+
+  :method-count-assert 9
+  :size-assert         #x10
+  :flag-assert         #x900000010
   )
 
 
@@ -689,13 +700,13 @@
   )
 
 
-(defmethod length ((this inline-array-class))
+(defmethod length inline-array-class ((this inline-array-class))
   "Get the length of the inline-array-class. This is the length field,
    not how much storage there is"
   (-> this length)
   )
 
-(defmethod asize-of ((this inline-array-class))
+(defmethod asize-of inline-array-class ((this inline-array-class))
   "Get the size in memory of an inline-array-class."
   (the-as int
           (+ (-> this type size)
@@ -743,7 +754,7 @@
   )
 
 
-(defmethod print ((this array))
+(defmethod print array ((this array))
   "Print array."
   (format #t "#(")
   (cond
@@ -872,7 +883,7 @@
   this
   )
 
-(defmethod inspect ((this array))
+(defmethod inspect array ((this array))
   "Inspect an array"
   (format #t "[~8x] ~A~%" this (-> this type))
   (format #t "~Tallocated-length: ~D~%" (-> this allocated-length))
@@ -948,12 +959,12 @@
   this
   )
 
-(defmethod length ((this array))
+(defmethod length array ((this array))
   "Get the length of an array"
   (-> this length)
   )
 
-(defmethod asize-of ((this array))
+(defmethod asize-of array ((this array))
   "Get the size in memory of an array"
   (the-as int (+ (-> array size)
                  (* (-> this allocated-length)

@@ -12,13 +12,19 @@ namespace snd {
 u64 SoundFlavaHack = 0;
 u8 GlobalExcite = 0;
 
-AmeHandler::AmeHandler(MultiMidi* block,
-                       VoiceManager& vm,
-                       MusicBank::MIDISound& sound,
-                       s32 vol,
-                       s32 pan,
-                       SoundBank& bank)
-    : m_sound(sound), m_bank(bank), m_header(block), m_vm(vm), m_repeats(sound.Repeats) {
+ame_handler::ame_handler(MultiMIDIBlockHeader* block,
+                         voice_manager& vm,
+                         MIDISound& sound,
+                         s32 vol,
+                         s32 pan,
+                         locator& loc,
+                         SoundBank& bank)
+    : m_sound(sound),
+      m_bank(bank),
+      m_header(block),
+      m_locator(loc),
+      m_vm(vm),
+      m_repeats(sound.Repeats) {
   if (vol == VOLUME_DONT_CHANGE) {
     vol = 1024;
   }
@@ -35,12 +41,12 @@ AmeHandler::AmeHandler(MultiMidi* block,
     m_pan = pan;
   }
 
-  StartSegment(0);
+  start_segment(0);
 };
 
-bool AmeHandler::Tick() {
+bool ame_handler::tick() {
   for (auto it = m_midis.begin(); it != m_midis.end();) {
-    bool done = it->second->Tick();
+    bool done = it->second->tick();
     if (done) {
       it = m_midis.erase(it);
     } else {
@@ -51,47 +57,48 @@ bool AmeHandler::Tick() {
   return m_midis.empty();
 };
 
-void AmeHandler::StartSegment(u32 id) {
+void ame_handler::start_segment(u32 id) {
   if (m_midis.find(id) == m_midis.end()) {
-    auto& midi = m_header->midi[id];
+    auto midiblock = (MIDIBlockHeader*)(m_header->BlockPtr[id] + (uintptr_t)m_header);
+    auto sound_handler = (MIDISoundHandler*)((uintptr_t)midiblock + sizeof(MIDIBlockHeader));
 
     // Skip adding if not midi type
-    u32 type = (midi.SoundHandle >> 24) & 0xf;
+    u32 type = (sound_handler->OwnerID >> 24) & 0xf;
     if (type == 1 || type == 3) {
-      m_midis.emplace(id, std::make_unique<MidiHandler>(static_cast<Midi*>(&midi), m_vm, m_sound,
-                                                        m_vol, m_pan, m_bank, this));
+      m_midis.emplace(id, std::make_unique<midi_handler>(midiblock, m_vm, m_sound, m_vol, m_pan,
+                                                         m_locator, m_bank, this));
     }
   }
 }
 
-void AmeHandler::Stop() {
+void ame_handler::stop() {
   for (auto it = m_midis.begin(); it != m_midis.end();) {
-    it->second->Stop();
+    it->second->stop();
     it = m_midis.erase(it);
   }
 }
 
-void AmeHandler::StopSegment(u32 id) {
+void ame_handler::stop_segment(u32 id) {
   auto m = m_midis.find(id);
   if (m == m_midis.end())
     return;
 
-  m->second->Stop();
+  m->second->stop();
 }
 
-void AmeHandler::Pause() {
+void ame_handler::pause() {
   for (auto& m : m_midis) {
-    m.second->Pause();
+    m.second->pause();
   }
 }
 
-void AmeHandler::Unpause() {
+void ame_handler::unpause() {
   for (auto& m : m_midis) {
-    m.second->Unpause();
+    m.second->unpause();
   }
 }
 
-void AmeHandler::SetVolPan(s32 vol, s32 pan) {
+void ame_handler::set_vol_pan(s32 vol, s32 pan) {
   if (vol >= 0) {
     if (vol != VOLUME_DONT_CHANGE) {
       m_vol = (m_sound.Vol * vol) >> 10;
@@ -111,13 +118,13 @@ void AmeHandler::SetVolPan(s32 vol, s32 pan) {
   }
 
   for (auto& m : m_midis) {
-    m.second->SetVolPan(vol, pan);
+    m.second->set_vol_pan(vol, pan);
   }
 }
 
-void AmeHandler::SetPMod(s32 mod) {
+void ame_handler::set_pmod(s32 mod) {
   for (auto& m : m_midis) {
-    m.second->SetPMod(mod);
+    m.second->set_pmod(mod);
   }
 }
 
@@ -134,7 +141,7 @@ void AmeHandler::SetPMod(s32 mod) {
     ;              \
   stream += (x);
 
-std::pair<bool, u8*> AmeHandler::RunAME(MidiHandler& midi, u8* stream) {
+std::pair<bool, u8*> ame_handler::run_ame(midi_handler& midi, u8* stream) {
   int skip = 0;
   bool done = false;
   bool cont = true;
@@ -179,7 +186,7 @@ std::pair<bool, u8*> AmeHandler::RunAME(MidiHandler& midi, u8* stream) {
       } break;
       case 0x3: {
         AME_BEGIN(op)
-        StopSegment(stream[0]);
+        stop_segment(stream[0]);
         AME_END(1)
       } break;
       case 0x4: {
@@ -218,7 +225,7 @@ std::pair<bool, u8*> AmeHandler::RunAME(MidiHandler& midi, u8* stream) {
       } break;
       case 0xc: {
         AME_BEGIN(op)
-        auto [sub_cont, ptr] = RunAME(midi, m_macro[stream[0]]);
+        auto [sub_cont, ptr] = run_ame(midi, m_macro[stream[0]]);
         if (!sub_cont) {
           cont = false;
           done = true;
@@ -229,12 +236,12 @@ std::pair<bool, u8*> AmeHandler::RunAME(MidiHandler& midi, u8* stream) {
         AME_BEGIN(op)
         cont = false;
         done = true;
-        StartSegment(m_register[stream[0]] - 1);
+        start_segment(m_register[stream[0]] - 1);
         AME_END(1)
       } break;
       case 0xe: {
         AME_BEGIN(op)
-        StartSegment(m_register[stream[0]] - 1);
+        start_segment(m_register[stream[0]] - 1);
         AME_END(1)
       } break;
       case 0xf: {
@@ -278,9 +285,9 @@ std::pair<bool, u8*> AmeHandler::RunAME(MidiHandler& midi, u8* stream) {
           // note : added hack here! :-)
           if (!SoundFlavaHack &&
               (comp < m_groups[group].excite_min[i] || comp > m_groups[group].excite_max[i])) {
-            midi.MuteChannel(m_groups[group].channel[i]);
+            midi.mute_channel(m_groups[group].channel[i]);
           } else {
-            midi.UnmuteChannel(m_groups[group].channel[i]);
+            midi.unmute_channel(m_groups[group].channel[i]);
           }
         }
         AME_END(1)
@@ -289,12 +296,12 @@ std::pair<bool, u8*> AmeHandler::RunAME(MidiHandler& midi, u8* stream) {
         AME_BEGIN(op)
         done = true;
         cont = false;
-        StartSegment(stream[0]);
+        start_segment(stream[0]);
         AME_END(1)
       } break;
       case 0x12: {
         AME_BEGIN(op)
-        StartSegment(stream[0]);
+        start_segment(stream[0]);
         AME_END(1)
       } break;
       case 0x13: {
@@ -327,7 +334,7 @@ std::pair<bool, u8*> AmeHandler::RunAME(MidiHandler& midi, u8* stream) {
         AME_END(2)
       } break;
       default: {
-        throw AMEError(fmt::format("Unhandled AME event {:02x}", (u8)op));
+        throw ame_error(fmt::format("Unhandled AME event {:02x}", (u8)op));
       } break;
     }
 
