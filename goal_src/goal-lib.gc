@@ -546,7 +546,6 @@
 (defmacro symbol-member? (sym lst)
   "is sym present in lst? uses or, so it short circuits."
   (with-gensyms (sym-var)
-  (fmt #t "{}" lst)
   `(let ((,sym-var ,sym))
                                                       ;; TODO fix this bug
     (or ,@(apply (lambda (x) `(= ,sym-var (quote ,x))) (second lst))))
@@ -665,6 +664,13 @@
 
 (defmacro &-> (&rest args)
   `(& (-> ,@args))
+  )
+
+(defmacro xor (a b)
+  "xor for #t and #f"
+  (with-gensyms (a-temp b-temp)
+    `(let ((,a-temp ,a) (,b-temp ,b))
+        (or (and ,a-temp (not ,b-temp)) (and (not ,a-temp) ,b-temp))))
   )
 
 (defmacro logior! (place amount)
