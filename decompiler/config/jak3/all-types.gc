@@ -7003,7 +7003,7 @@
 
 (deftype mood-channel (structure)
   ((data float   24 :offset-assert 0) ;; guessed by decompiler
-   (vecs vector4 6  :offset 0) ;; guessed by decompiler
+   (vecs vector4 6 :inline :offset 0) ;; guessed by decompiler
    )
   :method-count-assert 9
   :size-assert         #x60
@@ -7034,6 +7034,7 @@
 
 (deftype mood-fog-table (structure)
   ((data mood-fog 8 :inline :offset-assert 0) ;; guessed by decompiler
+   (_data uint128 24 :offset 0 :score -1)
    )
   :method-count-assert 9
   :size-assert         #x180
@@ -7059,6 +7060,7 @@
 
 (deftype mood-color-table (structure)
   ((data mood-color 8 :inline :offset-assert 0) ;; guessed by decompiler
+   (_data uint128 16 :offset 0 :score -1)
    )
   :method-count-assert 9
   :size-assert         #x100
@@ -7144,6 +7146,7 @@
   ((time float  :offset-assert 0)
    (fade float  :offset-assert 4)
    )
+  :pack-me
   :method-count-assert 9
   :size-assert         #x8
   :flag-assert         #x900000008
@@ -7153,6 +7156,7 @@
   ((flicker-off uint8  :offset-assert 0)
    (flicker-on  uint8  :offset-assert 1)
    )
+  :allow-misaligned
   :method-count-assert 9
   :size-assert         #x2
   :flag-assert         #x900000002
@@ -7202,6 +7206,7 @@
    (length uint8  :offset-assert 5)
    (height uint8  :offset-assert 6)
    )
+  :pack-me
   :method-count-assert 9
   :size-assert         #x7
   :flag-assert         #x900000007
@@ -7238,6 +7243,7 @@
 (deftype mood-context (mood-context-core3)
   ((itimes vector4w 4 :inline  :offset-assert 1776) ;; guessed by decompiler
    (state  uint32   32 :offset-assert 1840) ;; guessed by decompiler
+   (data uint128   123 :offset 0 :score -1)
    )
   :method-count-assert 9
   :size-assert         #x7b0
@@ -7299,10 +7305,10 @@
   :size-assert         #x118
   :flag-assert         #x1900000118
   (:methods
-    (mood-control-method-9 () none) ;; 9 ;; (init-weather! (_type_) none)
-    (mood-control-method-10 () none) ;; 10 ;; (update-mood-weather! (_type_ float float float float) none)
-    (mood-control-method-11 () none) ;; 11 ;; (update-mood-range! (_type_ float float float float) none)
-    (mood-control-method-12 () none) ;; 12 ;; (set-time-for-random-weather! (_type_ float float) none)
+    (init-weather! (_type_) none) ;; 9
+    (set-cloud-and-fog-interp! (_type_ float float float float) none) ;; 10 ;; (update-mood-weather! (_type_ float float float float) none)
+    (update-mood-range! (_type_ float float float float) none) ;; 11
+    (set-time-for-random-weather! (_type_ float float) none) ;; 12
     (set-special-interps!
       "Sets the `*-special-interp` values with the given values
        @param! this The [[mood-control]]
@@ -7310,20 +7316,20 @@
        @param rate-interp Value to set [[this::rate-special-interp]]
        @param set-current-interp? Uses `target-interp` to set [[this::current-special-interp]
        @returns [[none]]"
-      (_type_ float float symbol) none) ;; 13 ;; (apply-mood-clouds-and-fog (_type_ mood-control-work) none)
+      (_type_ float float symbol) none) ;; 13
     (weather-event-concluded? ;; TODO - guess at name
       "@returns [[#t]] if [[this::override-weather-flag]] is set, we aren't in a cutscene and [[this::current-special-interp]] is equal to `0.0`"
       (_type_) symbol) ;; 14 ;; (apply-mood-color (_type_ mood-control-work) none)
-    (mood-control-method-15 () none) ;; 15 ;; (apply-mood-channels (_type_ mood-control-work) none)
-    (mood-control-method-16 () none) ;; 16 ;; (adjust-num-clouds! (_type_ mood-control-work) none)
-    (mood-control-method-17 () none) ;; 17 ;; (gen-lightning-and-thunder! (_type_) number)
-    (mood-control-method-18 () none) ;; 18 ;; (play-or-stop-lightning! (_type_ sound-spec vector) sound-id)
-    (mood-control-method-19 () none) ;; 19
-    (mood-control-method-20 () none) ;; 20
-    (mood-control-method-21 () none) ;; 21
-    (mood-control-method-22 () none) ;; 22
-    (mood-control-method-23 () none) ;; 23
-    (mood-control-method-24 () none) ;; 24
+    (set-lightning-time! (_type_ int int float) none) ;; 15 ;; (apply-mood-channels (_type_ mood-control-work) none)
+    (apply-mood-clouds-and-fog (_type_ mood-control-work) none) ;; 16 ;; (adjust-num-clouds! (_type_ mood-control-work) none)
+    (apply-mood-fog (_type_ mood-control-work mood-color-table mood-color-table mood-color-table float) none) ;; 17
+    (apply-fog-height (_type_ mood-control-work float float float float) none) ;; 18
+    (apply-mood-colors (_type_ mood-control-work) none) ;; 19
+    (mood-control-method-20 (_type_ mood-control-work mood-color-table mood-color-table mood-color-table float) none) ;; 20
+    (apply-mood-channels (_type_ mood-control-work) none) ;; 21
+    (adjust-num-clouds (_type_ mood-control-work) none) ;; 22
+    (gen-lightning-and-thunder! (_type_ int) none) ;; 23
+    (play-or-stop-lightning-sfx! (_type_ sound-spec vector) none) ;; 24
     )
   )
 
@@ -11257,9 +11263,9 @@
   :size-assert         #x2814
   :flag-assert         #x2700002814
   (:methods
-    (sky-work-method-9 () none) ;; 9 ;; (init-sun-data! (_type_ int float float float) none)
-    (sky-work-method-10 () none) ;; 10 ;; (init-orbit-settings! (_type_ int float float float float float float) none)
-    (sky-work-method-11 () none) ;; 11 ;; (update-colors-for-time (_type_ float) none)
+    (init-sun-data! (_type_ int float float float) none) ;; 9
+    (init-orbit-settings! (_type_ int float float float float float float) none) ;; 10
+    (update-colors-for-time (_type_ float) none) ;; 11
     (update-time-and-speed (_type_ float float) none) ;; 12
     (sky-work-method-13 () none) ;; 13
     (draw (_type_) none) ;; 14 ;; (update-matrix (_type_ matrix) none)
@@ -21418,7 +21424,7 @@
    (last-nonzero-input-dir-targ                    quaternion                 :inline     :offset 6384)
    (time-of-last-wall-hide-first-check-pass        time-frame                             :offset 6400)
    (time-of-first-wall-hide-first-check-pass       time-frame                             :offset 6408)
-   (pad uint8 4)
+   (unknown-float0000                              float                                  :offset 6416)
    )
   :size-assert #x1914
   :flag-assert #x4400001914
@@ -22766,7 +22772,8 @@
    (leg-ik                      joint-mod-ik                     2       :offset-assert 252) ;; guessed by decompiler
    (foot                        joint-mod                        2       :offset-assert 260) ;; guessed by decompiler
    (cloth                       symbol                                   :offset-assert 268)
-   (init-time                   time-frame                               :offset-assert 272) ;; time-frame
+   (mech-ik                     joint-mod-ik                     2       :offset-assert 272) ;; added
+   (init-time                   time-frame                               :offset 272) ;; time-frame
    (teleport-time               time-frame                               :offset-assert 280) ;; time-frame
    (state-hook-time             time-frame                               :offset-assert 288) ;; time-frame
    (state-hook                  (function none :behavior target)         :offset-assert 296) ;; guessed by decompiler
@@ -22801,9 +22808,9 @@
    (mode-param1                 handle                                   :offset-assert 2320) ;; handle
    (mode-param2                 uint64                                   :offset-assert 2328)
    (mode-param3                 uint64                                   :offset-assert 2336)
-   (major-mode-exit-hook        basic                                    :offset-assert 2344)
-   (major-mode-event-hook       basic                                    :offset-assert 2348)
-   (sub-mode-exit-hook          basic                                    :offset-assert 2352)
+   (major-mode-exit-hook        (function none :behavior target)         :offset-assert 2344)
+   (major-mode-event-hook       (function none :behavior target)         :offset-assert 2348)
+   (sub-mode-exit-hook          (function none :behavior target)         :offset-assert 2352)
    (ext-geo-control             external-art-buffer                      :offset-assert 2356)
    (pending-ext-geo             target-geo                               :offset-assert 2360)
    (ext-geo                     target-geo                               :offset-assert 2364)
@@ -22894,7 +22901,7 @@
     (target-jump-forward float float symbol)
     (target-high-jump float float object)
     (target-double-jump float float)
-    (target-falling symbol)
+    (target-falling object)
     target-slide-down
     (target-flop float float float object)
     (target-hit-ground symbol)
@@ -22955,49 +22962,50 @@
     (target-board-clone-anim handle)
     ;; flut
     (target-flut-start handle symbol int)
-    target-flut-get-on
-    target-flut-get-off
+    (target-flut-get-on handle)
+    (target-flut-get-off handle)
     target-flut-get-off-jump
-    target-flut-eject
+    (target-flut-eject symbol)
     target-flut-grab
     target-flut-stance
     target-flut-walk
-    target-flut-jump
-    target-flut-double-jump
+    (target-flut-jump float float)
+    (target-flut-double-jump float float)
     target-flut-running-attack
-    target-flut-air-attack
+    (target-flut-air-attack float)
     target-flut-air-attack-hit-ground
-    target-flut-hit
+    (target-flut-hit symbol attack-info)
     target-flut-hit-ground
-    target-flut-falling
-    target-flut-kanga-catch
-    target-flut-death
-    target-flut-clone-anim
+    (target-flut-falling object)
+    (target-flut-kanga-catch handle symbol)
+    (target-flut-death symbol)
+    (target-flut-clone-anim handle)
+    target-flut-run-wild
     ;; mech
     (target-mech-start handle float symbol)
-    target-mech-get-on ;; associated process guessed by decompiler, old: (state handle target)
+    (target-mech-get-on handle)
     target-mech-get-off
-    target-mech-get-up
+    (target-mech-get-up handle)
     target-mech-grab
     target-mech-stance
     target-mech-walk
-    target-mech-jump ;; associated process guessed by decompiler, old: (state float float surface target)
+    (target-mech-jump float float surface)
     target-mech-punch
     target-mech-shield
-    target-mech-hit ;; associated process guessed by decompiler, old: (state symbol attack-info target)
-    target-mech-hit-ground ;; associated process guessed by decompiler, old: (state symbol target)
-    target-mech-falling ;; associated process guessed by decompiler, old: (state symbol target)
+    (target-mech-hit symbol attack-info)
+    (target-mech-hit-ground symbol)
+    (target-mech-falling symbol)
     target-mech-carry-pickup
     target-mech-carry-stance
     target-mech-carry-walk
-    target-mech-carry-jump ;; associated process guessed by decompiler, old: (state float float symbol target)
+    (target-mech-carry-jump float float)
     target-mech-carry-drag
     target-mech-carry-drop
     target-mech-carry-throw
-    target-mech-carry-hit-ground ;; associated process guessed by decompiler, old: (state symbol target)
+    (target-mech-carry-hit-ground symbol)
     target-mech-carry-falling
-    target-mech-death ;; associated process guessed by decompiler, old: (state symbol target)
-    target-mech-clone-anim ;; associated process guessed by decompiler, old: (state handle target)
+    (target-mech-death symbol)
+    (target-mech-clone-anim handle)
     ;; pilot
     (target-racing-start handle)
     (target-grab-ride handle)
@@ -23065,8 +23073,12 @@
     target-ladder-switch
     target-ladder-jump-off
     ;; tube
-    (target-tube-start handle)
     target-tube
+    target-tube-walk
+    (target-tube-start handle)
+    (target-tube-jump float float)
+    (target-tube-hit symbol attack-info)
+    (target-tube-death symbol)
     ;; tobot
     tobot-stance
     )
@@ -23288,7 +23300,7 @@
    (cam-outside-bsp          uint8                       :offset        152)
    (cam-using-back           uint8                       :offset-assert 153)
    (cam-box-idx              uint16                      :offset-assert 154)
-   ; (ambients                 symbol                      :offset-assert 156) ;; now just #t?
+   (ambients                 symbol                      :offset-assert 156) ;; now just #t?
    (subdivide-close          float                       :offset 160)
    (subdivide-far            float                       :offset-assert 164)
    (race-meshes              (array entity-race-mesh)    :offset-assert 168)
@@ -27890,29 +27902,29 @@
   :flag-assert         #x2000000024
   (:methods
     (new "Allocate a new path-control, set up the curve to point to the specified lump data." (symbol type process symbol float entity symbol) _type_) ;; 0
-    (path-control-method-9 (_type_) none) ;; 9 ;; (debug-draw (_type_) none)
+    (debug-draw (_type_) none) ;; 9
     (get-point-in-path! (_type_ vector float symbol) vector) ;; 10
-    (path-control-method-11 () none) ;; 11 ;; (get-random-point (_type_ vector) vector)
-    (path-control-method-12 () none) ;; 12 ;; (displacement-between-two-points-copy! (_type_ vector float float) vector)
-    (path-control-method-13 () none) ;; 13 ;; (displacement-between-two-points-normalized! (_type_ vector float) vector)
+    (get-random-point (_type_ vector) vector) ;; 11
+    (path-control-method-12 (_type_ vector float float) vector) ;; 12 ;; (displacement-between-two-points-copy! (_type_ vector float float) vector)
+    (displacement-between-two-points-normalized! (_type_ vector float) vector) ;; 13
     (get-point-at-percent-along-path! (_type_ vector float symbol) vector) ;; 14
-    (path-control-method-15 () none) ;; 15 ;; (displacement-between-points-at-percent-scaled! (_type_ vector float float) vector)
+    (path-control-method-15 (_type_ vector float float) vector) ;; 15 ;; (displacement-between-points-at-percent-scaled! (_type_ vector float float) vector)
     (displacement-between-points-at-percent-normalized! (_type_ vector float) vector) ;; 16
     (get-num-segments (_type_) float) ;; 17
     (total-distance (_type_) float) ;; 18
     (get-num-verts (_type_) int) ;; 19
     (segement-duration->path-duration (_type_ float) float) ;; 20
     (path-duration->segment-duration (_type_ float) float) ;; 21
-    (path-control-method-22 () none) ;; 22 ;; (get-furthest-point-on-path (_type_ vector) float)
-    (path-control-method-23 () none) ;; 23 ;; (get-path-percentage-at-furthest-point (_type_ vector) float)
-    (path-control-method-24 () none) ;; 24 ;; (path-control-method-24 (_type_ vector) vector)
+    (path-control-method-22 (_type_ vector) float) ;; 22 ;; (get-furthest-point-on-path (_type_ vector) float)
+    (path-control-method-23 (_type_ vector) float) ;; 23 ;; (get-path-percentage-at-furthest-point (_type_ vector) float)
+    (path-control-method-24 (_type_ vector) float) ;; 24 ;; (path-control-method-24 (_type_ vector) vector)
     (path-control-method-25 (_type_ vector) float) ;; 25
-    (path-control-method-26 () none) ;; 26 ;; (displacement-between-two-points! (_type_ vector float float) vector)
-    (path-control-method-27 () none) ;; 27
-    (path-control-method-28 () none) ;; 28
-    (path-control-method-29 () none) ;; 29
+    (path-control-method-26 (_type_ float float) float) ;; 26 ;; (displacement-between-two-points! (_type_ vector float float) vector)
+    (path-control-method-27 (_type_ vector) vector) ;; 27
+    (path-control-method-28 (_type_ vector float float) float) ;; 28
+    (path-control-method-29 (_type_ vector int float) float) ;; 29
     (should-display-marks? (_type_) symbol) ;; 30
-    (path-control-method-31 () none) ;; 31
+    (displacement-between-two-points! (_type_ vector float float) vector) ;; 31
     )
   )
 
@@ -31464,14 +31476,14 @@
 (define-extern palette-select-special (function mood-context-core3 symbol))
 (define-extern clear-mood-times (function mood-context symbol)) ;;
 (define-extern update-mood-itimes (function mood-context none))
-;; (define-extern update-mood-direction function) ;; (function mood-context-core3 mood-table float float)
+(define-extern update-mood-direction (function mood-context-core3 mood-table float float))
 (define-extern update-mood-exterior (function mood-context-core3 mood-table float int object))
-;; (define-extern copy-mood-exterior function) ;; (function mood-context symbol)
-;; (define-extern copy-mood-exterior-ambi function) ;; (function mood-context symbol none)
+(define-extern copy-mood-exterior (function mood-context symbol))
+(define-extern copy-mood-exterior-ambi (function mood-context symbol none))
 (define-extern clear-mood-context (function mood-context symbol))
-;; (define-extern update-mood-interior function) ;; (function mood-context float)
-;; (define-extern update-mood-interior-ambient function)
-;; (define-extern update-mood-flames function) ;; (function mood-context int int int float float float float :behavior time-of-day-proc)
+(define-extern update-mood-interior (function mood-context symbol float))
+(define-extern update-mood-interior-ambient (function mood-context symbol float vector))
+(define-extern update-mood-flames (function mood-context int int int float float float float :behavior time-of-day-proc))
 (define-extern *flash0* (array float))
 (define-extern *flash1* (array float))
 (define-extern *flash2* (array float))
@@ -31480,22 +31492,21 @@
 (define-extern *flash5* (array float))
 (define-extern *flash6* (array float))
 (define-extern *flash7* (array float))
-;; (define-extern update-mood-light function) ;; (function mood-context int int float float float float float float)
-;; (define-extern update-mood-lava function) ;; (function mood-context int int float float float float float float)
-;; (define-extern update-mood-flicker function) ;; (function mood-context int int none)
-;; (define-extern update-mood-florescent function) ;; (function mood-context int int float)
-;; (define-extern update-mood-electricity function) ;; (function mood-context int int float float none)
-;; (define-extern update-mood-pulse function) ;; (function mood-context int int float float float float none)
-;; (define-extern update-mood-strobe function) ;; (function mood-context int int int float float)
-;; (define-extern update-mood-caustics function) ;; (function mood-context int float float float float float)
-;; (define-extern overide-mood-fog function)
-;; (define-extern overide-mood-color function)
+(define-extern update-mood-light (function mood-context int int float float float float float float))
+(define-extern update-mood-lava (function mood-context int int float float float float float float))
+(define-extern update-mood-flicker (function mood-context int int none))
+(define-extern update-mood-florescent (function mood-context int int float))
+(define-extern update-mood-electricity (function mood-context int int float float none))
+(define-extern update-mood-pulse (function mood-context int int float float float float none))
+(define-extern update-mood-strobe (function mood-context int int int float float))
+(define-extern update-mood-caustics (function mood-context int float float float float float))
+(define-extern overide-mood-fog (function mood-context float int float none))
+(define-extern overide-mood-color (function mood-context float int float none))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mood-funcs                     ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#|
 (deftype ctywide-states (structure)
   ((light light-state  :inline :offset-assert 0)
    (flame flames-state :inline :offset-assert 8)
@@ -31504,9 +31515,7 @@
   :size-assert         #xf
   :flag-assert         #x90000000f
   )
-|#
 
-#|
 (deftype ctysluma-states (structure)
   ((light   light-state        :inline :offset-assert 0)
    (flame   flames-state       :inline :offset-assert 8)
@@ -31518,9 +31527,7 @@
   :size-assert         #x1c
   :flag-assert         #x90000001c
   )
-|#
 
-#|
 (deftype ctyslumb-states (structure)
   ((light   light-state        :inline :offset-assert 0)
    (spec-0  sp-field-init-spec         :offset-assert 8)
@@ -31531,9 +31538,7 @@
   :size-assert         #x14
   :flag-assert         #x900000014
   )
-|#
 
-#|
 (deftype ctyslumc-states (structure)
   ((light   light-state        :inline :offset-assert 0)
    (spec-0  sp-field-init-spec         :offset-assert 8)
@@ -31544,9 +31549,7 @@
   :size-assert         #x14
   :flag-assert         #x900000014
   )
-|#
 
-#|
 (deftype ctygenb-states (structure)
   ((light        light-state        :inline :offset-assert 0)
    (flame        flames-state       :inline :offset-assert 8)
@@ -31561,9 +31564,7 @@
   :size-assert         #x28
   :flag-assert         #x900000028
   )
-|#
 
-#|
 (deftype mhcitya-states (structure)
   ((pulse pulse-state :inline :offset-assert 0)
    )
@@ -31571,9 +31572,7 @@
   :size-assert         #x10
   :flag-assert         #x900000010
   )
-|#
 
-#|
 (deftype mhcityb-states (structure)
   ((pulse pulse-state :inline :offset-assert 0)
    )
@@ -31581,9 +31580,7 @@
   :size-assert         #x10
   :flag-assert         #x900000010
   )
-|#
 
-#|
 (deftype ctyport-states (structure)
   ((light           light-state        :inline :offset-assert 0)
    (spec-0          sp-field-init-spec         :offset-assert 8)
@@ -31593,9 +31590,7 @@
   :size-assert         #x10
   :flag-assert         #x900000010
   )
-|#
 
-#|
 (deftype ctymarka-states (structure)
   ((light light-state :inline :offset-assert 0)
    (blink float               :offset-assert 8)
@@ -31604,9 +31599,7 @@
   :size-assert         #xc
   :flag-assert         #x90000000c
   )
-|#
 
-#|
 (deftype mountain-states (structure)
   ((light0 light-state        :inline :offset-assert 0)
    (light1 light-state        :inline :offset-assert 8)
@@ -31622,9 +31615,7 @@
   :size-assert         #x2c
   :flag-assert         #x90000002c
   )
-|#
 
-#|
 (deftype ctyinda-states (structure)
   ((light light-state :inline :offset-assert 0)
    )
@@ -31632,9 +31623,7 @@
   :size-assert         #x8
   :flag-assert         #x900000008
   )
-|#
 
-#|
 (deftype ctyindb-states (structure)
   ((light   light-state :inline :offset-assert 0)
    (flicker float               :offset-assert 8)
@@ -31643,9 +31632,7 @@
   :size-assert         #xc
   :flag-assert         #x90000000c
   )
-|#
 
-#|
 (deftype atoll-states (structure)
   ((light     light-state :inline :offset-assert 0)
    (explosion float               :offset-assert 8)
@@ -31654,43 +31641,42 @@
   :size-assert         #xc
   :flag-assert         #x90000000c
   )
-|#
 
 (define-extern update-mood-default (function mood-context float int none :behavior time-of-day-proc))
-;; (define-extern update-mood-copy-parent function)
-;; (define-extern get-sphere-interp function) ;; (function sphere vector float float float)
-;; (define-extern update-mood-ctywide function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern update-mood-copy-ctywide function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern init-mood-ctysluma function) ;; (function mood-context float)
-;; (define-extern update-mood-ctysluma function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern init-mood-ctyslumb function) ;; (function mood-context uint)
-;; (define-extern update-mood-ctyslumb function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern init-mood-ctyslumc function) ;; (function mood-context none)
-;; (define-extern update-mood-ctyslumc function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern init-mood-ctygenb function)
-;; (define-extern update-mood-ctygenb function)
-;; (define-extern *mhcity-mood-fog-table* object)
-;; (define-extern overide-mhcity-fog function)
-;; (define-extern init-mood-mhcitya function)
-;; (define-extern update-mood-mhcitya function)
-;; (define-extern init-mood-mhcityb function)
-;; (define-extern update-mood-mhcityb function)
-;; (define-extern calc-lmhcity-palettes function)
-;; (define-extern update-mood-lmhcitya function)
-;; (define-extern update-mood-lmhcityb function)
-;; (define-extern *ctyport-level* object)
-;; (define-extern update-mood-ctyport function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern reset-marquee-color! function)
-;; (define-extern add-marquee-color! function)
-;; (define-extern update-mood-ctymarka function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern init-mood-mountain function) ;; (function mood-context uint)
-;; (define-extern update-mood-mountain function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern update-mood-ctyinda function)
-;; (define-extern update-mood-ctyindb function)
-;; (define-extern init-mood-atoll function) ;; (function mood-context float)
-;; (define-extern update-mood-atoll function) ;; (function mood-context float int none :behavior time-of-day-proc)
-;; (define-extern set-atoll-explosion! function) ;; (function float float)
-;; (define-extern update-mood-atollext function) ;; (function mood-context float int none :behavior time-of-day-proc)
+(define-extern update-mood-copy-parent (function mood-context object int none))
+(define-extern get-sphere-interp (function sphere vector float float float))
+(define-extern update-mood-ctywide (function mood-context float int none :behavior time-of-day-proc))
+(define-extern update-mood-copy-ctywide (function mood-context float int none :behavior time-of-day-proc))
+(define-extern init-mood-ctysluma (function mood-context float))
+(define-extern update-mood-ctysluma (function mood-context float int none :behavior time-of-day-proc))
+(define-extern init-mood-ctyslumb (function mood-context uint))
+(define-extern update-mood-ctyslumb (function mood-context float int none :behavior time-of-day-proc))
+(define-extern init-mood-ctyslumc (function mood-context none))
+(define-extern update-mood-ctyslumc (function mood-context float int none :behavior time-of-day-proc))
+(define-extern init-mood-ctygenb (function mood-context object))
+(define-extern update-mood-ctygenb (function mood-context float int none :behavior time-of-day-proc))
+(define-extern *mhcity-mood-fog-table* mood-fog-table)
+(define-extern overide-mhcity-fog function)
+(define-extern init-mood-mhcitya (function mood-context object))
+(define-extern update-mood-mhcitya (function mood-context float int none :behavior time-of-day-proc))
+(define-extern init-mood-mhcityb (function mood-context object))
+(define-extern update-mood-mhcityb (function mood-context float int none :behavior time-of-day-proc))
+(define-extern calc-lmhcity-palettes function)
+(define-extern update-mood-lmhcitya (function mood-context float int none :behavior time-of-day-proc))
+(define-extern update-mood-lmhcityb (function mood-context float int none :behavior time-of-day-proc))
+(define-extern *ctyport-level* level-group)
+(define-extern update-mood-ctyport (function mood-context float int none :behavior time-of-day-proc))
+(define-extern reset-marquee-color! function)
+(define-extern add-marquee-color! function)
+(define-extern update-mood-ctymarka (function mood-context float int none :behavior time-of-day-proc))
+(define-extern init-mood-mountain (function mood-context uint))
+(define-extern update-mood-mountain (function mood-context float int none :behavior time-of-day-proc))
+(define-extern update-mood-ctyinda (function mood-context float int none :behavior time-of-day-proc))
+(define-extern update-mood-ctyindb (function mood-context float int none :behavior time-of-day-proc))
+(define-extern init-mood-atoll (function mood-context float))
+(define-extern update-mood-atoll (function mood-context float int none :behavior time-of-day-proc))
+(define-extern set-atoll-explosion! (function float float))
+(define-extern update-mood-atollext (function mood-context float int none :behavior time-of-day-proc))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mood-funcs2                    ;;
@@ -31831,14 +31817,14 @@
 
 (define-extern group-rain-screend-drop sparticle-launch-group)
 (define-extern update-snow (function float vector vector none))
-;; (define-extern birth-func-omega-normal-orient function) ;; (function sparticle-system sparticle-cpuinfo sprite-vec-data-3d sparticle-launcher sparticle-launch-state none)
-;; (define-extern birth-func-rain function) ;; (function sparticle-system sparticle-cpuinfo sprite-vec-data-3d sparticle-launcher sparticle-launch-state none)
-;; (define-extern check-drop-level-rain function) ;; (function sparticle-system sparticle-cpuinfo vector none)
-;; (define-extern check-drop-level-rain2 function) ;; (function sparticle-system sparticle-cpuinfo vector none)
-;; (define-extern check-drop-level-splash function) ;; (function sparticle-system sparticle-cpuinfo vector none)
+(define-extern birth-func-omega-normal-orient (function sparticle-system sparticle-cpuinfo sprite-vec-data-3d sparticle-launcher sparticle-launch-state none))
+(define-extern birth-func-rain (function sparticle-system sparticle-cpuinfo sprite-vec-data-3d sparticle-launcher sparticle-launch-state none))
+(define-extern check-drop-level-rain (function sparticle-system sparticle-cpuinfo vector none))
+(define-extern check-drop-level-rain2 (function sparticle-system sparticle-cpuinfo vector none))
+(define-extern check-drop-level-splash (function sparticle-system sparticle-cpuinfo vector none))
 (define-extern update-rain (function float vector vector none))
 (define-extern cam-master-effect (function none :behavior camera-master))
-;; (define-extern sparticle-track-sun function) ;; (function int sparticle-cpuinfo matrix none)
+(define-extern sparticle-track-sun (function int sparticle-cpuinfo matrix none))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; time-of-day                    ;;
@@ -31865,16 +31851,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-extern *sky-work* sky-work)
-;; (define-extern sky-base-polygons object) ;; (inline-array sky-vertex)
-;; (define-extern sky-roof-polygons object) ;; (inline-array sky-vertex)
-;; (define-extern *cloud-vert-array* object) ;; cloud-vert-array
-;; (define-extern *cloud-poly* object) ;; (inline-array sky-vertex)
-;; (define-extern init-cloud-vert-array function) ;; (function symbol)
-;; (define-extern *haze-vert-array* object) ;; haze-vert-array
-;; (define-extern *haze-poly* object) ;; (inline-array sky-vertex)
-;; (define-extern init-haze-vert-array function) ;; (function symbol)
-;; (define-extern sky-make-sun-data function) ;; (function sky-work int float none)
-;; (define-extern sky-make-moon-data function) ;; (function sky-work float none)
+(define-extern sky-base-polygons (inline-array sky-vertex))
+(define-extern sky-roof-polygons (inline-array sky-vertex))
+(define-extern *cloud-vert-array* cloud-vert-array)
+(define-extern *cloud-poly* (inline-array sky-vertex))
+(define-extern init-cloud-vert-array (function symbol))
+(define-extern *haze-vert-array* haze-vert-array)
+(define-extern *haze-poly* (inline-array sky-vertex))
+(define-extern init-haze-vert-array (function symbol))
+(define-extern sky-make-sun-data (function sky-work int float none))
+(define-extern sky-make-moon-data (function sky-work float none))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; sky-tng                        ;;
@@ -35167,33 +35153,40 @@
 (defenum flut-flag
   :type uint64
   :bitfield #t
+  (ff0 0)
+  (ff1 1)
+  (ff2 2)
+  (ff3 3)
   )
 ;; ---flut-h:flut-flag
 
 (deftype flut (process-focusable)
-  ((extra-trans       vector             :inline :offset-assert 208)
+  ((root              collide-shape-moving       :override)
+   (extra-trans       vector             :inline :offset-assert 208)
    (condition         int32                      :offset-assert 224)
    (shadow-backup     shadow-geo                 :offset-assert 228)
    (rider             handle                     :offset-assert 232)
    (nav-sphere-handle handle                     :offset-assert 240)
    (probe-time        time-frame                 :offset-assert 248)
-   (count-lock        basic                      :offset-assert 256)
+   (count-lock        symbol                     :offset-assert 256)
    (flags             flut-flag                  :offset-assert 264)
-   (mode              basic                      :offset-assert 272)
+   (mode              symbol                     :offset-assert 272)
    (color-index       int32                      :offset-assert 276)
    (minimap           connection-minimap         :offset-assert 280)
    )
   :method-count-assert 35
   :size-assert         #x11c
   :flag-assert         #x2300a0011c
+  (:state-methods
+    wait-for-start ;; 28
+    idle ;; 29
+    (pickup (state flut)) ;; 30
+    wait-for-return ;; 31
+    die ;; 32
+    )
   (:methods
-    (flut-method-28 () none) ;; 28
-    (flut-method-29 () none) ;; 29
-    (flut-method-30 () none) ;; 30
-    (flut-method-31 () none) ;; 31
-    (flut-method-32 () none) ;; 32
-    (flut-method-33 () none) ;; 33
-    (flut-method-34 () none) ;; 34
+    (flut-method-33 (_type_) symbol) ;; 33
+    (spawn-part-and-sound! (_type_) none) ;; 34
     )
   )
 
@@ -35333,7 +35326,7 @@
 (define-extern move-legs? (function symbol :behavior target))
 (define-extern jump-hit-ground-stuck? (function symbol :behavior target))
 (define-extern target-time-to-ground (function time-frame :behavior target))
-(define-extern fall-test (function (state symbol target) float none :behavior target))
+(define-extern fall-test (function (state object target) float none :behavior target))
 (define-extern slide-down-test (function none :behavior target))
 (define-extern smack-surface? (function symbol symbol :behavior target))
 (define-extern can-roll? (function symbol :behavior target))
@@ -36981,6 +36974,7 @@
    (drag-sound-id         sound-id                   :offset-assert 80) ;; guessed by decompiler
    (whine-sound-id        sound-id                   :offset-assert 84) ;; guessed by decompiler
    (shield-sound-id       sound-id                   :offset-assert 88)
+   (mode-sound-bank       connection                 :offset-assert 92) ;; added
    (mech-start-time       time-frame                 :offset-assert 96) ;; time-frame
    (mech-time             time-frame                 :offset-assert 104) ;; time-frame
    (no-get-off-time       time-frame                 :offset-assert 112) ;; time-frame
@@ -37010,7 +37004,7 @@
    (smoke-local-vel       vector             2 :inline :offset-assert 464) ;; guessed by decompiler
    (particle-system-2d    basic                      :offset-assert 496)
    (particle-system-3d    basic                      :offset-assert 500)
-   (part-thruster         sparticle-launch-control   :offset-assert 504)
+   (part-thruster         sparticle-launcher         :offset-assert 504)
    (part-thruster-scale-x sp-field-init-spec         :offset-assert 508)
    (part-thruster-scale-y sp-field-init-spec         :offset-assert 512)
    (part-quat             quaternion                 :offset-assert 516)
@@ -40120,7 +40114,6 @@
 ;; collision-editor               ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#|
 (deftype collision-editor-default-proc (process-drawable)
   ()
   :method-count-assert 21
@@ -40130,9 +40123,7 @@
     idle ;; 20
     )
   )
-|#
 
-#|
 (deftype collision-editor-edited-proc (process-drawable)
   ()
   :method-count-assert 21
@@ -40142,11 +40133,9 @@
     idle ;; 20
     )
   )
-|#
 
-#|
 (deftype collision-editor (process)
-  ((proc uint64  :offset-assert 128)
+  ((proc handle  :offset-assert 128)
    )
   :method-count-assert 15
   :size-assert         #x88
@@ -40155,39 +40144,46 @@
     idle ;; 14
     )
   )
-|#
 
-#|
+;; +++collision-editor:collision-editor-func
+(defenum collision-editor-func
+  :type uint64
+  (analog 0)
+  (edit 1)
+  (print-collision 2)
+  (stop-editor 3)
+  )
+;; ---collision-editor:collision-editor-func
+
 (deftype collision-edit-info (structure)
-  ((editing      basic   :offset-assert 0)
-   (current-func uint64  :offset-assert 8)
-   (analog-func  uint64  :offset-assert 16)
+  ((editing      symbol  :offset-assert 0)
+   (current-func collision-editor-func :offset-assert 8)
+   (analog-func  collision-editor-func :offset-assert 16)
    (current-prim int32   :offset-assert 24)
    )
   :method-count-assert 12
   :size-assert         #x1c
   :flag-assert         #xc0000001c
   (:methods
-    (collision-edit-info-method-9 () none) ;; 9
-    (collision-edit-info-method-10 () none) ;; 10
-    (collision-edit-info-method-11 () none) ;; 11
+    (collision-edit-info-method-9 (_type_) none) ;; 9
+    (draw-menu (_type_ process-drawable) none) ;; 10
+    (collision-edit-info-method-11 (_type_ process-drawable) none) ;; 11
     )
   )
-|#
 
-;; (define-extern collision-editor-default-proc-init-by-other function)
-;; (define-extern collision-editor-edited-proc-init-by-other function)
-;; (define-extern *collision-editor-mesh-names* array)
-;; (define-extern *collision-editor-art-group-name* string)
-;; (define-extern collision-editor-add-mesh-to-ccache function)
-;; (define-extern print-default-collision function)
-;; (define-extern print-actual-collision function)
-;; (define-extern collision-edit-get-max-prim function)
-;; (define-extern collision-edit-get-prim function)
-;; (define-extern *collision-edit-info* object)
-;; (define-extern collision-editor-init-by-other function)
-;; (define-extern stop-collision-edit function)
-;; (define-extern collision-edit function)
+(define-extern collision-editor-default-proc-init-by-other (function object :behavior collision-editor-default-proc))
+(define-extern collision-editor-edited-proc-init-by-other (function object :behavior collision-editor-edited-proc))
+(define-extern *collision-editor-mesh-names* (array string))
+(define-extern *collision-editor-art-group-name* string)
+(define-extern collision-editor-add-mesh-to-ccache (function collide-shape-prim-group collide-cache none))
+(define-extern print-default-collision (function process-drawable none))
+(define-extern print-actual-collision (function process-drawable none))
+(define-extern collision-edit-get-max-prim (function process-drawable int))
+(define-extern collision-edit-get-prim (function process-drawable int collide-shape-prim))
+(define-extern *collision-edit-info* collision-edit-info)
+(define-extern collision-editor-init-by-other (function handle object :behavior collision-editor))
+(define-extern stop-collision-edit (function none))
+(define-extern collision-edit (function process (pointer process)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; speech-manager                 ;;
@@ -41614,7 +41610,6 @@
 ;; simple-nav-sphere              ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#|
 (deftype simple-nav-sphere (process-drawable)
   ((first-time? symbol  :offset-assert 200) ;; guessed by decompiler
    (track-joint int32   :offset-assert 204)
@@ -41623,14 +41618,13 @@
   :size-assert         #xd0
   :flag-assert         #x16005000d0
   (:state-methods
-    active ;; 21, old: (active () _type_ :state)
-    idle ;; 20, old: (idle () _type_ :state)
+    idle ;; 20
+    active ;; 21
     )
   )
-|#
 
-;; (define-extern simple-nav-sphere-event-handler function) ;; (function process int symbol event-message-block object :behavior simple-nav-sphere)
-;; (define-extern simple-nav-sphere-init-by-other function) ;; (function float vector nav-mesh int none :behavior simple-nav-sphere)
+(define-extern simple-nav-sphere-event-handler (function process int symbol event-message-block object :behavior simple-nav-sphere))
+(define-extern simple-nav-sphere-init-by-other (function float vector nav-mesh int object :behavior simple-nav-sphere))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; process-taskable               ;;
@@ -49527,7 +49521,7 @@
 ;; (define-extern traffic-manager-init-by-other function) ;; (function none :behavior traffic-manager)
 (define-extern traffic-start (function none))
 (define-extern traffic-kill (function none))
-;; (define-extern ctywide-entity-hack function) ;; (function none)
+(define-extern ctywide-entity-hack (function none))
 ;; (define-extern traffic-entity-hack function)
 ;; (define-extern riders-on function) ;; (function none)
 ;; (define-extern riders-off function) ;; (function none)
@@ -50297,59 +50291,56 @@
 ;; mech-part                      ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; (define-extern mech-spawn-thruster function) ;; (function mech-info vector vector float float none)
+(define-extern mech-spawn-thruster (function mech-info vector vector float float none))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mech                           ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#|
 (deftype mech (process-drawable)
-  ((extra-trans       vector :inline :offset-assert 208)
+  ((root              collide-shape-moving :override)
+   (extra-trans       vector :inline :offset-assert 208)
    (condition         int32          :offset-assert 224)
-   (shadow-backup     basic          :offset-assert 228)
-   (rider             uint64         :offset-assert 232)
+   (shadow-backup     shadow-geo     :offset-assert 228)
+   (rider             handle         :offset-assert 232)
    (shield-value      float          :offset-assert 240)
-   (nav-sphere-handle uint64         :offset-assert 248)
-   (probe-time        uint64         :offset-assert 256) ;; time-frame
+   (nav-sphere-handle handle         :offset-assert 248)
+   (probe-time        time-frame     :offset-assert 256) ;; time-frame
    )
   :method-count-assert 25
   :size-assert         #x108
   :flag-assert         #x1900900108
-  (:methods
-    (mech-method-24 () none) ;; 24 ;; (mech-method-24 (_type_) none)
-    )
   (:state-methods
-    wait-for-return ;; 23, old: (wait-for-return () _type_ :state)
-    pickup ;; 22, old: (pickup ((state mech)) _type_ :state)
-    idle ;; 21, old: (idle () _type_ :state)
-    wait-for-start ;; 20, old: (wait-for-start () _type_ :state)
+    wait-for-start ;; 20
+    idle ;; 21
+    (pickup (state mech)) ;; 22
+    wait-for-return ;; 23
+    )
+  (:methods
+    (mech-method-24 (_type_) none) ;; 24
     )
   )
-|#
 
-#|
 (deftype mech-target (process-drawable)
-  ()
+  ((parent (pointer target) :override)
+   )
   :method-count-assert 22
   :size-assert         #xc8
   :flag-assert         #x16005000c8
   (:state-methods
-    active ;; 21, old: (active () _type_ :state)
-    idle ;; 20, old: (idle () _type_ :state)
+    idle ;; 20
+    active ;; 21
     )
   )
-|#
 
-;; (define-extern mech-init function) ;; (function entity-actor matrix3 handle float none :behavior mech)
-;; (define-extern mech-target-init function) ;; (function vector quaternion entity-actor none :behavior mech)
-;; (define-extern mech-target-spawn function) ;; (function vector process quaternion entity-actor (pointer mech-target))
+(define-extern mech-init (function entity-actor matrix3 handle float object :behavior mech))
+(define-extern mech-target-init (function vector quaternion entity-actor object :behavior mech))
+(define-extern mech-target-spawn (function vector process quaternion entity-actor (pointer mech-target)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; target-mech                    ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#|
 (deftype mech-shield (shield-sphere)
   ()
   :method-count-assert 43
@@ -50359,43 +50350,42 @@
     shield-disabled ;; 29
     )
   )
-|#
 
-;; (define-extern mech-shield-init-by-other function)
-;; (define-extern *mech-stance-mods* surface) ;; surface
-;; (define-extern *mech-walk-mods* surface) ;; surface
-;; (define-extern *mech-jump-mods* surface) ;; surface
-;; (define-extern *mech-punch-mods* surface) ;; surface
-;; (define-extern *mech-pickup-mods* surface) ;; surface
-;; (define-extern *mech-carry-walk-mods* surface) ;; surface
-;; (define-extern *mech-carry-drag-mods* surface) ;; surface
-;; (define-extern *mech-carry-jump-mods* surface) ;; surface
-;; (define-extern target-mech-falling-anim-trans function) ;; (function none :behavior target)
-;; (define-extern target-mech-mech-effect function) ;; (function target none :behavior mech)
-;; (define-extern mech-on-ground? function) ;; (function symbol :behavior target)
-;; (define-extern target-mech-get-off? function) ;; (function symbol :behavior target)
-;; (define-extern target-mech-handler function) ;; (function process int symbol event-message-block object :behavior target)
-;; (define-extern target-mech-bonk-event-handler function) ;; (function process int symbol event-message-block object :behavior target)
-;; (define-extern mech-leg-ik-callback function) ;; (function joint-mod-ik matrix matrix vector object :behavior target)
-;; (define-extern mech-update-ik function) ;; (function none :behavior target)
-;; (define-extern target-mech-init function) ;; (function handle float symbol none :behavior target)
-;; (define-extern target-mech-exit function) ;; (function none :behavior target)
-;; (define-extern target-mech-effect function) ;; (function none :behavior target)
-;; (define-extern target-mech-add-thrust function) ;; (function none :behavior target)
-;; (define-extern target-mech-collision function) ;; (function none :behavior target)
-;; (define-extern target-mech-real-post function) ;; (function none :behavior target)
-;; (define-extern target-mech-post function) ;; (function none :behavior target)
+(define-extern mech-shield-init-by-other (function shield-sphere-spawn-params object :behavior mech-shield))
+(define-extern *mech-stance-mods* surface)
+(define-extern *mech-walk-mods* surface)
+(define-extern *mech-jump-mods* surface)
+(define-extern *mech-punch-mods* surface)
+(define-extern *mech-pickup-mods* surface)
+(define-extern *mech-carry-walk-mods* surface)
+(define-extern *mech-carry-drag-mods* surface)
+(define-extern *mech-carry-jump-mods* surface)
+(define-extern target-mech-falling-anim-trans (function none :behavior target))
+(define-extern target-mech-mech-effect (function target none :behavior mech))
+(define-extern mech-on-ground? (function symbol :behavior target))
+(define-extern target-mech-get-off? (function symbol :behavior target))
+(define-extern target-mech-handler (function process int symbol event-message-block object :behavior target))
+(define-extern target-mech-bonk-event-handler (function process int symbol event-message-block object :behavior target))
+(define-extern mech-leg-ik-callback (function joint-mod-ik matrix matrix vector object :behavior target))
+(define-extern mech-update-ik (function none :behavior target))
+(define-extern target-mech-init (function handle float symbol none :behavior target))
+(define-extern target-mech-exit (function none :behavior target))
+(define-extern target-mech-effect (function none :behavior target))
+(define-extern target-mech-add-thrust (function none :behavior target))
+(define-extern target-mech-collision (function none :behavior target))
+(define-extern target-mech-real-post (function none :behavior target))
+(define-extern target-mech-post (function none :behavior target))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mech-states                    ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; (define-extern *mech-exploder-params* joint-exploder-static-params) ;; joint-exploder-static-params
-;; (define-extern check-turn-on-shield function)
-;; (define-extern mech-can-throw? function)
-;; (define-extern target-mech-punch-pick function) ;; (function symbol int :behavior target)
-;; (define-extern target-mech-carry-update function) ;; (function none :behavior target)
-;; (define-extern target-mech-carry-post function) ;; (function none :behavior target)
+(define-extern *mech-exploder-params* joint-exploder-static-params)
+(define-extern check-turn-on-shield (function target object))
+(define-extern mech-can-throw? (function symbol :behavior target))
+(define-extern target-mech-punch-pick (function symbol int :behavior target))
+(define-extern target-mech-carry-update (function none :behavior target))
+(define-extern target-mech-carry-post (function none :behavior target))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; nstb-texture                   ;;
@@ -65674,17 +65664,16 @@
 ;; flut                           ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; (define-extern *flut-shadow-control* shadow-control)
-;; (define-extern *flut-color-table* array)
-;; (define-extern flut-color-from-index function)
-;; (define-extern flut-random-color-index function)
-;; (define-extern flut-init function)
+(define-extern *flut-shadow-control* shadow-control)
+(define-extern *flut-color-table* (array rgbaf))
+(define-extern flut-color-from-index (function int none :behavior flut))
+(define-extern flut-random-color-index (function int))
+(define-extern flut-init (function entity-actor transformq handle flut-flag symbol object :behavior flut))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; target-flut                    ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#|
 (deftype flut-bank (basic)
   ((jump-height-min        meters  :offset-assert 4)
    (jump-height-max        meters  :offset-assert 8)
@@ -65697,33 +65686,31 @@
   :size-assert         #x20
   :flag-assert         #x900000020
   )
-|#
 
-;; (define-extern *FLUT-bank* flut-bank)
-;; (define-extern *flut-walk-mods* surface)
-;; (define-extern *flut-run-racer-mods* surface)
-;; (define-extern *flut-run-wild-mods* surface)
-;; (define-extern *flut-jump-wild-mods* surface)
-;; (define-extern *flut-jump-mods* surface)
-;; (define-extern *flut-jump-racer-mods* surface)
-;; (define-extern *flut-double-jump-mods* surface)
-;; (define-extern *flut-double-jump-racer-mods* surface)
-;; (define-extern *flut-run-attack-mods* surface)
-;; (define-extern *flut-air-attack-mods* surface)
-;; (define-extern flut-leg-ik-callback function)
-;; (define-extern flut-update-ik function)
-;; (define-extern target-flut-get-off? function)
-;; (define-extern target-flut-post-post function)
-;; (define-extern target-flut-wild-post function)
-;; (define-extern target-flut-post function)
-;; (define-extern target-flut-falling-anim-trans function)
-;; (define-extern target-flut-hit-ground-anim function)
-;; (define-extern target-flut-standard-event-handler function)
-;; (define-extern target-flut-dangerous-event-handler function)
-;; (define-extern target-fldax-enter function)
-;; (define-extern target-fldax-exit function)
-;; (define-extern target-flut-run-wild object)
-;; (define-extern *flut-get-off-mods* object)
+(define-extern *FLUT-bank* flut-bank)
+(define-extern *flut-walk-mods* surface)
+(define-extern *flut-run-racer-mods* surface)
+(define-extern *flut-run-wild-mods* surface)
+(define-extern *flut-jump-wild-mods* surface)
+(define-extern *flut-jump-mods* surface)
+(define-extern *flut-jump-racer-mods* surface)
+(define-extern *flut-double-jump-mods* surface)
+(define-extern *flut-double-jump-racer-mods* surface)
+(define-extern *flut-run-attack-mods* surface)
+(define-extern *flut-air-attack-mods* surface)
+(define-extern flut-leg-ik-callback (function joint-mod-ik object object vector none))
+(define-extern flut-update-ik (function object :behavior target))
+(define-extern target-flut-get-off? (function symbol :behavior target))
+(define-extern target-flut-post-post (function none :behavior target))
+(define-extern target-flut-wild-post (function none :behavior target))
+(define-extern target-flut-post (function none :behavior target))
+(define-extern target-flut-falling-anim-trans (function object :behavior target))
+(define-extern target-flut-hit-ground-anim (function object :behavior target))
+(define-extern target-flut-standard-event-handler (function process int symbol event-message-block object :behavior target))
+(define-extern target-flut-dangerous-event-handler (function process int symbol event-message-block object :behavior target))
+(define-extern target-fldax-enter (function object :behavior target))
+(define-extern target-fldax-exit (function object :behavior target))
+(define-extern *flut-get-off-mods* surface)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ctymark-obs-h                  ;;
@@ -68275,10 +68262,9 @@
 ;; target-tube                    ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#|
 (deftype tube-info (basic)
-  ((entity           basic            :offset-assert 4)
-   (tube             uint64           :offset-assert 8) ;; handle
+  ((entity           entity           :offset-assert 4)
+   (tube             handle           :offset-assert 8) ;; handle
    (downhill         vector   :inline :offset-assert 16)
    (centertube       vector   :inline :offset-assert 32)
    (downtube         vector   :inline :offset-assert 48)
@@ -68287,7 +68273,7 @@
    (old-transv       vector   :inline :offset-assert 96)
    (mod-x            float            :offset-assert 112)
    (mod-y            float            :offset-assert 116)
-   (start-time       uint64           :offset-assert 120) ;; time-frame
+   (start-time       time-frame       :offset-assert 120) ;; time-frame
    (turn-anim-targ   float            :offset-assert 128)
    (turn-anim-frame  float            :offset-assert 132)
    (turn-anim-vel    float            :offset-assert 136)
@@ -68299,20 +68285,16 @@
   :size-assert         #x98
   :flag-assert         #x900000098
   )
-|#
 
-#|
 (deftype tube-bank (basic)
   ()
   :method-count-assert 9
   :size-assert         #x4
   :flag-assert         #x900000004
   )
-|#
 
-#|
 (deftype slide-control (process-drawable)
-  ((target uint64         :offset-assert 200) ;; handle
+  ((target handle         :offset-assert 200) ;; handle
    (pos    float          :offset-assert 208)
    (trans  vector :inline :offset-assert 224)
    (rot    vector :inline :offset-assert 240)
@@ -68322,27 +68304,23 @@
   :size-assert         #x110
   :flag-assert         #x1600900110
   (:state-methods
-    slide-control-ride ;; 21, old: (slide-control-ride () _type_ :state)
-    slide-control-watch ;; 20, old: (slide-control-watch () _type_ :state)
+    slide-control-watch ;; 20
+    slide-control-ride ;; 21
     )
   )
-|#
 
-;; (define-extern *tube-mods* surface) ;; surface
-;; (define-extern *tube-jump-mods* surface) ;; surface
-;; (define-extern *tube-hit-mods* surface) ;; surface
-;; (define-extern *tube-surface* surface) ;; surface
-;; (define-extern *TUBE-bank* tube-bank) ;; tube-bank
-;; (define-extern tube-sounds function) ;; (function sound-id :behavior target)
-;; (define-extern tube-thrust function) ;; (function float float none :behavior target)
-;; (define-extern target-tube-post function) ;; (function none :behavior target)
-;; (define-extern target-tube-turn-anim function) ;; (function none :behavior target)
-;; (define-extern target-tube-walk object)
-;; (define-extern target-tube-jump object) ;; (state float float target)
-;; (define-extern target-tube-hit object) ;; (state symbol attack-info target)
-;; (define-extern target-tube-death object) ;; (state symbol target)
-;; (define-extern distance-from-tangent function) ;; (function path-control float vector vector vector vector float)
-;; (define-extern find-target-point function) ;; (function vector float :behavior slide-control)
+(define-extern *tube-mods* surface)
+(define-extern *tube-jump-mods* surface)
+(define-extern *tube-hit-mods* surface)
+(define-extern *tube-surface* surface)
+(define-extern *TUBE-bank* tube-bank)
+(define-extern tube-sounds (function sound-id :behavior target))
+(define-extern tube-thrust (function float float none :behavior target))
+(define-extern target-tube-post (function none :behavior target))
+(define-extern target-tube-turn-anim (function none :behavior target))
+
+(define-extern distance-from-tangent (function path-control float vector vector vector vector float))
+(define-extern find-target-point (function vector float :behavior slide-control))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; precurc-part                   ;;

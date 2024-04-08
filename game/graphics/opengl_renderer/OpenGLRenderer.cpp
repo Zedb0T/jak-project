@@ -135,6 +135,7 @@ void OpenGLRenderer::init_bucket_renderers_jak3() {
 
     m_blit_displays =
         init_bucket_renderer<BlitDisplays>("blit", BucketCategory::OTHER, BucketId::BLIT_START);
+    init_bucket_renderer<VisDataHandler>("vis", BucketCategory::OTHER, BucketId::BUCKET_2);
 
     // 4
     init_bucket_renderer<TextureUploadHandler>("tex-lcom-sky-pre", BucketCategory::TEX,
@@ -286,8 +287,12 @@ void OpenGLRenderer::init_bucket_renderers_jak3() {
     init_bucket_renderer<TextureUploadHandler>("tex-hud-hud-alpha", BucketCategory::TEX,
                                                BucketId::TEX_HUD_HUD_ALPHA, texture_animator);
 
-    //    init_bucket_renderer<TextureUploadHandler>("tex-hud-hud-alpha", BucketCategory::TEX,
-    //                                               BucketId::TEX_HUD_HUD_ALPHA, texture_animator);
+    init_bucket_renderer<TextureUploadHandler>("tex-hud-hud-alpha", BucketCategory::TEX,
+                                               BucketId::TEX_HUD_HUD_ALPHA, texture_animator);
+    init_bucket_renderer<TextureUploadHandler>("tex-hud-pris2", BucketCategory::TEX,
+                                               BucketId::TEX_HUD_PRIS2, texture_animator);
+    init_bucket_renderer<ProgressRenderer>("hud-draw-hud-alpha", BucketCategory::OTHER,
+                                           BucketId::HUD_DRAW_HUD_ALPHA, 0x1000);
 
     // 583
     init_bucket_renderer<DirectRenderer>("debug", BucketCategory::OTHER, BucketId::DEBUG, 0x8000);
@@ -296,6 +301,10 @@ void OpenGLRenderer::init_bucket_renderers_jak3() {
                                          BucketId::DEBUG_NO_ZBUF2, 0x8000);
     init_bucket_renderer<DirectRenderer>("debug-menu", BucketCategory::OTHER, BucketId::DEBUG_MENU,
                                          0x8000);
+
+    auto eye_renderer = std::make_unique<EyeRenderer>("eyes", 0);
+    m_render_state.eye_renderer = eye_renderer.get();
+    m_jak3_eye_renderer = std::move(eye_renderer);
 
     // for any unset renderers, just set them to an EmptyBucketRenderer.
     for (size_t i = 0; i < m_bucket_renderers.size(); i++) {
@@ -307,6 +316,8 @@ void OpenGLRenderer::init_bucket_renderers_jak3() {
       m_bucket_renderers[i]->init_shaders(m_render_state.shaders);
       m_bucket_renderers[i]->init_textures(*m_render_state.texture_pool, GameVersion::Jak3);
     }
+    m_jak3_eye_renderer->init_shaders(m_render_state.shaders);
+    m_jak3_eye_renderer->init_textures(*m_render_state.texture_pool, GameVersion::Jak3);
   }
 }
 
@@ -1033,6 +1044,12 @@ void OpenGLRenderer::draw_renderer_selection_window() {
   if (m_jak2_eye_renderer) {
     if (ImGui::TreeNode("Eyes")) {
       m_jak2_eye_renderer->draw_debug_window();
+      ImGui::TreePop();
+    }
+  }
+  if (m_jak3_eye_renderer) {
+    if (ImGui::TreeNode("Eyes")) {
+      m_jak3_eye_renderer->draw_debug_window();
       ImGui::TreePop();
     }
   }

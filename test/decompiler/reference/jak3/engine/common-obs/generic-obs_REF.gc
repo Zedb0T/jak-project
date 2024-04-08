@@ -11,7 +11,7 @@
 (defskelgroup skel-spotlight spotlight spotlight-lod0-jg -1
               ((spotlight-lod0-mg (meters 999999)))
               :bounds (static-spherem 0 0 0 10)
-              :shadow-joint-index 5
+              :origin-joint-index 5
               )
 
 ;; definition for function entity-lookup-part-group
@@ -2482,7 +2482,7 @@
   :trans (behavior ()
     (when (-> self enable)
       (when (nonzero? (-> self path))
-        (path-control-method-9 (-> self path))
+        (debug-draw (-> self path))
         (get-point-at-percent-along-path! (-> self path) (-> self root trans) (-> self path-pos) 'interp)
         (displacement-between-points-at-percent-normalized! (-> self path) (-> self last-velocity) (-> self path-pos))
         (let ((f0-3 (+ (-> self path-pos) (* (-> self path-speed) (seconds-per-frame)))))

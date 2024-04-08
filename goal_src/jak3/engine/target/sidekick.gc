@@ -16,9 +16,9 @@
               :longest-edge (meters 1)
               :shadow daxter-shadow-mg
               :texture-level 10
+              :sort 1
               :origin-joint-index 6
               :shadow-joint-index 6
-              :light-index 1
               )
 
 (defskelgroup skel-sidekick-highres daxter-highres daxter-highres-lod0-jg -1
@@ -26,9 +26,9 @@
               :bounds (static-spherem 0 0 0 3)
               :longest-edge (meters 1)
               :shadow daxter-highres-shadow-mg
+              :sort 1
               :origin-joint-index 6
               :shadow-joint-index 6
-              :light-index 1
               )
 
 (define *sidekick-remap*
@@ -545,9 +545,9 @@
     ;; (if (logtest? (-> self skel status) (joint-control-status blend-shape blend-shape-valid))
     ;;     (merc-blend-shape self)
     ;;     )
-    ;; (if (logtest? (-> self skel status) (joint-control-status eye-anim-valid eye-anim))
-    ;;     (merc-eye-anim self)
-    ;;     )
+    (if (logtest? (-> self skel status) (joint-control-status eye-anim-valid eye-anim))
+        (merc-eye-anim self)
+        )
     (when (!= (not (-> *setting-control* user-current mirror)) (not (-> self mirror)))
       (cond
         ((-> self mirror)
