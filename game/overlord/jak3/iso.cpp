@@ -182,7 +182,7 @@ void InitISOFS() {
   StartThread(g_nPlayThreadID, 0);
   WaitMbx(g_nSyncMbx);
 
-  const ISOFileDef* vagdir_file = FindISOFile("VAGDIR.AYB");
+  const ISOFileDef* vagdir_file = FindISOFile("VAG/VAGDIR.AYB");
   if (vagdir_file) {
     int load_status = LoadISOFileToIOP(vagdir_file, &g_VagDir, sizeof(g_VagDir));
     if (load_status) {
