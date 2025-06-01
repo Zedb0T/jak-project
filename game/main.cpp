@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
   std::vector<std::string> game_args;
   CLI::App app{"OpenGOAL Game Runtime"};
   app.add_flag("--version", show_version, "Display the built revision");
-  app.add_option("-g,--game", game_name, "The game name: 'jak1' or 'jak2'");
+  app.add_option("-g,--game", game_name, "The game name: 'jak1', 'jak2' or 'jak3'");
   app.add_flag("-v,--verbose", verbose_logging, "Enable verbose logging on stdout");
   app.add_flag(
       "--port", port_number,
