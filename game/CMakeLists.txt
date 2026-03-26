@@ -27,6 +27,8 @@ set(RUNTIME_SOURCE
         external/discord_jak2.cpp
         external/discord_jak3.cpp
         external/discord.cpp
+        external/sm64.cpp
+        graphics/opengl_renderer/SM64MarioRenderer.cpp
         graphics/display.cpp
         graphics/gfx_test.cpp
         graphics/gfx.cpp
@@ -314,7 +316,7 @@ add_subdirectory(sound)
 # we build the runtime as a static library.
 add_library(runtime STATIC ${RUNTIME_SOURCE} "../third-party/glad/src/glad.c")
 
-target_link_libraries(runtime common fmt SDL3::SDL3 imgui discord-rpc sound stb_image libco libcurl)
+target_link_libraries(runtime common fmt SDL3::SDL3 imgui discord-rpc sm64 sound stb_image libco libcurl)
 if(WIN32)
     target_link_libraries(runtime mman)
 else()

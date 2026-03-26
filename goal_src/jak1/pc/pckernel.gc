@@ -255,6 +255,192 @@
       (pc-discord-rpc-update info)))
   (none))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; SM64 integration
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun sm64-pat-to-surface-type ((pat pat-surface))
+  "Convert OpenGOAL pat-surface event to SM64 surface type"
+  (case (-> pat event)
+    (((pat-event deadly) (pat-event melt)) (the int16 1))   ;; SURFACE_BURNING
+    (((pat-event endlessfall)) (the int16 10))               ;; SURFACE_DEATH_PLANE
+    (((pat-event burn)) (the int16 1))                       ;; SURFACE_BURNING
+    (else
+      (case (-> pat material)
+        (((pat-material ice)) (the int16 19))                ;; SURFACE_ICE
+        (else (the int16 0))))))                             ;; SURFACE_DEFAULT
+
+(defun sm64-pat-to-terrain-type ((pat pat-surface))
+  "Convert OpenGOAL pat-surface material to SM64 terrain type"
+  (case (-> pat material)
+    (((pat-material grass)) (the int16 0))      ;; TERRAIN_GRASS
+    (((pat-material stone)) (the int16 1))      ;; TERRAIN_STONE
+    (((pat-material ice)) (the int16 2))        ;; TERRAIN_SNOW
+    (((pat-material waterbottom)) (the int16 5)) ;; TERRAIN_WATER
+    (else (the int16 1))))                       ;; TERRAIN_STONE (default)
+
+(defun sm64-spawn-mario ()
+  "Spawn Mario at Jak's current position"
+  (when (and *sm64-control* *target*)
+    (let ((pos (target-pos 0)))
+      ;; First, load collision surfaces around spawn point so Mario has ground
+      (let ((block *sm64-control*))
+        (set! (-> block query-x) (-> pos x))
+        (set! (-> block query-y) (-> pos y))
+        (set! (-> block query-z) (-> pos z))
+        ;; Fill collide-cache
+        (let ((bbox (new 'stack-no-clear 'bounding-box))
+              (r (-> block query-radius)))
+          (set! (-> bbox min x) (- (-> pos x) r))
+          (set! (-> bbox min y) (- (-> pos y) r))
+          (set! (-> bbox min z) (- (-> pos z) r))
+          (set! (-> bbox min w) 0.0)
+          (set! (-> bbox max x) (+ (-> pos x) r))
+          (set! (-> bbox max y) (+ (-> pos y) r))
+          (set! (-> bbox max z) (+ (-> pos z) r))
+          (set! (-> bbox max w) 0.0)
+          (fill-using-bounding-box *collide-cache* bbox
+                                   (collide-kind background cak-1 cak-2 cak-3 ground-object wall-object)
+                                   (the process-drawable #f)
+                                   (new 'static 'pat-surface)))
+        ;; Convert collide-cache tris
+        (let ((num-tris (-> *collide-cache* num-tris))
+              (out-tris (-> block collide-tris)))
+          (set! (-> block num-collide-tris) num-tris)
+          (dotimes (i num-tris)
+            (let ((src (-> *collide-cache* tris i))
+                  (dst (-> out-tris i)))
+              (set! (-> dst v0-x) (-> src vertex 0 x))
+              (set! (-> dst v0-y) (-> src vertex 0 y))
+              (set! (-> dst v0-z) (-> src vertex 0 z))
+              (set! (-> dst v1-x) (-> src vertex 1 x))
+              (set! (-> dst v1-y) (-> src vertex 1 y))
+              (set! (-> dst v1-z) (-> src vertex 1 z))
+              (set! (-> dst v2-x) (-> src vertex 2 x))
+              (set! (-> dst v2-y) (-> src vertex 2 y))
+              (set! (-> dst v2-z) (-> src vertex 2 z))
+              (set! (-> dst surface-type) (sm64-pat-to-surface-type (-> src pat)))
+              (set! (-> dst terrain-type) (sm64-pat-to-terrain-type (-> src pat)))))
+          ;; Load surfaces into SM64 before creating Mario
+          (sm64-load-surfaces block)
+          (format #t "[SM64] Pre-loaded ~d collision tris~%" num-tris)))
+      ;; Now create Mario with surfaces already loaded
+      (set! (-> *sm64-control* mario-id)
+            (sm64-create-mario (-> pos x) (-> pos y) (-> pos z)))
+      (when (>= (-> *sm64-control* mario-id) 0)
+        (set! (-> *sm64-control* enabled?) #t)
+        (format #t "[SM64] Mario spawned at ~f ~f ~f~%"
+                (-> pos x) (-> pos y) (-> pos z)))))
+  (none))
+
+
+(defun sm64-despawn-mario ()
+  "Remove Mario"
+  (when (and *sm64-control* (>= (-> *sm64-control* mario-id) 0))
+    (sm64-delete-mario (-> *sm64-control* mario-id))
+    (set! (-> *sm64-control* mario-id) -1)
+    (set! (-> *sm64-control* enabled?) #f)
+    (format #t "[SM64] Mario despawned~%"))
+  (none))
+
+(defmethod update-sm64 ((obj pc-settings-jak1))
+  "Update SM64 Mario each frame - feed collision, inputs, and tick"
+
+  ;; Initialize on first call if ROM exists and not yet initialized
+  (when (and (-> obj sm64?) (not *sm64-control*))
+    ;; Allocate control block and collision buffer
+    (set! *sm64-collide-buffer* (the (inline-array sm64-collide-tri)
+                                     (malloc 'global (* (size-of sm64-collide-tri) 461))))
+    (set! *sm64-control* (the sm64-control-block (malloc 'global (size-of sm64-control-block))))
+    (set! (-> *sm64-control* enabled?) #f)
+    (set! (-> *sm64-control* mario-id) -1)
+    (set! (-> *sm64-control* collide-tris) *sm64-collide-buffer*)
+    (set! (-> *sm64-control* query-radius) (meters 40))
+    (set! (-> *sm64-control* num-collide-tris) 0)
+    ;; Init the library
+    (sm64-init "sm64.z64")
+    (format #t "[SM64] Control block initialized~%"))
+
+  ;; Per-frame update
+  (when (and *sm64-control* (-> *sm64-control* enabled?) (>= (-> *sm64-control* mario-id) 0))
+    (let ((block *sm64-control*))
+
+      ;; 1. Update query position to Mario's current position
+      ;;    (or Jak's position on the first frame)
+      (cond
+        ((and (= (-> block pos-x) 0.0) (= (-> block pos-y) 0.0) (= (-> block pos-z) 0.0) *target*)
+         ;; First frame - use Jak's position
+         (let ((pos (target-pos 0)))
+           (set! (-> block query-x) (-> pos x))
+           (set! (-> block query-y) (-> pos y))
+           (set! (-> block query-z) (-> pos z))))
+        (else
+         ;; Use Mario's current position from last tick
+         (set! (-> block query-x) (-> block pos-x))
+         (set! (-> block query-y) (-> block pos-y))
+         (set! (-> block query-z) (-> block pos-z))))
+
+      ;; 2. Fill collide-cache with nearby triangles (background + foreground)
+      (let ((bbox (new 'stack-no-clear 'bounding-box))
+            (r (-> block query-radius)))
+        (set! (-> bbox min x) (- (-> block query-x) r))
+        (set! (-> bbox min y) (- (-> block query-y) r))
+        (set! (-> bbox min z) (- (-> block query-z) r))
+        (set! (-> bbox min w) 0.0)
+        (set! (-> bbox max x) (+ (-> block query-x) r))
+        (set! (-> bbox max y) (+ (-> block query-y) r))
+        (set! (-> bbox max z) (+ (-> block query-z) r))
+        (set! (-> bbox max w) 0.0)
+        ;; Fill with background + foreground collision
+        (fill-using-bounding-box *collide-cache* bbox
+                                 (collide-kind background cak-1 cak-2 cak-3 ground-object wall-object)
+                                 (the process-drawable #f)
+                                 (new 'static 'pat-surface)))
+
+      ;; 3. Convert collide-cache triangles to sm64-collide-tri array
+      (let ((num-tris (-> *collide-cache* num-tris))
+            (out-tris (-> block collide-tris)))
+        (set! (-> block num-collide-tris) num-tris)
+        (dotimes (i num-tris)
+          (let ((src (-> *collide-cache* tris i))
+                (dst (-> out-tris i)))
+            ;; Copy triangle vertices (3 vectors, we need x y z from each)
+            (set! (-> dst v0-x) (-> src vertex 0 x))
+            (set! (-> dst v0-y) (-> src vertex 0 y))
+            (set! (-> dst v0-z) (-> src vertex 0 z))
+            (set! (-> dst v1-x) (-> src vertex 1 x))
+            (set! (-> dst v1-y) (-> src vertex 1 y))
+            (set! (-> dst v1-z) (-> src vertex 1 z))
+            (set! (-> dst v2-x) (-> src vertex 2 x))
+            (set! (-> dst v2-y) (-> src vertex 2 y))
+            (set! (-> dst v2-z) (-> src vertex 2 z))
+            ;; Convert pat-surface to SM64 types
+            (set! (-> dst surface-type) (sm64-pat-to-surface-type (-> src pat)))
+            (set! (-> dst terrain-type) (sm64-pat-to-terrain-type (-> src pat))))))
+
+      ;; 4. Map controller inputs
+      (let ((cpad (-> *cpad-list* cpads 0)))
+        ;; Analog stick: 0-255 with 128 center -> -1.0 to 1.0
+        (set! (-> block stick-x) (/ (- (the float (-> cpad leftx)) 128.0) 128.0))
+        (set! (-> block stick-y) (/ (- (the float (-> cpad lefty)) 128.0) -128.0)) ;; invert Y
+
+        ;; Camera look direction from the camera transform
+        (when (nonzero? *math-camera*)
+          (let ((cam-mat (-> *math-camera* camera-temp)))
+            ;; Forward vector of camera (Z axis)
+            (set! (-> block cam-look-x) (-> cam-mat vector 2 x))
+            (set! (-> block cam-look-z) (-> cam-mat vector 2 z))))
+
+        ;; Button mapping: X = jump (A), square = punch (B), L1 = crouch (Z)
+        (set! (-> block button-a) (if (cpad-hold? 0 x) #t #f))
+        (set! (-> block button-b) (if (cpad-hold? 0 square) #t #f))
+        (set! (-> block button-z) (if (cpad-hold? 0 l1) #t #f)))
+
+      ;; 5. Call C++ tick
+      (with-profiler "sm64-tick"
+        (sm64-tick block))))
+  (none))
+
 (defmethod update-speedrun ((obj pc-settings-jak1))
   "update speedrun module"
   (with-profiler "speedrun-update"

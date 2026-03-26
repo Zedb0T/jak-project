@@ -193,6 +193,7 @@
    (territory                        int16)
    (bingo                            pc-bingo-info :inline) ;; bingo integration. does nothing for now.
    (discord-rpc?                     symbol) ;; enable discord rich presence integration
+   (sm64?                            symbol) ;; enable SM64 Mario integration
    (speedrunner-mode?                symbol) ;; enable speedrunner mode
    (flava-hack                       int64)
    ;; settings originally stored in the game save
@@ -208,6 +209,7 @@
    (update-from-os (_type_) none)
    (update-to-os (_type_) none)
    (update-discord-rpc (_type_) none)
+   (update-sm64 (_type_) none)
    (update-speedrun (_type_) none)
    (update-video-hacks (_type_) object)
    (reset (_type_ symbol) int)
@@ -299,6 +301,7 @@
   (set! (-> obj aspect-custom-x) 4)
   (set! (-> obj aspect-custom-y) 3)
   (set! (-> obj discord-rpc?) #t)
+  (set! (-> obj sm64?) #f)
   (set! (-> obj speedrunner-mode?) #f)
   (set! (-> obj debug-font-scale) 1.0)
   (set! (-> obj debug-font-scale-auto?) #t)

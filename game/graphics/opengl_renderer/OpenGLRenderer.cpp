@@ -1345,6 +1345,12 @@ void OpenGLRenderer::dispatch_buckets_jak1(DmaFollower dma,
       auto p = prof.make_scoped_child("collision-draw");
       m_collide_renderer.render(&m_render_state, p);
     }
+
+    // SM64 Mario rendering
+    if (bucket_id == 31 - 1) {
+      auto p = prof.make_scoped_child("sm64-mario");
+      m_sm64_renderer.render(&m_render_state, p);
+    }
   }
 
   // TODO ending data.

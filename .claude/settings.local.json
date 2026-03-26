@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/ZedBo/OneDrive/Documents/GitHub/jak-project -type f \\\\\\(-name *pc* -o -name *kernel* -o -name *kdnet* \\\\\\))",
+      "Bash(grep -E \"\\\\.\\(h|cpp|gc\\)$\")",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"curl\\\\|libco\" /c/Users/ZedBo/OneDrive/Documents/GitHub/jak-project/game/*.cpp)",
+      "Bash(find /c/Users/ZedBo/OneDrive/Documents/GitHub/jak-project/goal_src -type f -name \"*.gc\" -exec grep -l \"pc-get-display-mode\\\\|pc-set-window-size\\\\|pc-discord\" {})",
+      "Bash(git clone:*)",
+      "Bash(find third-party/libsm64/src -name *.c -o -name *.h)",
+      "Bash(find third-party/libsm64/src -name *.c)",
+      "Bash(python3 import-mario-geo.py)",
+      "Bash(cmake --preset Release-windows-clang)",
+      "Bash(cmake --build out/build/Release --target sm64)",
+      "Read(//c/Users/ZedBo/scoop/apps/cmake/current/bin/**)",
+      "Read(//c/Users/ZedBo/scoop/**)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build out/build/Release --target sm64)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build out/build/Release --target runtime)",
+      "Bash(find out/build/Release -name goalc* -o -name gk* -o -name offline*)",
+      "Bash(find out/build/Release -maxdepth 3 -name *.exe)",
+      "Bash(find out/build/Release -name goalc* -type f)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build out/build/Release --target goalc)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build out/build/Release --target gk)",
+      "Bash(echo -e \"\\(mi\\)\\\\n\\(lt\\)\\\\n\\(set! \\(-> *pc-settings* sm64?\\) #t\\)\\\\n\\(sm64-spawn-mario\\)\")",
+      "Bash(timeout 120 out/build/Release/bin/goalc.exe --user-auto --game jak1)",
+      "Bash(timeout 300 out/build/Release/bin/goalc.exe --user-auto --game jak1)",
+      "Bash(tasklist)",
+      "Bash(taskkill //F //IM gk.exe)",
+      "Bash(taskkill //F //IM goalc.exe)",
+      "Bash(cmd.exe /c \"taskkill /F /IM gk.exe & taskkill /F /IM goalc.exe & echo DONE\")",
+      "Bash(cmd.exe /c \"tasklist | findstr /I gk.exe\")",
+      "Bash(echo \"EXIT:$?\")"
+    ]
+  }
+}

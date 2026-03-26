@@ -44,6 +44,8 @@
 #include "game/sce/sif_ee.h"
 #include "game/sce/stubs.h"
 
+#include "game/external/sm64.h"
+
 using namespace ee;
 
 namespace jak1 {
@@ -511,6 +513,48 @@ void update_discord_rpc(u32 discord_info) {
   }
 }
 
+// ============================================================================
+// SM64 Integration - GOAL-callable wrapper functions
+// ============================================================================
+
+void sm64_pc_init(u32 rom_path_str) {
+  if (!rom_path_str)
+    return;
+  auto path = Ptr<String>(rom_path_str).c()->data();
+  sm64_bridge::init(std::string(path));
+}
+
+void sm64_pc_shutdown() {
+  sm64_bridge::shutdown();
+}
+
+u64 sm64_pc_create_mario(u32 x_raw, u32 y_raw, u32 z_raw) {
+  // GOAL passes floats as u32 bit patterns
+  float x, y, z;
+  memcpy(&x, &x_raw, sizeof(float));
+  memcpy(&y, &y_raw, sizeof(float));
+  memcpy(&z, &z_raw, sizeof(float));
+  return sm64_bridge::create_mario(x, y, z);
+}
+
+void sm64_pc_delete_mario(u32 id) {
+  sm64_bridge::delete_mario((int)id);
+}
+
+void sm64_pc_load_surfaces(u32 control_block_ptr) {
+  if (!control_block_ptr)
+    return;
+  auto block = Ptr<SM64ControlBlock>(control_block_ptr).c();
+  sm64_bridge::load_surfaces(block);
+}
+
+void sm64_pc_tick(u32 control_block_ptr) {
+  if (!control_block_ptr)
+    return;
+  auto block = Ptr<SM64ControlBlock>(control_block_ptr).c();
+  sm64_bridge::tick(block);
+}
+
 void pc_set_levels(u32 l0, u32 l1) {
   if (!Gfx::GetCurrentRenderer()) {
     return;
@@ -548,6 +592,14 @@ void InitMachine_PCPort() {
   make_function_symbol_from_c("__pc-set-levels", (void*)pc_set_levels);
 
   make_function_symbol_from_c("pc-discord-rpc-update", (void*)update_discord_rpc);
+
+  // SM64 integration
+  make_function_symbol_from_c("sm64-init", (void*)sm64_pc_init);
+  make_function_symbol_from_c("sm64-shutdown", (void*)sm64_pc_shutdown);
+  make_function_symbol_from_c("sm64-create-mario", (void*)sm64_pc_create_mario);
+  make_function_symbol_from_c("sm64-delete-mario", (void*)sm64_pc_delete_mario);
+  make_function_symbol_from_c("sm64-load-surfaces", (void*)sm64_pc_load_surfaces);
+  make_function_symbol_from_c("sm64-tick", (void*)sm64_pc_tick);
 
   // setup string constants
   // TODO - these may be able to be moved into `init_common_pc_port_functions` but it's trickier

@@ -185,6 +185,8 @@
   (update-from-os obj)
   (update-to-os obj)
   (update-discord-rpc obj)
+  ;; update sm64 mario
+  (update-sm64 obj)
   ;; update auto-splitter info
   (update-speedrun obj)
   (when (not (-> obj use-vis?))
@@ -534,6 +536,7 @@
     (("use-vis?") (set! (-> obj use-vis?) (file-stream-read-symbol file)))
     (("hinttitles?") (set! (-> obj hinttitles?) (file-stream-read-symbol file)))
     (("discord-rpc?") (set! (-> obj discord-rpc?) (file-stream-read-symbol file)))
+    (("sm64?") (set! (-> obj sm64?) (file-stream-read-symbol file)))
     (("speedrunner-mode?") (set! (-> obj speedrunner-mode?) (file-stream-read-symbol file)))
     (("cutscene-skips?") (file-stream-read-symbol file)) ;; TODO remove
     (("first-camera-h-inverted?") (set! (-> obj first-camera-h-inverted?) (file-stream-read-symbol file)))
@@ -609,6 +612,7 @@
   (format file "  (force-envmap? ~A)~%" (-> obj force-envmap?))
   (format file "  (use-vis? ~A)~%" (-> obj use-vis?))
   (format file "  (discord-rpc? ~A)~%" (-> obj discord-rpc?))
+  (format file "  (sm64? ~A)~%" (-> obj sm64?))
   (format file "  (speedrunner-mode? ~A)~%" (-> obj speedrunner-mode?))
   (format file "  (first-camera-h-inverted? ~A)~%" (-> obj first-camera-h-inverted?))
   (format file "  (first-camera-v-inverted? ~A)~%" (-> obj first-camera-v-inverted?))

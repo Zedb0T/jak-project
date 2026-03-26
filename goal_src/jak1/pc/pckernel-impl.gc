@@ -100,6 +100,59 @@
    (flutflut?    symbol)
    (time-of-day  (pointer float))))
 
+;; SM64 integration types - must match C++ structs exactly
+(deftype sm64-collide-tri (structure)
+  ((v0-x         float)
+   (v0-y         float)
+   (v0-z         float)
+   (v1-x         float)
+   (v1-y         float)
+   (v1-z         float)
+   (v2-x         float)
+   (v2-y         float)
+   (v2-z         float)
+   (surface-type int16)
+   (terrain-type int16)))
+
+(deftype sm64-control-block (structure)
+  ((enabled?        symbol)
+   (mario-id        int32)
+   ;; inputs
+   (cam-look-x      float)
+   (cam-look-z      float)
+   (stick-x         float)
+   (stick-y         float)
+   (button-a        symbol)
+   (button-b        symbol)
+   (button-z        symbol)
+   ;; state output
+   (pos-x           float)
+   (pos-y           float)
+   (pos-z           float)
+   (vel-x           float)
+   (vel-y           float)
+   (vel-z           float)
+   (face-angle      float)
+   (health          int16)
+   (health-pad      int16)
+   (action          uint32)
+   (flags           uint32)
+   (anim-id         int32)
+   (anim-frame      int16)
+   (anim-frame-pad  int16)
+   ;; collision feed
+   (num-collide-tris int32)
+   (collide-tris    (inline-array sm64-collide-tri))
+   ;; query position
+   (query-x         float)
+   (query-y         float)
+   (query-z         float)
+   (query-radius    float)))
+
+;; SM64 globals
+(define *sm64-control* (the sm64-control-block #f))
+(define *sm64-collide-buffer* (the (inline-array sm64-collide-tri) #f))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; debug settings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
