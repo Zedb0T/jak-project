@@ -535,6 +535,7 @@
   "pelican.gc"
   "lurkerworm.gc"
   "lurkercrab.gc"
+  "remote-crab.gc"
   "lurkerpuppy.gc"
   "beach-rocks.gc"
   "seagull.gc"

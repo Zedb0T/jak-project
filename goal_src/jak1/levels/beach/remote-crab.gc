@@ -1,0 +1,148 @@
+;;-*-Lisp-*-
+(in-package goal)
+(bundles "BEA.DGO")
+(require "levels/beach/lurkercrab.gc")
+
+;; remote-crab: a player-controllable crab!
+;; inherits from lurkercrab, reads pad input, moves the crab,
+;; and teleports *target* (Jak) to follow so the camera tracks us.
+
+(deftype remote-crab (lurkercrab)
+  ((pad          cpad-info)
+   (move-speed   float)
+   (turn-speed   float))
+  (:states
+   remote-crab-playing))
+
+;; The main playing state - reads pad input and moves the crab
+(defstate remote-crab-playing (remote-crab)
+  :event
+    (behavior ((arg0 process) (arg1 int) (arg2 symbol) (arg3 event-message-block))
+      ;; ignore all damage/touch events - we're the player now!
+      (none))
+  :enter
+    (behavior ()
+      (set! (-> self move-speed) (meters 12))
+      (set! (-> self turn-speed) (degrees 360))
+      ;; hide jak
+      (when *target*
+        (logior! (-> *target* draw status) (draw-status hidden)))
+      (none))
+  :exit
+    (behavior ()
+      ;; restore jak visibility
+      (when *target*
+        (logclear! (-> *target* draw status) (draw-status hidden)))
+      (none))
+  :trans
+    (behavior ()
+      ;; keep hiding jak and his sidekick each frame
+      (when *target*
+        (logior! (-> *target* draw status) (draw-status hidden))
+        ;; also hide daxter (sidekick)
+        (let ((sk (handle->process (-> *target* sidekick))))
+          (when sk
+            (logior! (-> (the-as process-drawable sk) draw status) (draw-status hidden)))))
+      (none))
+  :code
+    (behavior ()
+      ;; start with walk animation
+      (ja-channel-push! 1 (seconds 0.075))
+      (loop
+        (let* ((pad (-> *cpad-list* cpads 0))
+               (speed (-> pad stick0-speed))
+               (dir (-> pad stick0-dir)))
+          (cond
+            ((< 0.1 speed)
+             ;; player is pushing the stick - move!
+             ;; compute world-space velocity from stick direction
+             ;; stick0-dir is the angle of the stick, speed is 0-1
+             (let ((move-x (* (-> self move-speed) speed (sin dir) (seconds-per-frame)))
+                   (move-z (* (-> self move-speed) speed (cos dir) (seconds-per-frame))))
+               ;; move the collide shape
+               (+! (-> self collide-info trans x) move-x)
+               (+! (-> self collide-info trans z) move-z))
+             ;; face the movement direction
+             (quaternion-set! (-> self collide-info quat)
+                              0.0
+                              (sin (* 0.5 dir))
+                              0.0
+                              (cos (* 0.5 dir)))
+             ;; walk animation
+             (ja :group! lurkercrab-walk-ja :num! (loop! (* 2.0 speed))))
+            (else
+             ;; idle - play idle animation
+             (ja :group! lurkercrab-idle-ja :num! (loop!)))))
+        ;; keep us on the ground
+        (integrate-for-enemy-with-move-to-ground! (-> self collide-info)
+                                                  (new 'static 'vector)
+                                                  (collide-kind background)
+                                                  8192.0
+                                                  #f
+                                                  #f
+                                                  #f)
+        ;; teleport jak to our position so the camera follows us
+        (when *target*
+          (let ((crab-pos (-> self collide-info trans)))
+            ;; move jak's control transform to our position, offset slightly below ground so he's hidden
+            (set! (-> *target* control trans x) (-> crab-pos x))
+            (set! (-> *target* control trans y) (-> crab-pos y))
+            (set! (-> *target* control trans z) (-> crab-pos z))))
+        (update-transforms! (-> self collide-info))
+        (ja-post)
+        (suspend)))
+  :post
+    (behavior ()
+      ;; post is handled in code (ja-post + update-transforms)
+      (none)))
+
+;; init method - set up the remote crab, called when the process spawns
+(defmethod init-from-entity! ((this remote-crab) (arg0 entity-actor))
+  ;; call parent init to set up collision, skeleton, nav-info etc.
+  (let ((s4-0 (new 'process 'collide-shape-moving this (collide-list-enum usually-hit-by-player))))
+    (set! (-> s4-0 dynam) (copy *standard-dynamics* 'process))
+    (set! (-> s4-0 reaction) default-collision-reaction)
+    (set! (-> s4-0 no-reaction) (the-as (function collide-shape-moving collide-shape-intersect vector vector none) nothing))
+    (let ((s3-0 (new 'process 'collide-shape-prim-group s4-0 (the-as uint 3) 0)))
+      (set! (-> s3-0 prim-core collide-as) (collide-kind enemy))
+      (set! (-> s3-0 collide-with) (collide-kind background))
+      (set! (-> s3-0 prim-core action) (collide-action solid))
+      (set-vector! (-> s3-0 local-sphere) 0.0 10240.0 0.0 12288.0)
+      (set-root-prim! s4-0 s3-0)
+      (let ((s2-0 (new 'process 'collide-shape-prim-sphere s4-0 (the-as uint 2))))
+        (set! (-> s2-0 prim-core collide-as) (collide-kind enemy))
+        (set! (-> s2-0 collide-with) (collide-kind background))
+        (set! (-> s2-0 prim-core action) (collide-action solid))
+        (set! (-> s2-0 prim-core offense) (collide-offense indestructible))
+        (set-vector! (-> s2-0 local-sphere) 0.0 4915.2 0.0 4096.0)
+        (append-prim s3-0 s2-0))
+      (let ((s2-1 (new 'process 'collide-shape-prim-sphere s4-0 (the-as uint 1))))
+        (set! (-> s2-1 prim-core collide-as) (collide-kind enemy))
+        (set! (-> s2-1 collide-with) (collide-kind background))
+        (set! (-> s2-1 prim-core offense) (collide-offense no-offense))
+        (set! (-> s2-1 transform-index) 16)
+        (set-vector! (-> s2-1 local-sphere) 0.0 0.0 0.0 1638.4)
+        (append-prim s3-0 s2-1))
+      (let ((s2-2 (new 'process 'collide-shape-prim-sphere s4-0 (the-as uint 1))))
+        (set! (-> s2-2 prim-core collide-as) (collide-kind enemy))
+        (set! (-> s2-2 collide-with) (collide-kind background))
+        (set! (-> s2-2 prim-core offense) (collide-offense no-offense))
+        (set! (-> s2-2 transform-index) 21)
+        (set-vector! (-> s2-2 local-sphere) 0.0 0.0 0.0 1638.4)
+        (append-prim s3-0 s2-2)))
+    (set! (-> s4-0 nav-radius) 4096.0)
+    (backup-collide-with-as s4-0)
+    (set! (-> this collide-info) s4-0))
+  (process-drawable-from-entity! this arg0)
+  (initialize-skeleton this *lurkercrab-sg* '())
+  (init-defaults! this *lurkercrab-nav-enemy-info*)
+  (set! (-> this orient) #t)
+  (logclear! (-> this nav-enemy-flags) (nav-enemy-flags navenmf5 navenmf6))
+  (set! (-> this target-speed) 0.0)
+  (set! (-> this momentum-speed) 0.0)
+  (set! (-> this pad) (-> *cpad-list* cpads 0))
+  (set! (-> this move-speed) (meters 12))
+  (set! (-> this turn-speed) (degrees 360))
+  ;; go straight to the playing state
+  (go remote-crab-playing)
+  (none))

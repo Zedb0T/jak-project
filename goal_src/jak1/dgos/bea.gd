@@ -13,6 +13,7 @@
   "pelican.o"
   "lurkerworm.o"
   "lurkercrab.o"
+  "remote-crab.o"
   "lurkerpuppy.o"
   "beach-rocks.o"
   "seagull.o"

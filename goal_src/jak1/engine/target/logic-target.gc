@@ -1179,6 +1179,9 @@
   (set-setting! 'allow-progress #f 0.0 0)
   (apply-settings *setting-control*)
   (if (not arg0) (set! arg0 (get-or-create-continue! *game-info*)))
+  ;; og:play-as-crab mod - force start at beach
+  (let ((beach-cp (get-continue-by-name *game-info* "beach-start")))
+    (when beach-cp (set! arg0 beach-cp)))
   (set-continue! *game-info* arg0)
   (stack-size-set! (-> self main-thread) 1024)
   (logior! (-> self mask) (process-mask target))
