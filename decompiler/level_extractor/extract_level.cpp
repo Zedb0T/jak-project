@@ -269,7 +269,8 @@ void extract_common(const ObjectFileDB& db,
                     const TextureDB& tex_db,
                     const std::string& dgo_name,
                     const fs::path& output_folder,
-                    const Config& config) {
+                    const Config& config,
+                   const std::vector<std::string>& all_dgo_names) {
   if (db.obj_files_by_dgo.count(dgo_name) == 0) {
     lg::warn("Skipping common extract for {} because the DGO was not part of the input", dgo_name);
     return;
@@ -289,7 +290,39 @@ void extract_common(const ObjectFileDB& db,
 
   add_all_textures_from_level(tfrag_level, "ARTSPOOL", tex_db);
   extract_art_groups_from_level(db, tex_db, {}, "ARTSPOOL", tfrag_level, art_group_data);
+  // copy in the lurkercrab art group so it's always available
+  // {
+  //   const std::string target_ag = "lurkercrab-ag";
+  //   bool found = false;
 
+  //   for (const std::string& lvl_dgo_name : all_dgo_names) {
+  //     if (found) break;  // already found it, no need to keep searching
+
+  //     lg::info("Looking for lurkercrab art group in {}", lvl_dgo_name);
+
+  //     if (db.obj_files_by_dgo.count(lvl_dgo_name)) {
+  //       const auto& files = db.obj_files_by_dgo.at(lvl_dgo_name);
+  //       for (const auto& file : files) {
+  //         if (file.name == target_ag) {
+  //           lg::info("Found lurkercrab art group in {}! Making it common.", lvl_dgo_name);
+
+  //           auto tex_remap = extract_tex_remap(db, lvl_dgo_name);
+  //           const auto& ag_file = db.lookup_record(file);
+
+  //           extract_merc(ag_file, tex_db, db.dts, tex_remap, tfrag_level, false, db.version());
+  //           extract_joint_group(ag_file, db.dts, db.version(), art_group_data);
+
+  //           found = true;
+  //           break;
+  //         }
+  //       }
+  //     }
+  //   }
+
+  //   if (!found) {
+  //     lg::warn("Could not find lurkercrab-ag.go in any level! It will not be available as a common art group.");
+  //   }
+  // }
   std::set<std::string> textures_we_have;
   std::set<u32> textures_we_have_id;
 
@@ -401,7 +434,7 @@ void extract_all_levels(const ObjectFileDB& db,
                         const std::string& common_name,
                         const Config& config,
                         const fs::path& output_path) {
-  extract_common(db, tex_db, common_name, output_path, config);
+  extract_common(db, tex_db, common_name, output_path, config, dgo_names);
   auto entities_dir = file_util::get_jak_project_dir() / "decompiler_out" /
                       game_version_names[config.game_version] / "entities";
   file_util::create_dir_if_needed(entities_dir);

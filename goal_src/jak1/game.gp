@@ -535,7 +535,6 @@
   "pelican.gc"
   "lurkerworm.gc"
   "lurkercrab.gc"
-  "remote-crab.gc"
   "lurkerpuppy.gc"
   "beach-rocks.gc"
   "seagull.gc"
@@ -2103,6 +2102,9 @@
 (goal-src "pc/debug/pc-debug-common.gc" "pckernel-impl" "entity-h" "game-info-h" "level-h" "settings-h" "gsound-h" "target-util")
 (goal-src "pc/debug/pc-debug-methods.gc" "pc-debug-common")
 (goal-src "levels/test-zone/test-zone-obs.gc" "process-drawable")
+
+;; og:play-as-crab mod
+(goal-src "levels/beach/remote-crab.gc" "process-drawable" "cam-interface" "pad")
 
 (group-list "all-code"
   `(,@(reverse *all-gc*))
