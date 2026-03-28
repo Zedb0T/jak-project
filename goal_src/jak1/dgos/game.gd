@@ -346,6 +346,9 @@
   "ropebridge.o"
   "ticky.o"
   "hud-classes-pc.o" ;; added
+  "remote-enemy.o" ;; og:play-as-crab mod
   "remote-crab.o" ;; og:play-as-crab mod
+  "remote-aphid.o" ;; og:play-as-crab mod
   "lurkercrab-ag.go" ;; og:play-as-crab mod - crab art always loaded
+  "aphid-lurker-ag.go" ;; og:play-as-crab mod - aphid art always loaded
  ))

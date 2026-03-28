@@ -200,7 +200,9 @@
    (memcard-volume-sfx               float)
    (memcard-volume-music             float)
    (memcard-volume-dialog            float)
-   (memcard-vibration?               symbol))
+   (memcard-vibration?               symbol)
+   ;; og:play-as-crab mod
+   (remote-enemy-mode                symbol))  ;; 'target, 'crab, or 'aphid
   (:methods
    (new (symbol type) _type_)
    (initialize (_type_) _type_)
@@ -401,6 +403,7 @@
   (set! (-> obj subtitle-speaker?) 'auto)
   (reset-camera obj call-handlers)
   (set! (-> obj territory) -1) ;; auto
+  (set! (-> obj remote-enemy-mode) 'crab) ;; og:play-as-crab mod default
   0)
 
 (defmethod reset-camera ((obj pc-settings) (call-handlers symbol))

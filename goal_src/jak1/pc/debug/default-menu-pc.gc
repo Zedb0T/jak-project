@@ -473,6 +473,14 @@
       (cheats-sound-play (logtest? (-> *pc-settings* cheats) cheat)))
     (logtest? (-> *pc-settings* cheats) cheat)))
 
+;; og:play-as-crab mod - remote enemy mode picker
+(defun dm-remote-enemy-mode ((mode symbol) (msg debug-menu-msg))
+  (when (= msg (debug-menu-msg press))
+    (set! (-> *pc-settings* remote-enemy-mode) mode)
+    ;; remote-enemy-set-mode checks *remote-enemy-mode* internally, so call it BEFORE updating the global
+    (remote-enemy-set-mode mode))
+  (= *remote-enemy-mode* mode))
+
 (when (-> *debug-menu-context* root-menu)
   (debug-menu-append-item (-> *debug-menu-context* root-menu) (debug-menu-make-load-menu *debug-menu-context*))
   (debug-menu-append-item (-> *debug-menu-context* root-menu) (debug-menu-make-part-menu *debug-menu-context*))
@@ -670,6 +678,10 @@
                                                                (flag "Extra hud elements" #f ,(dm-lambda-boolean-flag (-> *pc-settings* extra-hud?)))
                                                                (flag "Music fadein" #f ,(dm-lambda-boolean-flag (-> *pc-settings* music-fadein?)))
                                                                (flag "Music fadeout" #f ,(dm-lambda-boolean-flag (-> *pc-settings* music-fadeout?)))
+                                                               (menu "Play As"
+                                                                     (flag "Jak (normal)" target dm-remote-enemy-mode)
+                                                                     (flag "Crab" crab dm-remote-enemy-mode)
+                                                                     (flag "Aphid" aphid dm-remote-enemy-mode))
                                                                (function "Reset" #f ,(lambda () (reset *pc-settings* #t)))
                                                                (function "Save" #f ,(lambda () (commit-to-file *pc-settings*)))
                                                                (function "Load" #f ,(lambda () (load-settings *pc-settings*))))))

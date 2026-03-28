@@ -1,0 +1,49 @@
+;;-*-Lisp-*-
+(in-package goal)
+(bundles "GAME.CGO")
+(require "levels/beach/remote-enemy.gc")
+
+;; remote-aphid: player-controllable aphid extending remote-enemy
+
+(defskelgroup *remote-aphid-sg*
+  aphid-lurker
+  aphid-lurker-lod0-jg
+  aphid-lurker-idle-ja
+  ((aphid-lurker-lod0-mg (meters 999999)))
+  :bounds (static-spherem 0 2 0 2))
+
+(deftype remote-aphid (remote-enemy)
+  ())
+
+(defbehavior remote-aphid-init-by-pos remote-aphid ((arg0 vector))
+  (remote-enemy-setup-collision self)
+  ;; set position and orientation
+  (set! (-> self collide-info trans quad) (-> arg0 quad))
+  (quaternion-identity! (-> self collide-info quat))
+  (vector-identity! (-> self collide-info scale))
+  ;; skeleton and animation
+  (initialize-skeleton self *remote-aphid-sg* '())
+  (set! (-> self draw lod-set max-lod) 0)
+  ;; align control
+  (set! (-> self align) (new 'process 'align-control self))
+  ;; set anim references for the base class
+  ;; aphid-lurker anims: 3=idle, 4=walk, 5=walk-deadly, 6=spike-out
+  (set! (-> self walk-anim) (the-as art-joint-anim (-> self draw art-group data 4)))  ;; aphid-lurker-walk-ja
+  (set! (-> self idle-anim) (the-as art-joint-anim (-> self draw art-group data 3)))  ;; aphid-lurker-idle-ja
+  (set! (-> self shell-anim) (the-as art-joint-anim (-> self draw art-group data 5))) ;; aphid-lurker-walk-deadly-ja (spikes out!)
+  (set! (-> self shell-frame) 0.0)
+  ;; fields
+  (set! (-> self pad) (-> *cpad-list* cpads 0))
+  (set! (-> self move-speed) (meters 10))
+  (set! (-> self turn-speed) (degrees 360))
+  (set! (-> self fall-speed) 0.0)
+  (go remote-enemy-playing)
+  (none))
+
+;; Register spawn function with the remote-enemy system
+(set! *remote-enemy-spawn-aphid*
+  (lambda ((pos vector))
+    (set! *remote-enemy-process*
+          (the-as (pointer remote-enemy)
+                  (process-spawn remote-aphid :init remote-aphid-init-by-pos pos :from *default-dead-pool* :to *active-pool*)))
+    (none)))

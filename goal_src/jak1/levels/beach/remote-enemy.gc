@@ -1,0 +1,266 @@
+;;-*-Lisp-*-
+(in-package goal)
+(bundles "GAME.CGO")
+(require "engine/game/game-h.gc")
+(require "engine/camera/cam-interface.gc")
+(require "engine/ps2/pad.gc")
+(require "engine/collide/collide-shape-h.gc")
+(require "engine/anim/aligner-h.gc")
+(require "engine/data/art-h.gc")
+
+;; remote-enemy: base type for player-controllable enemies.
+;; Extends process-drawable directly so it works in ALL levels.
+
+;; Spawn function pointers - set by child type files when they load
+(define *remote-enemy-spawn-crab* (the-as (function vector none) #f))
+(define *remote-enemy-spawn-aphid* (the-as (function vector none) #f))
+
+;; PC setting: which remote enemy to use ('target = normal jak, 'crab, 'aphid)
+(define *remote-enemy-mode* 'crab)
+
+(deftype remote-enemy (process-drawable)
+  ((collide-info    collide-shape-moving :overlay-at root)
+   (pad             cpad-info)
+   (move-speed      float)
+   (turn-speed      float)
+   (fall-speed      float)
+   ;; animation references - set by child types
+   (walk-anim       art-joint-anim)
+   (idle-anim       art-joint-anim)
+   (shell-anim      art-joint-anim)  ;; optional "boost" pose
+   (shell-frame     float))           ;; frame to hold for shell pose
+  (:states
+   remote-enemy-playing
+   remote-enemy-waiting))
+
+;; The main playing state - reads pad input and moves the enemy
+(defstate remote-enemy-playing (remote-enemy)
+  :event
+    (behavior ((arg0 process) (arg1 int) (arg2 symbol) (arg3 event-message-block))
+      (none))
+  :enter
+    (behavior ()
+      (set! (-> self move-speed) (meters 12))
+      (set! (-> self turn-speed) (degrees 360))
+      (set! (-> self fall-speed) 0.0)
+      (when *target*
+        (logior! (-> *target* draw status) (draw-status hidden)))
+      (none))
+  :exit
+    (behavior ()
+      (when *target*
+        (logclear! (-> *target* draw status) (draw-status hidden)))
+      (none))
+  :trans
+    (behavior ()
+      (when *target*
+        (logior! (-> *target* draw status) (draw-status hidden))
+        (let ((sk (handle->process (-> *target* sidekick))))
+          (when sk
+            (logior! (-> (the-as process-drawable sk) draw status) (draw-status hidden)))))
+      (none))
+  :code
+    (behavior ()
+      (ja-channel-push! 1 (seconds 0.075))
+      (loop
+        ;; if target is dead or being teleported to a new continue point, pause
+        (when (or (not *target*)
+                  (and *target* (= (-> *target* next-state name) 'target-continue)))
+          (go remote-enemy-waiting))
+        (let* ((pad (-> *cpad-list* cpads 0))
+               (speed (-> pad stick0-speed))
+               (stick-dir (-> pad stick0-dir))
+               (cam-angle (camera-angle))
+               (dir (+ stick-dir cam-angle))
+               ;; L1 = boost (5x speed)
+               (shell-mode (logtest? (-> pad button0-abs 0) (pad-buttons l1)))
+               (cur-speed (if shell-mode (* (-> self move-speed) 5.0) (-> self move-speed)))
+               (on-ground (logtest? (-> self collide-info status) (cshape-moving-flags onground))))
+          ;; X button = jump (only when on ground)
+          (when (and on-ground
+                     (logtest? (-> pad button0-rel 0) (pad-buttons x)))
+            (set! (-> self fall-speed) (meters -20)))
+          (cond
+            ((< 0.1 speed)
+             (let ((move-x (* cur-speed speed (sin dir) (seconds-per-frame)))
+                   (move-z (* cur-speed speed (cos dir) (seconds-per-frame))))
+               (+! (-> self collide-info trans x) move-x)
+               (+! (-> self collide-info trans z) move-z))
+             (quaternion-set! (-> self collide-info quat)
+                              0.0
+                              (sin (* 0.5 dir))
+                              0.0
+                              (cos (* 0.5 dir)))
+             (if (and shell-mode (-> self shell-anim))
+               (ja :group! (-> self shell-anim) :num! (identity (-> self shell-frame)))
+               (ja :group! (-> self walk-anim) :num! (loop! (* 2.0 speed)))))
+            (else
+             (if (and shell-mode (-> self shell-anim))
+               (ja :group! (-> self shell-anim) :num! (identity (-> self shell-frame)))
+               (ja :group! (-> self walk-anim) :num! (identity 0.0))))))
+        ;; gravity
+        (+! (-> self fall-speed) (* (meters 60) (seconds-per-frame)))
+        (if (> (-> self fall-speed) (meters 160))
+          (set! (-> self fall-speed) (meters 160)))
+        (let ((vel (new 'stack-no-clear 'vector)))
+          (set-vector! vel 0.0 (- (-> self fall-speed)) 0.0 0.0)
+          (integrate-for-enemy-with-move-to-ground! (-> self collide-info)
+                                                    vel
+                                                    (collide-kind background)
+                                                    8192.0
+                                                    #f
+                                                    #f
+                                                    #f))
+        (when (logtest? (-> self collide-info status) (cshape-moving-flags onground))
+          (set! (-> self fall-speed) 0.0))
+        ;; bridge/platform support: use *target*'s collision as a proxy.
+        ;; target has full bridge collision. we only set target's X/Z to ours,
+        ;; and if target's Y is higher (standing on a bridge), we snap to it.
+        (when *target*
+          (let ((crab-pos (-> self collide-info trans))
+                (tgt-y (-> *target* control trans y)))
+            ;; set target X/Z to follow crab horizontally
+            (set! (-> *target* control trans x) (-> crab-pos x))
+            (set! (-> *target* control trans z) (-> crab-pos z))
+            ;; if target is on a bridge/platform significantly above crab, snap to it.
+            ;; threshold avoids small collision differences from killing jump/fall.
+            (if (> tgt-y (+ (-> crab-pos y) (meters 1)))
+              (begin
+                (set! (-> self collide-info trans y) tgt-y)
+                (set! (-> self fall-speed) 0.0))
+              ;; otherwise sync target Y to crab Y
+              (set! (-> *target* control trans y) (-> crab-pos y)))))
+        (update-transforms! (-> self collide-info))
+        (ja-post)
+        (suspend)))
+  :post
+    (behavior ()
+      (none)))
+
+;; Waiting state - entered when *target* is killed (e.g. debug menu continue change).
+(defstate remote-enemy-waiting (remote-enemy)
+  :code
+    (behavior ()
+      (logior! (-> self draw status) (draw-status hidden))
+      (format #t "remote-enemy: pausing for continue point change...~%")
+      (while (not *target*)
+        (suspend))
+      (while (and *target* (= (-> *target* next-state name) 'target-continue))
+        (suspend))
+      (let ((start-time (current-time)))
+        (while (< (- (current-time) start-time) (seconds 1))
+          (suspend)))
+      (when *target*
+        (set! (-> self collide-info trans quad) (-> *target* control trans quad)))
+      (logclear! (-> self draw status) (draw-status hidden))
+      (format #t "remote-enemy: resuming control at new location!~%")
+      (go remote-enemy-playing)))
+
+;; Generic collision setup for remote enemies
+(defun remote-enemy-setup-collision ((self remote-enemy))
+  (let ((s4-0 (new 'process 'collide-shape-moving self (collide-list-enum usually-hit-by-player))))
+    (set! (-> s4-0 dynam) (copy *standard-dynamics* 'process))
+    (set! (-> s4-0 reaction) default-collision-reaction)
+    (set! (-> s4-0 no-reaction) (the-as (function collide-shape-moving collide-shape-intersect vector vector none) nothing))
+    ;; collide-as includes target so bridges/platforms (which collide-with target) detect us
+    (let ((s3-0 (new 'process 'collide-shape-prim-group s4-0 (the-as uint 3) 0)))
+      (set! (-> s3-0 prim-core collide-as) (collide-kind enemy target))
+      (set! (-> s3-0 collide-with) (collide-kind background wall-object ground-object))
+      (set! (-> s3-0 prim-core action) (collide-action solid rider-target))
+      (set-vector! (-> s3-0 local-sphere) 0.0 10240.0 0.0 12288.0)
+      (set-root-prim! s4-0 s3-0)
+      (let ((s2-0 (new 'process 'collide-shape-prim-sphere s4-0 (the-as uint 2))))
+        (set! (-> s2-0 prim-core collide-as) (collide-kind enemy target))
+        (set! (-> s2-0 collide-with) (collide-kind background wall-object ground-object))
+        (set! (-> s2-0 prim-core action) (collide-action solid rider-target))
+        (set! (-> s2-0 prim-core offense) (collide-offense indestructible))
+        (set-vector! (-> s2-0 local-sphere) 0.0 4915.2 0.0 4096.0)
+        (append-prim s3-0 s2-0))
+      (let ((s2-1 (new 'process 'collide-shape-prim-sphere s4-0 (the-as uint 1))))
+        (set! (-> s2-1 prim-core collide-as) (collide-kind enemy target))
+        (set! (-> s2-1 collide-with) (collide-kind background wall-object ground-object))
+        (set! (-> s2-1 prim-core offense) (collide-offense no-offense))
+        (set! (-> s2-1 prim-core action) (collide-action solid rider-target))
+        (set-vector! (-> s2-1 local-sphere) 0.0 0.0 0.0 1638.4)
+        (append-prim s3-0 s2-1)))
+    (set! (-> s4-0 nav-radius) 4096.0)
+    (backup-collide-with-as s4-0)
+    (set! (-> self collide-info) s4-0))
+  (none))
+
+;; Global state
+(define *remote-enemy-spawned* #f)
+(define *remote-enemy-process* (the-as (pointer remote-enemy) #f))
+
+;; Kill any existing remote enemy
+(defun remote-enemy-kill ()
+  (when *remote-enemy-spawned*
+    (when (and *remote-enemy-process*
+               (-> *remote-enemy-process* 0))
+      (deactivate (-> *remote-enemy-process* 0)))
+    (set! *remote-enemy-process* (the-as (pointer remote-enemy) #f))
+    (set! *remote-enemy-spawned* #f)
+    ;; restore jak visibility
+    (when *target*
+      (logclear! (-> *target* draw status) (draw-status hidden))
+      (let ((sk (handle->process (-> *target* sidekick))))
+        (when sk
+          (logclear! (-> (the-as process-drawable sk) draw status) (draw-status hidden)))))
+    (format #t "remote-enemy: killed~%"))
+  (none))
+
+;; Spawn the appropriate remote enemy based on *remote-enemy-mode*
+(defun remote-enemy-spawn ()
+  (when (not *remote-enemy-spawned*)
+    (when (not *target*)
+      (format #t "remote-enemy: no target, can't spawn~%")
+      (return 0))
+    (let ((pos (target-pos 0)))
+      (case *remote-enemy-mode*
+        (('crab)
+         (when *remote-enemy-spawn-crab*
+           (set! *remote-enemy-spawned* #t)
+           (*remote-enemy-spawn-crab* pos)
+           (format #t "~%========================================~%")
+           (format #t "  REMOTE CRAB SPAWNED! YOU ARE THE CRAB!~%")
+           (format #t "========================================~%")))
+        (('aphid)
+         (when *remote-enemy-spawn-aphid*
+           (set! *remote-enemy-spawned* #t)
+           (*remote-enemy-spawn-aphid* pos)
+           (format #t "~%========================================~%")
+           (format #t "  REMOTE APHID SPAWNED! YOU ARE THE BUG!~%")
+           (format #t "========================================~%")))
+        (('target)
+         (format #t "remote-enemy: target mode, playing as Jak~%")))))
+  (none))
+
+;; Switch mode: kill current, spawn new
+(defun remote-enemy-set-mode ((mode symbol))
+  (when (!= mode *remote-enemy-mode*)
+    (remote-enemy-kill)
+    (set! *remote-enemy-mode* mode)
+    ;; spawn after a short delay via process
+    (process-spawn-function process
+      (lambda ()
+        (let ((start-time (current-time)))
+          (while (< (- (current-time) start-time) (seconds 0.5))
+            (suspend)))
+        (remote-enemy-spawn)
+        (none))
+      :from *4k-dead-pool*
+      :to *active-pool*))
+  (none))
+
+;; Auto-spawn at game start
+(process-spawn-function process
+  (lambda ()
+    (while (not *target*)
+      (suspend))
+    (let ((start-time (current-time)))
+      (while (< (- (current-time) start-time) (seconds 2))
+        (suspend)))
+    (remote-enemy-spawn)
+    (none))
+  :from *4k-dead-pool*
+  :to *active-pool*)

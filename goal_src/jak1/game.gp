@@ -2098,13 +2098,15 @@
 (goal-src "pc/hud-classes-pc.gc" "pckernel" "hud" "battlecontroller" "generic-obs")
 (goal-src "pc/debug/anim-tester-x.gc" "pckernel" "gstring" "joint" "process-drawable" "art-h" "effect-control")
 (goal-src "pc/debug/entity-debug.gc" "debug" "main-h" "entity" "pckernel" "font")
-(goal-src "pc/debug/default-menu-pc.gc" "anim-tester-x" "part-tester" "entity-debug")
+;; og:play-as-crab mod - must be before default-menu-pc which references these symbols
+(goal-src "levels/beach/remote-enemy.gc" "process-drawable" "cam-interface" "pad")
+(goal-src "levels/beach/remote-crab.gc" "remote-enemy")
+(goal-src "levels/beach/remote-aphid.gc" "remote-enemy")
+
+(goal-src "pc/debug/default-menu-pc.gc" "anim-tester-x" "part-tester" "entity-debug" "remote-aphid")
 (goal-src "pc/debug/pc-debug-common.gc" "pckernel-impl" "entity-h" "game-info-h" "level-h" "settings-h" "gsound-h" "target-util")
 (goal-src "pc/debug/pc-debug-methods.gc" "pc-debug-common")
 (goal-src "levels/test-zone/test-zone-obs.gc" "process-drawable")
-
-;; og:play-as-crab mod
-(goal-src "levels/beach/remote-crab.gc" "process-drawable" "cam-interface" "pad")
 
 (group-list "all-code"
   `(,@(reverse *all-gc*))

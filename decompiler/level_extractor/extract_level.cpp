@@ -290,39 +290,43 @@ void extract_common(const ObjectFileDB& db,
 
   add_all_textures_from_level(tfrag_level, "ARTSPOOL", tex_db);
   extract_art_groups_from_level(db, tex_db, {}, "ARTSPOOL", tfrag_level, art_group_data);
-  // copy in the lurkercrab art group so it's always available
-  // {
-  //   const std::string target_ag = "lurkercrab-ag";
-  //   bool found = false;
+  // og:play-as-crab mod - copy enemy art groups into common so models are visible in all levels
+  {
+    struct ArtGroupSource {
+      std::string ag_name;
+      std::string dgo_name;
+    };
+    std::vector<ArtGroupSource> art_groups_to_add = {
+      {"lurkercrab-ag", "BEA.DGO"},
+      {"aphid-lurker-ag", "JUB.DGO"},
+    };
 
-  //   for (const std::string& lvl_dgo_name : all_dgo_names) {
-  //     if (found) break;  // already found it, no need to keep searching
+    for (const auto& entry : art_groups_to_add) {
+      bool found = false;
+      if (db.obj_files_by_dgo.count(entry.dgo_name)) {
+        add_all_textures_from_level(tfrag_level, entry.dgo_name, tex_db);
+        auto tex_remap = extract_tex_remap(db, entry.dgo_name);
 
-  //     lg::info("Looking for lurkercrab art group in {}", lvl_dgo_name);
-
-  //     if (db.obj_files_by_dgo.count(lvl_dgo_name)) {
-  //       const auto& files = db.obj_files_by_dgo.at(lvl_dgo_name);
-  //       for (const auto& file : files) {
-  //         if (file.name == target_ag) {
-  //           lg::info("Found lurkercrab art group in {}! Making it common.", lvl_dgo_name);
-
-  //           auto tex_remap = extract_tex_remap(db, lvl_dgo_name);
-  //           const auto& ag_file = db.lookup_record(file);
-
-  //           extract_merc(ag_file, tex_db, db.dts, tex_remap, tfrag_level, false, db.version());
-  //           extract_joint_group(ag_file, db.dts, db.version(), art_group_data);
-
-  //           found = true;
-  //           break;
-  //         }
-  //       }
-  //     }
-  //   }
-
-  //   if (!found) {
-  //     lg::warn("Could not find lurkercrab-ag.go in any level! It will not be available as a common art group.");
-  //   }
-  // }
+        const auto& files = db.obj_files_by_dgo.at(entry.dgo_name);
+        MercSwapInfo swapped_info;
+        for (const auto& file : files) {
+          if (file.name == entry.ag_name) {
+            lg::info("Found {} in {}! Adding to common.", entry.ag_name, entry.dgo_name);
+            const auto& ag_file = db.lookup_record(file);
+            extract_merc(ag_file, tex_db, db.dts, tex_remap, tfrag_level, false, db.version(),
+                         swapped_info);
+            extract_joint_group(ag_file, db.dts, db.version(), art_group_data);
+            found = true;
+            break;
+          }
+        }
+      }
+      if (!found) {
+        lg::warn("Could not find {} in {} - model won't be available in all levels.",
+                 entry.ag_name, entry.dgo_name);
+      }
+    }
+  }
   std::set<std::string> textures_we_have;
   std::set<u32> textures_we_have_id;
 
