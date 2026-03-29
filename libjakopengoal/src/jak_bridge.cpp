@@ -930,12 +930,14 @@ static void inject_camera_rotation() {
     cam_z = s_pad_state.current_inputs.cam_z;
   }
 
-  // Normalize the look direction to get cos/sin of camera yaw
+  // Normalize the look direction to get cos/sin of camera yaw.
+  // cam_x/cam_z point from camera toward target, but GOAL's inv-camera-rot
+  // is the inverse rotation, so we negate to get camera-facing direction.
   float len = sqrtf(cam_x * cam_x + cam_z * cam_z);
   if (len < 0.001f)
     return;
-  float cos_y = cam_z / len;
-  float sin_y = cam_x / len;
+  float cos_y = -cam_z / len;
+  float sin_y = -cam_x / len;
 
   auto mc_sym = jak1::intern_from_c("*math-camera*");
   if (!mc_sym.offset || mc_sym->value == 0 || mc_sym->value == s7.offset)
@@ -944,7 +946,8 @@ static void inject_camera_rotation() {
   u32 mc_ptr = mc_sym->value;
 
   // Write Y-rotation matrix to both inv-camera-rot and inv-camera-rot-smooth
-  for (int offset : {432, 496}) {
+  // math-camera is a basic type: all-types offsets 432 and 496, -4 for basic = 428 and 492
+  for (int offset : {428, 492}) {
     float* m = (float*)(g_ee_main_mem + mc_ptr + offset);
     m[0] = cos_y;   m[1] = 0.0f;  m[2] = sin_y;   m[3] = 0.0f;   // col 0 (right)
     m[4] = 0.0f;    m[5] = 1.0f;  m[6] = 0.0f;     m[7] = 0.0f;   // col 1 (up)
