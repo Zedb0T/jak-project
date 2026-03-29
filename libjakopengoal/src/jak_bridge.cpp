@@ -1026,6 +1026,11 @@ void bridge_tick() {
   extract_jak_state();
   read_bones_from_goal();
   extract_jak_mesh();
+
+  // Throttle the GOAL runtime — without display/vsync it runs too fast.
+  // ~16ms sleep per tick brings it from uncapped to roughly 60fps,
+  // which feels like ~50% speed since the game expects vsync-paced frames.
+  std::this_thread::sleep_for(std::chrono::milliseconds(16));
 }
 
 }  // namespace jak_bridge
