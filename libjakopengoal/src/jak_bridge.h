@@ -74,6 +74,20 @@ void inject_pad_inputs();
 /*  Jak state extraction                                                      */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/*  Bone debug data (for skeleton visualization)                              */
+/* -------------------------------------------------------------------------- */
+
+struct BoneDebugData {
+  std::mutex mutex;
+  float positions[256][3];     // world-space bone positions (render units)
+  int parent_indices[256];     // parent bone index (-1 = no parent)
+  int num_bones = 0;
+  bool valid = false;
+};
+
+BoneDebugData& get_bone_debug_data();
+
 struct JakInternalState {
   std::mutex mutex;
   JakState state;

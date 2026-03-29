@@ -229,7 +229,8 @@
       (set! (-> v1-60 bgcolor b) (the int (* 255.0 (-> gp-0 bg-b))))
       (set! (-> v1-60 pmode alp) (the int (* 255.0 (- 1.0 f0-39)))))
     ;; ??
-    (set! (-> *level* border?) (-> gp-0 border-mode))
+    (set! (-> gp-0 border-mode) #f)
+    (set! (-> *level* border?) #f)
     ;; common pool texture page mask
     (set! (-> *texture-pool* common-page-mask) (-> gp-0 common-page))
     (set! (-> *cpad-list* cpads 0 buzz) (-> gp-0 vibration))
