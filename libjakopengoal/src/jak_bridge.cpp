@@ -651,6 +651,10 @@ void process_commands() {
     return;
   }
 
+  // Render/SM64 units -> GOAL internal meters conversion
+  // GOAL extracts positions via METERS_TO_UNITS = 50/4096, so inverse is 4096/50
+  constexpr float UNITS_TO_METERS = 4096.0f / 50.0f;
+
   // Process one command per tick (GOAL will read and clear it)
   // If multiple commands queued, we process the first and re-queue the rest
   for (auto& cmd : cmds) {
@@ -661,9 +665,15 @@ void process_commands() {
     float* args = (float*)(g_ee_main_mem + cmd_args_sym->value);
     if (cmd_args_sym->value != 0 &&
         cmd_args_sym->value != s7.offset) {
-      args[0] = cmd.f[0];
-      args[1] = cmd.f[1];
-      args[2] = cmd.f[2];
+      // Position/velocity commands need unit conversion from render units to GOAL meters
+      bool is_position_cmd = (cmd.type == CommandType::SPAWN ||
+                              cmd.type == CommandType::SET_POSITION ||
+                              cmd.type == CommandType::SET_VELOCITY);
+      float scale = is_position_cmd ? UNITS_TO_METERS : 1.0f;
+
+      args[0] = cmd.f[0] * scale;
+      args[1] = cmd.f[1] * scale;
+      args[2] = cmd.f[2] * scale;
       args[3] = cmd.f[3];
       // Int args stored as floats for simplicity
       memcpy(&args[4], &cmd.i[0], sizeof(int32_t));
@@ -687,25 +697,25 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
   std::lock_guard<std::mutex> lock(s_collision_state.mutex);
 
   // The cache_addr points to a collide-cache structure in GOAL memory.
-  // Layout (from collide-cache-h.gc):
-  //   offset 0:   type tag (basic)
-  //   offset 4:   num-tris (int32)
-  //   offset 8:   num-prims (int32)
-  //   offset 12:  ignore-mask (pat-surface)
-  //   offset 16:  proc (process-drawable)
-  //   offset 20:  collide-box (bounding-box, 32 bytes)
-  //   offset 52:  collide-box4w (bounding-box4w, 32 bytes)
-  //   offset 84:  collide-with (collide-kind, 8 bytes)
-  //   offset 92:  pad to 96
-  //   offset 96:  prims array (100 * 48 bytes = 4800 bytes)
-  //   offset 4896: tris array (461 * 64 bytes = 29504 bytes)
+  // IMPORTANT: In GOAL, a basic pointer points PAST the type tag.
+  // So cache_addr + 0 is the FIRST user field (num-tris), not the type tag.
+  // Layout (offsets from the GOAL pointer, i.e. from cache_addr):
+  //   offset 0:   num-tris (int32)
+  //   offset 4:   num-prims (int32)
+  //   offset 8:   ignore-mask (pat-surface)
+  //   offset 12:  proc (process-drawable)
+  //   offset 28:  collide-box (bounding-box :inline, 32 bytes, 16-byte aligned)
+  //   offset 60:  collide-box4w (bounding-box4w :inline, 32 bytes)
+  //   offset 92:  collide-with (collide-kind, 8 bytes)
+  //   offset 108: prims array (100 * 48 bytes = 4800 bytes)  [mips2c verified]
+  //   offset 4908: tris array (461 * 64 bytes = 29504 bytes) [mips2c verified]
 
   // We write collision triangles directly into the cache's tri array
   // and set up a single background prim that references them.
 
   uint8_t* cache = g_ee_main_mem + (uint32_t)cache_addr;
 
-  int32_t* num_tris_ptr = (int32_t*)(cache + 4);
+  int32_t* num_tris_ptr = (int32_t*)(cache + 0);  // num-tris is at offset 0 from GOAL pointer
   int32_t existing_tris = *num_tris_ptr;
 
   // collide-cache-tri is 64 bytes:
@@ -718,8 +728,19 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
   //   offset 56: user32[0] (uint32)
   //   offset 60: user32[1] (uint32)
 
-  const int TRI_OFFSET = 4896;  // offset of tris array from cache base
+  // NOTE: mips2c code (method 30/puyp-mesh) uses offset 4908 from the GOAL object pointer.
+  // Since the GOAL pointer for a basic is past the type tag, the offset from cache_addr is:
+  // prims=104, 100*48=4800, 104+4800=4904.
+  // But mips2c code also operates on the GOAL pointer (past type tag), so 4908 is correct
+  // as an offset from cache_addr (which IS the GOAL pointer).
+  const int TRI_OFFSET = 4908;
   const int MAX_TRIS = 461;
+
+  // Surface vertices are stored in render/SM64 units.
+  // GOAL's internal coordinate system uses meters where:
+  //   METERS_TO_UNITS = 50.0 / 4096.0 (GOAL meters -> render units)
+  // So we need the inverse: render units -> GOAL meters
+  constexpr float UNITS_TO_METERS = 4096.0f / 50.0f;
 
   int tris_added = 0;
   auto& surfaces = s_collision_state.static_surfaces;
@@ -729,25 +750,25 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
     int tri_idx = existing_tris + tris_added;
     uint8_t* tri_base = cache + TRI_OFFSET + tri_idx * 64;
 
-    // Write vertex 0
+    // Write vertex 0 (converted from render units to GOAL meters)
     float* v0 = (float*)(tri_base + 0);
-    v0[0] = surf.vertices[0][0];
-    v0[1] = surf.vertices[0][1];
-    v0[2] = surf.vertices[0][2];
+    v0[0] = surf.vertices[0][0] * UNITS_TO_METERS;
+    v0[1] = surf.vertices[0][1] * UNITS_TO_METERS;
+    v0[2] = surf.vertices[0][2] * UNITS_TO_METERS;
     v0[3] = 1.0f;
 
     // Write vertex 1
     float* v1 = (float*)(tri_base + 16);
-    v1[0] = surf.vertices[1][0];
-    v1[1] = surf.vertices[1][1];
-    v1[2] = surf.vertices[1][2];
+    v1[0] = surf.vertices[1][0] * UNITS_TO_METERS;
+    v1[1] = surf.vertices[1][1] * UNITS_TO_METERS;
+    v1[2] = surf.vertices[1][2] * UNITS_TO_METERS;
     v1[3] = 1.0f;
 
     // Write vertex 2
     float* v2 = (float*)(tri_base + 32);
-    v2[0] = surf.vertices[2][0];
-    v2[1] = surf.vertices[2][1];
-    v2[2] = surf.vertices[2][2];
+    v2[0] = surf.vertices[2][0] * UNITS_TO_METERS;
+    v2[1] = surf.vertices[2][1] * UNITS_TO_METERS;
+    v2[2] = surf.vertices[2][2] * UNITS_TO_METERS;
     v2[3] = 1.0f;
 
     // Write pat-surface (material type encoded as GOAL pat-surface bitfield)
@@ -790,9 +811,9 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
         float wz = -sin_y * lx + cos_y * lz + obj.transform.position[2];
 
         float* v = (float*)(tri_base + vi * 16);
-        v[0] = wx;
-        v[1] = wy;
-        v[2] = wz;
+        v[0] = wx * UNITS_TO_METERS;
+        v[1] = wy * UNITS_TO_METERS;
+        v[2] = wz * UNITS_TO_METERS;
         v[3] = 1.0f;
       }
 
@@ -805,54 +826,16 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
     }
   }
 
-  // Update the tri count
+  // Update the tri count — GOAL will handle prim setup after this function returns
+  // (we cannot reliably set up the prim from C++ due to potential offset differences
+  //  between what the GOAL compiler uses and what all-types.gc declares)
   *num_tris_ptr = existing_tris + tris_added;
 
-  // Ensure there's at least one prim (background prim) if we added triangles
-  if (tris_added > 0) {
-    int32_t* num_prims_ptr = (int32_t*)(cache + 8);
-    if (*num_prims_ptr == 0) {
-      // Set up prim 0 as background prim
-      // collide-cache-prim is 48 bytes at offset 96 from cache base
-      const int PRIM_OFFSET = 96;
-      uint8_t* prim_base = cache + PRIM_OFFSET;
-
-      // prim-core: world-sphere (16 bytes), then collide-as, action, offense, prim-type
-      // We set a large bounding sphere and mark as solid background
-      float* sphere = (float*)prim_base;
-      sphere[0] = 0.0f;
-      sphere[1] = 0.0f;
-      sphere[2] = 0.0f;
-      sphere[3] = 1000000.0f;  // huge radius
-
-      // collide-as at offset 16 (8 bytes) - set background bit
-      uint64_t* collide_as = (uint64_t*)(prim_base + 16);
-      *collide_as = 1;  // collide-kind background
-
-      // action at offset 24 (4 bytes) - set solid
-      uint32_t* action = (uint32_t*)(prim_base + 24);
-      *action = 1;  // collide-action solid
-
-      // prim-type at offset 31 (1 byte) - 0+ means mesh
-      int8_t* prim_type = (int8_t*)(prim_base + 31);
-      *prim_type = 0;
-
-      // first-tri at offset 40 (uint16)
-      uint16_t* first_tri = (uint16_t*)(prim_base + 40);
-      *first_tri = (uint16_t)existing_tris;
-
-      // num-tris at offset 42 (uint16)
-      uint16_t* num_tris_field = (uint16_t*)(prim_base + 42);
-      *num_tris_field = (uint16_t)tris_added;
-
-      *num_prims_ptr = 1;
-    } else {
-      // Update existing prim's tri count
-      const int PRIM_OFFSET = 96;
-      uint8_t* prim_base = cache + PRIM_OFFSET;
-      uint16_t* num_tris_field = (uint16_t*)(prim_base + 42);
-      *num_tris_field = (uint16_t)(existing_tris + tris_added);
-    }
+  static int fill_call_count = 0;
+  fill_call_count++;
+  if (fill_call_count <= 5 || (fill_call_count % 300 == 0)) {
+    lg::info("[COLLIDE DBG] fill #{}: existing={} added={} total={}",
+             fill_call_count, existing_tris, tris_added, *num_tris_ptr);
   }
 
   return tris_added;

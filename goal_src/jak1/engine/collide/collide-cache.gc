@@ -12,6 +12,12 @@
 (require "engine/collide/collide-shape-h.gc")
 (require "engine/debug/debug.gc")
 
+;; External collision surface injection (libjakopengoal bridge)
+;; These symbols are set by C++ when the bridge is active.
+;; If not active, *lib-jak-enabled* is #f and the call is skipped.
+(define-extern *lib-jak-enabled* symbol)
+(define-extern lib-jak-fill-external-collide (function object int))
+
 ;; DECOMP BEGINS
 
 (defmethod debug-draw ((obj collide-cache))
@@ -151,6 +157,27 @@
           (set! (-> v1-55 0 ccache) obj)
           (set! (-> v1-55 0 prim-core world-sphere quad) (-> a1-17 prim-core world-sphere quad))
           (set! (-> v1-55 0 prim-core quad 1) (-> a1-17 prim-core quad 1))))))
+
+  ;; Inject external collision surfaces from libjakopengoal bridge (if active)
+  ;; C++ only writes tri data and updates num-tris.
+  ;; We handle the prim setup entirely on the GOAL side to avoid offset mismatches.
+  (when *lib-jak-enabled*
+    (let ((ext-added (lib-jak-fill-external-collide obj)))
+      (when (> ext-added 0)
+        (let ((total-tris (-> obj num-tris)))
+          (when (> total-tris 0)
+            (when (= (-> obj num-prims) 0)
+              ;; No prims yet (no BSP geometry) — set up background prim from scratch
+              (let ((v1-bg (-> obj prims))
+                    (a1-bg *collide-shape-prim-backgnd*))
+                (set! (-> v1-bg 0 prim) a1-bg)
+                (set! (-> obj num-prims) 1)
+                (set! (-> v1-bg 0 first-tri) (the-as uint 0))
+                (set! (-> v1-bg 0 ccache) obj)
+                (set! (-> v1-bg 0 prim-core world-sphere quad) (-> a1-bg prim-core world-sphere quad))
+                (set! (-> v1-bg 0 prim-core quad 1) (-> a1-bg prim-core quad 1))))
+            ;; Update tri count on prim 0 to cover all tris (BSP + external)
+            (set! (-> obj prims 0 num-tris) (the-as uint total-tris)))))))
   0
   (none))
 
