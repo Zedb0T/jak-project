@@ -1,0 +1,349 @@
+;;-*-Lisp-*-
+(in-package goal)
+
+#|
+  lib-jak-bridge.gc - GOAL-side bridge for libjakopengoal.
+
+  This file provides the GOAL runtime support for the libjakopengoal C library.
+  It enables external engines to interact with Jak by:
+    - Exporting Jak's state (position, velocity, health, animation) each frame
+    - Injecting external collision surfaces into the collide-cache
+    - Processing commands from the host engine (spawn, teleport, damage, etc.)
+    - Providing bone matrix data for CPU-side mesh skinning
+
+  The C++ side registers these symbols during bridge initialization:
+    *lib-jak-enabled*       - #t if the bridge is active
+    *lib-jak-state*         - pointer to state export structure
+    *lib-jak-mesh-data*     - pointer to mesh vertex data
+    *lib-jak-mesh-count*    - number of mesh vertices
+    *lib-jak-command*       - command pending flag (0 = none, 1 = pending)
+    *lib-jak-command-type*  - command type enum
+    *lib-jak-command-args*  - pointer to command float args
+
+  C++ functions registered as GOAL callables:
+    (lib-jak-fill-external-collide cache) -> int  ; fill collide-cache with external surfaces
+    (lib-jak-notify-target-ready) -> none          ; signal that target is initialized
+    (lib-jak-provide-bone-data ptr count) -> none  ; send bone matrices for CPU skinning
+|#
+
+;; Forward declarations for C++ bridge functions
+(define-extern lib-jak-fill-external-collide (function object int))
+(define-extern lib-jak-notify-target-ready (function none))
+(define-extern lib-jak-provide-bone-data (function pointer int none))
+
+;; Check if the bridge is enabled
+(define-extern *lib-jak-enabled* symbol)
+
+;; State export structure - flat layout matching C++ reader in jak_bridge.cpp
+;; All fields are 4 bytes (float or int32), packed sequentially.
+(deftype lib-jak-state (structure)
+  ((pos-x         float)
+   (pos-y         float)
+   (pos-z         float)
+   (vel-x         float)
+   (vel-y         float)
+   (vel-z         float)
+   (face-angle    float)
+   (forward-vel   float)
+   (hp            float)
+   (eco-type      int32)
+   (action-id     uint32)
+   (anim-id       int32)
+   (anim-frame    int32)   ;; stored as int32 for alignment, actually int16
+   (flags         uint32)
+   (orb-count     int32)
+   (fly-count     int32)
+   (cell-count    int32)
+   (on-ground     uint8)
+   (in-water      uint8)
+   )
+  )
+
+;; Command args structure
+(deftype lib-jak-command-args (structure)
+  ((f0   float)
+   (f1   float)
+   (f2   float)
+   (f3   float)
+   (i0   int32)
+   (i1   int32)
+   )
+  )
+
+;; Command type constants (must match jak_bridge.h CommandType enum)
+(defconstant LIB_JAK_CMD_SPAWN         0)
+(defconstant LIB_JAK_CMD_DELETE         1)
+(defconstant LIB_JAK_CMD_SET_POSITION   2)
+(defconstant LIB_JAK_CMD_SET_VELOCITY   3)
+(defconstant LIB_JAK_CMD_SET_ANGLE      4)
+(defconstant LIB_JAK_CMD_SET_ACTION     5)
+(defconstant LIB_JAK_CMD_SET_HEALTH     6)
+(defconstant LIB_JAK_CMD_TAKE_DAMAGE    7)
+(defconstant LIB_JAK_CMD_HEAL           8)
+(defconstant LIB_JAK_CMD_KILL           9)
+(defconstant LIB_JAK_CMD_GIVE_ECO       10)
+
+;; Allocate the state export structure globally
+(define *lib-jak-state-data* (new 'global 'lib-jak-state))
+
+;; Allocate command args buffer globally
+(define *lib-jak-command-args-data* (new 'global 'lib-jak-command-args))
+
+;; Externally-defined symbols (set by C++ bridge)
+(define-extern *lib-jak-command* int32)
+(define-extern *lib-jak-command-type* int32)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; State export
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun lib-jak-export-state ()
+  "Export Jak's current state to the shared structure for C++ to read.
+   Called once per frame from the game loop when the bridge is active."
+
+  (when (and *lib-jak-enabled* *target*)
+    (let ((state *lib-jak-state-data*))
+      ;; Position from target's root transform
+      (set! (-> state pos-x) (-> *target* root trans x))
+      (set! (-> state pos-y) (-> *target* root trans y))
+      (set! (-> state pos-z) (-> *target* root trans z))
+
+      ;; Velocity from control-info transv
+      (set! (-> state vel-x) (-> *target* control transv x))
+      (set! (-> state vel-y) (-> *target* control transv y))
+      (set! (-> state vel-z) (-> *target* control transv z))
+
+      ;; Facing angle (Y rotation in radians)
+      (set! (-> state face-angle) (y-angle (-> *target* control)))
+
+      ;; Forward velocity (compute from transv magnitude in xz)
+      (let ((vx (-> *target* control transv x))
+            (vz (-> *target* control transv z)))
+        (set! (-> state forward-vel) (sqrtf (+ (* vx vx) (* vz vz))))
+        )
+
+      ;; Health (normalized 0-1, Jak has 3 hit points base)
+      (let ((hits (-> *target* fact health)))
+        (set! (-> state hp) (/ hits 3.0))
+        )
+
+      ;; Eco type (-1 = none)
+      (set! (-> state eco-type) (the int (-> *target* fact eco-type)))
+
+      ;; Action/state mapping
+      ;; We map GOAL target states to our action enum
+      (set! (-> state action-id) (the uint 0))  ;; default idle
+      ;; TODO: map current target state to action enum properly
+
+      ;; Animation
+      (when (-> *target* skel)
+        (let ((root-art (-> *target* skel root-channel 0)))
+          (when root-art
+            (set! (-> state anim-frame) (the int (-> root-art frame-num)))
+            )
+          )
+        )
+
+      ;; Game progress
+      (when *game-info*
+        (set! (-> state orb-count) (the int (-> *game-info* money)))
+        (set! (-> state fly-count) (the int (-> *game-info* buzzer-total)))
+        (set! (-> state cell-count) (the int (-> *game-info* fuel)))
+        )
+
+      ;; Ground/water flags
+      (if (logtest? (-> *target* control status) (cshape-moving-flags onsurf))
+        (set! (-> state on-ground) (the uint8 1))
+        (set! (-> state on-ground) (the uint8 0))
+        )
+      (if (logtest? (-> *target* control status) (cshape-moving-flags on-water))
+        (set! (-> state in-water) (the uint8 1))
+        (set! (-> state in-water) (the uint8 0))
+        )
+      )
+
+    ;; C++ reads the *lib-jak-state-data* symbol value directly to access this data.
+    ;; No additional pointer update needed since *lib-jak-state-data* was allocated by (define ...).
+    )
+  (none)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Command processing
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun lib-jak-process-commands ()
+  "Process any pending commands from the host engine.
+   Called once per frame from the game loop."
+
+  (when (and *lib-jak-enabled*
+             (> *lib-jak-command* 0))
+    (let ((cmd-type *lib-jak-command-type*)
+          (args *lib-jak-command-args-data*))
+
+      (case cmd-type
+        ((LIB_JAK_CMD_SPAWN)
+         ;; Spawn/respawn Jak at position
+         (when *target*
+           (let ((pos (new 'stack-no-clear 'vector)))
+             (set-vector! pos (-> args f0) (-> args f1) (-> args f2) 1.0)
+             (move-to-point! (-> *target* control) pos)
+             (format #t "[lib-jak] Spawned Jak at ~f ~f ~f~%" (-> args f0) (-> args f1) (-> args f2))
+             )
+           )
+         )
+
+        ((LIB_JAK_CMD_SET_POSITION)
+         ;; Teleport Jak
+         (when *target*
+           (let ((pos (new 'stack-no-clear 'vector)))
+             (set-vector! pos (-> args f0) (-> args f1) (-> args f2) 1.0)
+             (move-to-point! (-> *target* control) pos)
+             )
+           )
+         )
+
+        ((LIB_JAK_CMD_SET_VELOCITY)
+         ;; Set Jak's velocity
+         (when *target*
+           (set! (-> *target* control transv x) (-> args f0))
+           (set! (-> *target* control transv y) (-> args f1))
+           (set! (-> *target* control transv z) (-> args f2))
+           )
+         )
+
+        ((LIB_JAK_CMD_SET_ANGLE)
+         ;; Set Jak's facing angle
+         (when *target*
+           (quaternion-axis-angle!
+             (-> *target* control quat)
+             0.0 1.0 0.0
+             (-> args f0))
+           )
+         )
+
+        ((LIB_JAK_CMD_TAKE_DAMAGE)
+         ;; Deal damage to Jak from a direction
+         (when *target*
+           (let ((attack (new 'stack-no-clear 'attack-info)))
+             (set! (-> attack attacker-velocity x) (- (-> args f0) (-> *target* root trans x)))
+             (set! (-> attack attacker-velocity y) (- (-> args f1) (-> *target* root trans y)))
+             (set! (-> attack attacker-velocity z) (- (-> args f2) (-> *target* root trans z)))
+             (send-event *target* 'attack #f attack)
+             )
+           )
+         )
+
+        ((LIB_JAK_CMD_HEAL)
+         ;; Heal Jak - directly adjust health
+         (when *target*
+           (let ((new-hp (+ (-> *target* fact health) (-> args f0))))
+             (if (> new-hp (-> *target* fact health-max))
+               (set! new-hp (-> *target* fact health-max))
+               )
+             (set! (-> *target* fact health) new-hp)
+             )
+           )
+         )
+
+        ((LIB_JAK_CMD_KILL)
+         ;; Kill Jak
+         (when *target*
+           (send-event *target* 'die)
+           )
+         )
+        )
+
+      ;; Clear the command
+      (set! *lib-jak-command* 0)
+      )
+    )
+  (none)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Collision bridge
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun lib-jak-fill-collide-cache ((cache collide-cache))
+  "Hook into the collide-cache fill process to inject external collision surfaces.
+   This is called after the normal background fill."
+
+  (when *lib-jak-enabled*
+    ;; Call C++ to fill the cache with external surfaces
+    (lib-jak-fill-external-collide cache)
+    )
+  (none)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Bone data export (for mesh skinning)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun lib-jak-export-bones ()
+  "Export Jak's current bone matrices for CPU-side mesh skinning.
+   Called after animation update."
+
+  (when (and *lib-jak-enabled* *target* (-> *target* skel))
+    ;; The skeleton's bone array contains the world-space bone matrices.
+    ;; Each bone has a transform matrix we can pass to C++.
+    (let ((skel (-> *target* skel))
+          (num-bones (-> *target* node-list length)))
+      (when (> num-bones 0)
+        ;; Pass the bone array pointer and count to C++
+        ;; The bone data is in skel->bones which is an inline-array of bone structures
+        (lib-jak-provide-bone-data
+          (the pointer (-> skel bones))
+          num-bones)
+        )
+      )
+    )
+  (none)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Main bridge tick (called per frame)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun lib-jak-bridge-tick ()
+  "Main per-frame update for the libjakopengoal bridge.
+   Should be called from the main game loop."
+
+  (when *lib-jak-enabled*
+    ;; Process commands from host engine
+    (lib-jak-process-commands)
+
+    ;; Export Jak's state
+    (lib-jak-export-state)
+
+    ;; Export bone data for mesh skinning
+    (lib-jak-export-bones)
+    )
+  (none)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Initialization
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun lib-jak-bridge-init ()
+  "Initialize the GOAL side of the bridge. Called during game startup."
+
+  (when *lib-jak-enabled*
+    (format #t "[lib-jak] GOAL bridge initializing...~%")
+
+    ;; The structures are already allocated by the (define ...) at load time.
+    ;; C++ reads *lib-jak-state-data* and *lib-jak-command-args-data* symbols
+    ;; directly to find the GOAL-allocated structures.
+
+    ;; Initialize command state
+    (set! *lib-jak-command* 0)
+    (set! *lib-jak-command-type* 0)
+
+    (format #t "[lib-jak] GOAL bridge initialized.~%")
+
+    ;; Notify C++ that we're ready
+    (lib-jak-notify-target-ready)
+    )
+  (none)
+  )

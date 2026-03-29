@@ -354,6 +354,17 @@ add_subdirectory(sound)
 # we build the runtime as a static library.
 add_library(runtime STATIC ${RUNTIME_SOURCE} "../third-party/glad/src/glad.c")
 
+# Allow runtime to include libjakopengoal bridge headers
+target_include_directories(runtime PRIVATE ${PROJECT_SOURCE_DIR})
+
+# When BUILD_LIBJAKOPENGOAL is ON, define the macro so runtime's bridge hooks compile in
+if(BUILD_LIBJAKOPENGOAL)
+    target_compile_definitions(runtime PRIVATE BUILD_LIBJAKOPENGOAL)
+    target_sources(runtime PRIVATE
+        ${PROJECT_SOURCE_DIR}/libjakopengoal/src/jak_bridge.cpp
+    )
+endif()
+
 target_link_libraries(runtime common fmt SDL3::SDL3 imgui discord-rpc sound stb_image libco libcurl)
 if(WIN32)
     target_link_libraries(runtime mman)

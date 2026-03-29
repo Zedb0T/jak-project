@@ -51,6 +51,7 @@ struct MasterConfig {
   u16 volume;            // todo           14 in jak 2, 12 in jak 1
 
   u16 disable_sound = 0;  // added. disables all sound code.
+  bool lib_jak_bridge = false;  // added. enables libjakopengoal bridge mode.
 };
 
 extern MasterConfig masterConfig;

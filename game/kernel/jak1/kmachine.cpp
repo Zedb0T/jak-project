@@ -44,6 +44,10 @@
 #include "game/sce/sif_ee.h"
 #include "game/sce/stubs.h"
 
+#ifdef BUILD_LIBJAKOPENGOAL
+#include "libjakopengoal/src/jak_bridge.h"
+#endif
+
 using namespace ee;
 
 namespace jak1 {
@@ -113,6 +117,14 @@ void InitParms(int argc, const char* const* argv) {
       Msg(6, "dkernel: no sound mode\n");
       masterConfig.disable_sound = true;
     }
+
+#ifdef BUILD_LIBJAKOPENGOAL
+    // libjakopengoal bridge mode - enables the embedded library bridge
+    if (arg == "-lib-jak") {
+      Msg(6, "dkernel: lib-jak bridge mode\n");
+      masterConfig.lib_jak_bridge = true;
+    }
+#endif
 
     // GOAL Settings
     // ----------------------------
@@ -354,6 +366,14 @@ int InitMachine() {
   if (goal_status < 0) {
     return goal_status;
   }
+
+#ifdef BUILD_LIBJAKOPENGOAL
+  // Initialize the libjakopengoal bridge if enabled
+  if (masterConfig.lib_jak_bridge) {
+    lg::info("InitLibJakBridge");
+    jak_bridge::initialize_bridge();
+  }
+#endif
 
   // TODO - better place to put this?
   // TODO - yes, see jak2's code!
