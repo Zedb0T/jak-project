@@ -351,8 +351,8 @@ JAK_LIB_FN void jak_tick(int32_t jak_id,
       if (geometry->normal && mesh.normals.size() >= num_verts * 3) {
         memcpy(geometry->normal, mesh.normals.data(), num_verts * 3 * sizeof(float));
       }
-      if (geometry->color && mesh.colors.size() >= num_verts * 4) {
-        memcpy(geometry->color, mesh.colors.data(), num_verts * 4 * sizeof(float));
+      if (geometry->color && mesh.colors.size() >= num_verts * 3) {
+        memcpy(geometry->color, mesh.colors.data(), num_verts * 3 * sizeof(float));
       }
       if (geometry->uv && mesh.uvs.size() >= num_verts * 2) {
         memcpy(geometry->uv, mesh.uvs.data(), num_verts * 2 * sizeof(float));

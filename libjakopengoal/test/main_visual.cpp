@@ -17,7 +17,26 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
+static LONG WINAPI crash_handler(EXCEPTION_POINTERS* ep) {
+    DWORD code = ep->ExceptionRecord->ExceptionCode;
+    void* addr = ep->ExceptionRecord->ExceptionAddress;
+    printf("\n[CRASH] Unhandled Exception! Code=0x%08lX Address=%p\n", code, addr);
+    fflush(stdout);
+    FILE* f = fopen("C:\\temp\\mj_crash.txt", "w");
+    if (f) {
+        fprintf(f, "Exception Code=0x%08lX Address=%p\n", code, addr);
+        fclose(f);
+    }
+    return EXCEPTION_EXECUTE_HANDLER;
+}
 #endif
+
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
+
 
 // SDL3 (from jak-project third-party)
 #include <SDL3/SDL.h>
@@ -31,6 +50,7 @@
 
 // libjakopengoal
 #include "libjakopengoal.h"
+#include "libjakopengoal/src/jak_bridge.h"  // for BoneDebugData
 
 /* -------------------------------------------------------------------------- */
 /*  Config                                                                     */
@@ -297,6 +317,109 @@ static void char_mesh_draw(CharMesh* cm) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Skeleton line mesh (for bone debug visualization)                          */
+/* -------------------------------------------------------------------------- */
+
+struct SkelMesh {
+    GLuint vao, vbo_pos, vbo_col;
+    int num_verts;  // 2 verts per line segment
+};
+
+static void skel_mesh_init(SkelMesh* sm, int max_bones) {
+    int max_verts = max_bones * 8;  // 2 verts per bone line + 6 verts for cross marker
+    glGenVertexArrays(1, &sm->vao);
+    glBindVertexArray(sm->vao);
+
+    glGenBuffers(1, &sm->vbo_pos);
+    glBindBuffer(GL_ARRAY_BUFFER, sm->vbo_pos);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3 * max_verts, NULL, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    glGenBuffers(1, &sm->vbo_col);
+    glBindBuffer(GL_ARRAY_BUFFER, sm->vbo_col);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3 * max_verts, NULL, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    /* Normals not really needed for lines but shader expects them — use attrib 1 from col VBO */
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+
+    glBindVertexArray(0);
+    sm->num_verts = 0;
+}
+
+static void skel_mesh_update(SkelMesh* sm, const jak_bridge::BoneDebugData& bones) {
+    /* Build line segments: bone -> parent, plus small cross markers at each joint */
+    float positions[256 * 8 * 3];  // bone->parent lines + 3 cross lines per bone
+    float colors[256 * 8 * 3];
+    int vi = 0;
+
+    float marker_size = 12.0f;
+
+    for (int i = 0; i < bones.num_bones && i < 256; i++) {
+        float bx = bones.positions[i][0];
+        float by = bones.positions[i][1];
+        float bz = bones.positions[i][2];
+
+        /* Skip bones at origin (likely unused) */
+        if (bx == 0.0f && by == 0.0f && bz == 0.0f) continue;
+
+        int pi = bones.parent_indices[i];
+        /* Color: gradient from green (root) to cyan (leaf) */
+        float t = (float)i / (float)(bones.num_bones > 1 ? bones.num_bones - 1 : 1);
+        float cr = 0.0f, cg = 1.0f, cb = t;
+
+        if (pi >= 0 && pi < bones.num_bones) {
+            float px = bones.positions[pi][0];
+            float py = bones.positions[pi][1];
+            float pz = bones.positions[pi][2];
+
+            /* Line from this bone to parent */
+            positions[vi*3+0]=bx; positions[vi*3+1]=by; positions[vi*3+2]=bz;
+            colors[vi*3+0]=cr; colors[vi*3+1]=cg; colors[vi*3+2]=cb; vi++;
+            positions[vi*3+0]=px; positions[vi*3+1]=py; positions[vi*3+2]=pz;
+            colors[vi*3+0]=cr; colors[vi*3+1]=cg; colors[vi*3+2]=cb; vi++;
+        }
+
+        /* Cross-hair marker at joint (3 lines = 6 verts) */
+        float mc_r = 1.0f, mc_g = 0.3f, mc_b = 0.3f;  /* red markers */
+        /* X axis */
+        positions[vi*3+0]=bx-marker_size; positions[vi*3+1]=by; positions[vi*3+2]=bz;
+        colors[vi*3+0]=mc_r; colors[vi*3+1]=mc_g; colors[vi*3+2]=mc_b; vi++;
+        positions[vi*3+0]=bx+marker_size; positions[vi*3+1]=by; positions[vi*3+2]=bz;
+        colors[vi*3+0]=mc_r; colors[vi*3+1]=mc_g; colors[vi*3+2]=mc_b; vi++;
+        /* Y axis */
+        positions[vi*3+0]=bx; positions[vi*3+1]=by-marker_size; positions[vi*3+2]=bz;
+        colors[vi*3+0]=mc_r; colors[vi*3+1]=mc_g; colors[vi*3+2]=mc_b; vi++;
+        positions[vi*3+0]=bx; positions[vi*3+1]=by+marker_size; positions[vi*3+2]=bz;
+        colors[vi*3+0]=mc_r; colors[vi*3+1]=mc_g; colors[vi*3+2]=mc_b; vi++;
+        /* Z axis */
+        positions[vi*3+0]=bx; positions[vi*3+1]=by; positions[vi*3+2]=bz-marker_size;
+        colors[vi*3+0]=mc_r; colors[vi*3+1]=mc_g; colors[vi*3+2]=mc_b; vi++;
+        positions[vi*3+0]=bx; positions[vi*3+1]=by; positions[vi*3+2]=bz+marker_size;
+        colors[vi*3+0]=mc_r; colors[vi*3+1]=mc_g; colors[vi*3+2]=mc_b; vi++;
+    }
+
+    /* Upload */
+    sm->num_verts = vi;
+    if (vi > 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, sm->vbo_pos);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 3 * vi, positions);
+        glBindBuffer(GL_ARRAY_BUFFER, sm->vbo_col);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 3 * vi, colors);
+    }
+}
+
+static void skel_mesh_draw(SkelMesh* sm) {
+    if (sm->num_verts <= 0) return;
+    glBindVertexArray(sm->vao);
+    glDrawArrays(GL_LINES, 0, sm->num_verts);
+    glBindVertexArray(0);
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Collision geometry (flat ground)                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -305,7 +428,7 @@ static void char_mesh_draw(CharMesh* cm) {
 #define GROUND_SIZE 5000
 #define GROUND_CX 0
 #define GROUND_CZ 500
-#define GROUND_Y 490
+#define GROUND_Y 42
 
 static struct SM64Surface sm64_ground[] = {
     {0, 0, 0, {{GROUND_CX - GROUND_SIZE, GROUND_Y, GROUND_CZ + GROUND_SIZE},
@@ -340,13 +463,106 @@ static float ground_colors[] = {
 /* -------------------------------------------------------------------------- */
 
 static void sm64_debug(const char* msg) { printf("[SM64] %s\n", msg); fflush(stdout); }
+
+/* -------------------------------------------------------------------------- */
+/*  SM64 worker thread — SM64 must init and tick on the same thread           */
+/* -------------------------------------------------------------------------- */
+
+struct SM64Worker {
+    // Shared state (protected by mutex)
+    std::mutex mtx;
+    std::condition_variable cv_request;  // main -> worker: "tick please"
+    std::condition_variable cv_done;     // worker -> main: "tick done"
+
+    // Init
+    std::atomic<bool> init_done{false};
+    int32_t mario_id = -1;
+
+    // Per-frame tick
+    bool tick_requested = false;
+    bool tick_done = false;
+    bool running = true;
+
+    // Input/output buffers (double-buffered: main writes input, worker reads input/writes output)
+    SM64MarioInputs inputs = {};
+    SM64MarioState  state  = {};
+    SM64MarioGeometryBuffers geo = {};
+
+    void thread_func(uint8_t* rom, uint8_t* tex,
+                     SM64Surface* ground, int ground_count,
+                     int cx, int cy, int cz) {
+        sm64_global_terminate();
+        sm64_global_init(rom, tex);
+        sm64_static_surfaces_load(ground, ground_count);
+        mario_id = sm64_mario_create(cx, cy + 500, cz);
+        if (mario_id < 0)
+            mario_id = sm64_mario_create(cx, cy, cz);
+        free(rom);
+        init_done.store(true);
+        printf("[SM64] Init complete on worker thread. Mario id=%d\n", mario_id);
+        fflush(stdout);
+
+        // Tick loop — wait for requests from main thread
+        while (true) {
+            std::unique_lock<std::mutex> lock(mtx);
+            cv_request.wait(lock, [this] { return tick_requested || !running; });
+            if (!running) break;
+            tick_requested = false;
+
+            // Do the tick (with lock released so main thread can continue)
+            SM64MarioInputs local_inputs = inputs;
+            lock.unlock();
+
+            if (mario_id >= 0) {
+                sm64_mario_tick(mario_id, &local_inputs, &state, &geo);
+            }
+
+            lock.lock();
+            tick_done = true;
+            lock.unlock();
+            cv_done.notify_one();
+        }
+    }
+
+    // Called from main thread — request a tick and wait for result
+    void request_tick(const SM64MarioInputs& in) {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            inputs = in;
+            tick_requested = true;
+            tick_done = false;
+        }
+        cv_request.notify_one();
+
+        // Wait for completion
+        std::unique_lock<std::mutex> lock(mtx);
+        cv_done.wait(lock, [this] { return tick_done; });
+    }
+
+    void stop() {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            running = false;
+        }
+        cv_request.notify_one();
+    }
+};
 static void jak_debug(const char* msg) { printf("[JAK] %s\n", msg); fflush(stdout); }
 
 /* -------------------------------------------------------------------------- */
 /*  Main                                                                       */
 /* -------------------------------------------------------------------------- */
 
+static FILE* g_log = NULL;
+#define LOG(...) do { printf(__VA_ARGS__); if (g_log) { fprintf(g_log, __VA_ARGS__); fflush(g_log); } } while(0)
+
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    SetUnhandledExceptionFilter(crash_handler);
+#endif
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    g_log = fopen("C:\\temp\\mj_log.txt", "w");
     const char* rom_path = "baserom.us.z64";
     const char* jak_data = NULL;
 
@@ -395,7 +611,7 @@ int main(int argc, char** argv) {
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     SDL_GLContext gl_ctx = SDL_GL_CreateContext(window);
     SDL_GL_MakeCurrent(window, gl_ctx);
-    SDL_GL_SetSwapInterval(1);
+    SDL_GL_SetSwapInterval(0);  /* No vsync — vsync blocks when window isn't visible */
 
     if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
         printf("Failed to load OpenGL\n");
@@ -421,75 +637,54 @@ int main(int argc, char** argv) {
     }
 
     /* ---- Init libsm64 ---- */
-    printf("[INIT] Registering SM64 debug print callback...\n");
-    fflush(stdout);
+    LOG("[INIT] sm64_register_debug_print...\n");
     sm64_register_debug_print_function(sm64_debug);
-
-    printf("[INIT] Allocating SM64 texture (%d x %d)...\n", SM64_TEXTURE_WIDTH, SM64_TEXTURE_HEIGHT);
-    fflush(stdout);
+    LOG("[INIT] Allocating SM64 texture...\n");
     uint8_t* sm64_tex = (uint8_t*)malloc(4 * SM64_TEXTURE_WIDTH * SM64_TEXTURE_HEIGHT);
-    if (!sm64_tex) { printf("ERROR: Failed to allocate SM64 texture\n"); return 1; }
+    if (!sm64_tex) { LOG("ERROR: Failed to allocate SM64 texture\n"); return 1; }
     memset(sm64_tex, 0, 4 * SM64_TEXTURE_WIDTH * SM64_TEXTURE_HEIGHT);
 
-    printf("[INIT] Calling sm64_global_terminate (pre-init reset)...\n");
-    fflush(stdout);
-    sm64_global_terminate();
-    printf("[INIT] Calling sm64_global_init (ROM size: %zu bytes)...\n", rom_size);
-    printf("[INIT] ROM first 4 bytes: %02X %02X %02X %02X\n", rom[0], rom[1], rom[2], rom[3]);
-    printf("[INIT] sm64_tex buffer at %p\n", (void*)sm64_tex);
-    fflush(stdout);
-    sm64_global_init(rom, sm64_tex);
-    printf("[INIT] sm64_global_init done\n");
-    fflush(stdout);
+    /* SM64 must init+tick on the SAME thread (it uses thread-local state internally) */
+    LOG("[INIT] Starting SM64 worker thread...\n");
+    SM64Worker sm64_worker;
+    sm64_worker.geo.position = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
+    sm64_worker.geo.normal   = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
+    sm64_worker.geo.color    = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
+    sm64_worker.geo.uv       = (float*)malloc(sizeof(float) * 6 * SM64_GEO_MAX_TRIANGLES);
+    sm64_worker.geo.numTrianglesUsed = 0;
 
-    printf("[INIT] Loading %d collision surfaces...\n", sm64_ground_count);
-    fflush(stdout);
-    sm64_static_surfaces_load(sm64_ground, sm64_ground_count);
-    printf("[INIT] Surfaces loaded\n");
-    fflush(stdout);
+    std::thread sm64_thread([&]() {
+        sm64_worker.thread_func(rom, sm64_tex, sm64_ground, sm64_ground_count,
+                                GROUND_CX, GROUND_Y, GROUND_CZ);
+    });
 
-    printf("[INIT] Creating Mario near village1 (%d, %d, %d)...\n", GROUND_CX, GROUND_Y + 500, GROUND_CZ);
-    fflush(stdout);
-    int32_t marioId = sm64_mario_create(GROUND_CX, GROUND_Y + 500, GROUND_CZ);
-    printf("[INIT] Mario spawned (id=%d)\n", marioId);
-    fflush(stdout);
-    if (marioId < 0) {
-        printf("WARNING: Mario creation failed. Retrying at ground center...\n");
-        fflush(stdout);
-        marioId = sm64_mario_create(GROUND_CX, GROUND_Y, GROUND_CZ);
-        printf("[INIT] Mario retry (id=%d)\n", marioId);
+    /* Pump events while SM64 inits so Windows doesn't kill us */
+    while (!sm64_worker.init_done.load()) {
+        SDL_PumpEvents();
+        SDL_Delay(16);
     }
-    free(rom);
+    int32_t marioId = sm64_worker.mario_id;
+    LOG("[INIT] SM64 init complete. Mario id=%d\n", marioId);
 
     /* ---- Init libjakopengoal ---- */
-    printf("[INIT] Registering Jak debug callback...\n");
-    fflush(stdout);
+    LOG("[INIT] jak_register_debug_print...\n");
     jak_register_debug_print(jak_debug);
-
-    printf("[INIT] Allocating Jak texture (%d x %d)...\n", JAK_TEXTURE_WIDTH, JAK_TEXTURE_HEIGHT);
-    fflush(stdout);
+    LOG("[INIT] Allocating Jak texture...\n");
     uint8_t* jak_tex = (uint8_t*)malloc(JAK_TEXTURE_WIDTH * JAK_TEXTURE_HEIGHT * 4);
-    if (!jak_tex) { printf("ERROR: Failed to allocate Jak texture\n"); return 1; }
+    if (!jak_tex) { LOG("ERROR: Failed to allocate Jak texture\n"); return 1; }
 
-    printf("[INIT] Calling jak_global_init (data: %s)...\n", jak_data);
-    fflush(stdout);
+    LOG("[INIT] jak_global_init...\n");
     int32_t jak_result = jak_global_init(jak_data, jak_tex);
-    printf("[INIT] jak_global_init returned %d\n", jak_result);
-    fflush(stdout);
-    if (jak_result < 0) {
-        printf("WARNING: Jak init failed (%d). Will run Mario only.\n", jak_result);
-    }
+    LOG("[INIT] Jak init: %s (code %d)\n", jak_result >= 0 ? "OK" : "FAILED", jak_result);
 
     /* ---- GL setup ---- */
-    printf("[INIT] Compiling shaders...\n"); fflush(stdout);
     GLuint prog = create_program(VERT_SRC, FRAG_SRC);
     GLint uMVP = glGetUniformLocation(prog, "uMVP");
-    printf("[INIT] Shaders compiled (program=%u, uMVP=%d)\n", prog, uMVP); fflush(stdout);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glClearColor(0.4f, 0.6f, 0.9f, 1.0f);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);  /* Dark background to spot Jak */
 
     /* Marker spheres (radius=50 units) */
     SphereMesh jak_sphere, mario_sphere;
@@ -505,16 +700,18 @@ int main(int argc, char** argv) {
     CharMesh mario_mesh;
     char_mesh_init(&mario_mesh, SM64_GEO_MAX_TRIANGLES);
 
-    SM64MarioGeometryBuffers mario_geo;
-    mario_geo.position = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
-    mario_geo.normal   = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
-    mario_geo.color    = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
-    mario_geo.uv       = (float*)malloc(sizeof(float) * 6 * SM64_GEO_MAX_TRIANGLES);
-    mario_geo.numTrianglesUsed = 0;
+    /* mario_geo/state/inputs are in sm64_worker — use references for convenience */
+    SM64MarioGeometryBuffers& mario_geo = sm64_worker.geo;
+    SM64MarioState& mario_state = sm64_worker.state;
+    SM64MarioInputs mario_inputs = {};
 
     /* Jak mesh */
     CharMesh jak_mesh;
     char_mesh_init(&jak_mesh, JAK_GEO_MAX_TRIANGLES);
+
+    /* Skeleton debug mesh */
+    SkelMesh jak_skel;
+    skel_mesh_init(&jak_skel, 256);
 
     JakGeometryBuffers jak_geo;
     jak_geo.position = (float*)calloc(JAK_GEO_MAX_TRIANGLES * 3 * 3, sizeof(float));
@@ -523,8 +720,6 @@ int main(int argc, char** argv) {
     jak_geo.uv       = (float*)calloc(JAK_GEO_MAX_TRIANGLES * 3 * 2, sizeof(float));
     jak_geo.num_triangles_used = 0;
 
-    SM64MarioInputs mario_inputs = {};
-    SM64MarioState  mario_state  = {};
     JakInputs       jak_inputs   = {};
     JakState        jak_state    = {};
 
@@ -538,15 +733,17 @@ int main(int argc, char** argv) {
     bool cam_follow_jak = false;  /* Tab toggles between Mario/Jak */
 
     /* ---- Main loop ---- */
-    printf("[INIT] Setup complete. Entering main loop...\n");
-    printf("Controls: Arrow keys = move, X = jump, C = attack, Shift = rotate camera, Tab = toggle Mario/Jak camera\n");
-    printf("Waiting for Jak runtime to boot (Mario is playable immediately)...\n\n");
-    fflush(stdout);
+    LOG("\n[INIT] Setup complete. Ground at (%d, %d, %d)\n", GROUND_CX, GROUND_Y, GROUND_CZ);
+    LOG("Controls: Stick/Arrows=move  A/X=jump  B/C=attack  RStick/Shift=camera  Tab=follow Jak\n\n");
+    LOG("[DEBUG] Entering main loop...\n");
     float tick_accum = 0.0f;
     uint64_t last_time = SDL_GetTicks();
     bool running = true;
+    int global_frame = 0;
 
     while (running) {
+        global_frame++;
+
         /* Events */
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
@@ -635,13 +832,14 @@ int main(int argc, char** argv) {
         while (tick_accum >= 1.0f/30.0f) {
             tick_accum -= 1.0f/30.0f;
 
-            if (marioId >= 0)
-                sm64_mario_tick(marioId, &mario_inputs, &mario_state, &mario_geo);
+            if (marioId >= 0) {
+                sm64_worker.request_tick(mario_inputs);
+            }
 
             /* Check if Jak is ready */
             if (!jak_ready && jak_result >= 0 && jak_is_ready()) {
                 jak_ready = true;
-                printf("Jak runtime ready!\n");
+                LOG("Jak runtime ready!\n");
 
                 /* Share collision with Jak */
                 JakSurface jak_surfs[2];
@@ -655,14 +853,18 @@ int main(int argc, char** argv) {
                 }
                 jak_static_surfaces_load(jak_surfs, 2);
 
-                /* Spawn Jak near Mario on the village1 ground */
                 jak_id = jak_create(GROUND_CX + 300.0f, GROUND_Y + 100.0f, GROUND_CZ);
-                printf("Jak spawned (id=%d) near test-zone\n\n", jak_id);
+                printf("[INIT] Jak spawned (id=%d)\n", jak_id);
             }
 
             /* Tick Jak (once per frame — engine runs at its own rate internally) */
             if (jak_ready && jak_id >= 0) {
                 jak_tick(jak_id, &jak_inputs, &jak_state, &jak_geo);
+                static bool logged_first_tick = false;
+                if (!logged_first_tick) {
+                    LOG("[DEBUG] jak_tick returned: num_triangles_used=%d\n", jak_geo.num_triangles_used);
+                    logged_first_tick = true;
+                }
             }
         }
 
@@ -672,11 +874,34 @@ int main(int argc, char** argv) {
                            mario_geo.color, mario_geo.numTrianglesUsed);
         }
         if (jak_geo.num_triangles_used > 0) {
+            static bool printed_tri = false;
+            if (!printed_tri) {
+                LOG("[JAK GEO] %d triangles, first tri:\n", jak_geo.num_triangles_used);
+                for (int vi = 0; vi < 3 && vi * 3 + 2 < jak_geo.num_triangles_used * 9; vi++) {
+                    LOG("  v%d: pos=(%.1f, %.1f, %.1f) col=(%.2f, %.2f, %.2f)\n",
+                           vi,
+                           jak_geo.position[vi*3+0], jak_geo.position[vi*3+1], jak_geo.position[vi*3+2],
+                           jak_geo.color[vi*3+0], jak_geo.color[vi*3+1], jak_geo.color[vi*3+2]);
+                }
+                /* Also print min/max bounds of all positions */
+                float minx=1e9,miny=1e9,minz=1e9,maxx=-1e9,maxy=-1e9,maxz=-1e9;
+                for (int i = 0; i < jak_geo.num_triangles_used * 3; i++) {
+                    float x=jak_geo.position[i*3], y=jak_geo.position[i*3+1], z=jak_geo.position[i*3+2];
+                    if(x<minx)minx=x; if(y<miny)miny=y; if(z<minz)minz=z;
+                    if(x>maxx)maxx=x; if(y>maxy)maxy=y; if(z>maxz)maxz=z;
+                }
+                LOG("[JAK GEO] bounds: min=(%.1f, %.1f, %.1f) max=(%.1f, %.1f, %.1f)\n",
+                       minx, miny, minz, maxx, maxy, maxz);
+                printed_tri = true;
+            }
             char_mesh_update(&jak_mesh, jak_geo.position, jak_geo.normal,
                            jak_geo.color, jak_geo.num_triangles_used);
         }
 
         /* ---- Render ---- */
+        /* Re-acquire GL context in case GOAL runtime stole it */
+        SDL_GL_MakeCurrent(window, gl_ctx);
+
         int w, h;
         SDL_GetWindowSize(window, &w, &h);
         glViewport(0, 0, w, h);
@@ -699,9 +924,33 @@ int main(int argc, char** argv) {
         /* Draw Mario */
         char_mesh_draw(&mario_mesh);
 
-        /* Draw Jak */
-        if (jak_geo.num_triangles_used > 0) {
-            char_mesh_draw(&jak_mesh);
+        /* Draw Jak skeleton (bone lines instead of triangle mesh for debug) */
+        {
+            auto& bone_data = jak_bridge::get_bone_debug_data();
+            std::lock_guard<std::mutex> block(bone_data.mutex);
+            if (bone_data.valid && bone_data.num_bones > 0) {
+                skel_mesh_update(&jak_skel, bone_data);
+                glDisable(GL_DEPTH_TEST);  /* Draw skeleton on top */
+                glLineWidth(3.0f);
+                skel_mesh_draw(&jak_skel);
+                glLineWidth(1.0f);
+                glEnable(GL_DEPTH_TEST);
+            }
+        }
+        {
+            static int jak_dbg = 0;
+            if (++jak_dbg % 120 == 1) {
+                auto& bone_data = jak_bridge::get_bone_debug_data();
+                std::lock_guard<std::mutex> block(bone_data.mutex);
+                printf("[JAK DBG] bones=%d valid=%d ready=%d id=%d",
+                       bone_data.num_bones, bone_data.valid?1:0, jak_ready?1:0, jak_id);
+                if (bone_data.valid && bone_data.num_bones > 3) {
+                    printf(" bone3=(%.1f,%.1f,%.1f)",
+                           bone_data.positions[3][0], bone_data.positions[3][1], bone_data.positions[3][2]);
+                }
+                printf("\n");
+                fflush(stdout);
+            }
         }
 
         /* Draw debug marker spheres at character positions */
@@ -751,18 +1000,25 @@ int main(int argc, char** argv) {
         }
 
         SDL_GL_SwapWindow(window);
+
+        /* Frame limiter — cap at ~60fps to avoid tight-looping and GL context contention */
+        SDL_Delay(1);
     }
 
     /* ---- Cleanup ---- */
     printf("Cleaning up...\n");
+
+    /* Stop SM64 worker thread (it will call sm64_mario_delete/terminate on its thread) */
+    sm64_worker.stop();
+    sm64_thread.join();
     if (marioId >= 0) sm64_mario_delete(marioId);
     sm64_global_terminate();
 
     if (jak_id >= 0) jak_delete(jak_id);
     if (jak_result >= 0) jak_global_terminate();
 
-    free(mario_geo.position); free(mario_geo.normal);
-    free(mario_geo.color); free(mario_geo.uv);
+    free(sm64_worker.geo.position); free(sm64_worker.geo.normal);
+    free(sm64_worker.geo.color); free(sm64_worker.geo.uv);
     free(jak_geo.position); free(jak_geo.normal);
     free(jak_geo.color); free(jak_geo.uv);
 

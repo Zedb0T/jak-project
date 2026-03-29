@@ -8,8 +8,12 @@
 #include <cmath>
 #include <cstring>
 
+#include "common/custom_data/Tfrag3Data.h"
 #include "common/log/log.h"
 #include "common/symbols.h"
+#include "common/util/FileUtil.h"
+#include "common/util/Serializer.h"
+#include "common/util/compress.h"
 #include "game/kernel/common/Ptr.h"
 #include "game/kernel/common/kernel_types.h"
 #include "game/kernel/common/kscheme.h"
@@ -28,6 +32,7 @@ static JakInternalState s_jak_state;
 static MeshState s_mesh_state;
 static CommandQueue s_command_queue;
 static std::atomic<bool> s_runtime_ready{false};
+static BoneDebugData s_bone_debug;
 
 // Bone matrix storage for CPU skinning
 struct BoneMatrix {
@@ -37,6 +42,97 @@ struct BoneMatrix {
 static std::mutex s_bone_mutex;
 static std::vector<BoneMatrix> s_bone_matrices;
 static bool s_bones_valid = false;
+
+// FR3 model data for Jak's mesh (loaded once at init)
+struct Fr3ModelData {
+  std::vector<tfrag3::MercVertex> vertices;  // base-pose vertices (indexed by indices)
+  std::vector<u32> indices;                  // triangle indices
+  // Per-effect draw ranges so we can iterate all triangles
+  struct DrawRange {
+    u32 first_index;
+    u32 index_count;
+  };
+  std::vector<DrawRange> draws;
+  float xyz_scale = 1.0f;
+  u32 max_bones = 0;
+  bool loaded = false;
+};
+static Fr3ModelData s_fr3_model;
+static std::mutex s_fr3_mutex;
+
+/**
+ * Load Jak's merc model from an FR3 file.
+ * Searches for "jak" in the given FR3, extracts vertices/indices.
+ */
+static bool load_jak_model_from_fr3(const std::string& fr3_name) {
+  auto fr3_path =
+      file_util::get_jak_project_dir() / "out" / "jak1" / "fr3" / fmt::format("{}.fr3", fr3_name);
+
+  lg::info("[libjakopengoal] Loading FR3: {}", fr3_path.string());
+
+  std::vector<u8> data;
+  try {
+    data = file_util::read_binary_file(fr3_path);
+  } catch (const std::exception& e) {
+    lg::error("[libjakopengoal] Failed to read FR3 file: {}", e.what());
+    return false;
+  }
+
+  if (data.empty()) {
+    lg::error("[libjakopengoal] FR3 file is empty");
+    return false;
+  }
+
+  auto decomp_data = compression::decompress_zstd(data.data(), data.size());
+  tfrag3::Level level;
+  Serializer ser(decomp_data.data(), decomp_data.size());
+  level.serialize(ser);
+
+  // Find Jak's merc model (internal codename "eichar")
+  const tfrag3::MercModel* jak_model = nullptr;
+  for (const auto& model : level.merc_data.models) {
+    if (model.name == "eichar-lod0") {
+      jak_model = &model;
+      break;
+    }
+  }
+
+  if (!jak_model) {
+    lg::warn("[libjakopengoal] eichar-lod0 not found in {}.fr3", fr3_name);
+    return false;
+  }
+
+  lg::info("[libjakopengoal] Found eichar-lod0: {} effects, {} max_bones, xyz_scale={}",
+           jak_model->effects.size(), jak_model->max_bones, jak_model->xyz_scale);
+
+  // Collect all draw ranges and figure out which vertices we need
+  std::lock_guard<std::mutex> lock(s_fr3_mutex);
+  s_fr3_model.draws.clear();
+  s_fr3_model.xyz_scale = jak_model->xyz_scale;
+  s_fr3_model.max_bones = jak_model->max_bones;
+
+  for (const auto& effect : jak_model->effects) {
+    for (const auto& draw : effect.all_draws) {
+      s_fr3_model.draws.push_back({draw.first_index, draw.index_count});
+    }
+  }
+
+  // Copy the shared vertex and index buffers
+  // (We copy all vertices/indices from the level — the draws reference specific index ranges)
+  s_fr3_model.vertices = level.merc_data.vertices;
+  s_fr3_model.indices = level.merc_data.indices;
+  s_fr3_model.loaded = true;
+
+  u32 total_tris = 0;
+  for (const auto& d : s_fr3_model.draws) {
+    total_tris += d.index_count / 3;
+  }
+  lg::info("[libjakopengoal] Loaded eichar-lod0: {} vertices, {} indices, {} draws, ~{} triangles",
+           s_fr3_model.vertices.size(), s_fr3_model.indices.size(), s_fr3_model.draws.size(),
+           total_tris);
+
+  return true;
+}
 
 CollisionState& get_collision_state() {
   return s_collision_state;
@@ -53,6 +149,9 @@ MeshState& get_mesh_state() {
 CommandQueue& get_command_queue() {
   return s_command_queue;
 }
+BoneDebugData& get_bone_debug_data() {
+  return s_bone_debug;
+}
 
 bool is_runtime_ready() {
   return s_runtime_ready.load();
@@ -67,10 +166,9 @@ void set_runtime_ready(bool ready) {
 /* -------------------------------------------------------------------------- */
 
 void inject_pad_inputs() {
-  // This writes directly to the CPadInfo structure that GOAL reads.
-  // We access it via the pad_dma_buf global in kmachine.
-  // The actual injection happens in our patched scePadRead function.
-  // See libjakopengoal.cpp for the scePadRead override.
+  // Pad injection is handled by the patched scePadRead in game/sce/libpad.cpp.
+  // It reads from s_pad_state.current_inputs when lib_jak_bridge mode is active.
+  // No additional work needed here.
 }
 
 /* -------------------------------------------------------------------------- */
@@ -88,18 +186,9 @@ void extract_jak_state() {
     return;
   }
 
-  // target is a process-drawable with control-info overlay at root
-  // We read key fields from GOAL memory using known offsets.
-  //
-  // The target structure layout (from target-h.gc):
-  //   process-drawable base:
-  //     root (trsqv / control-info) at offset 108 in process-drawable
-  //       trans (vector) at offset 16 in trsqv
-  //     ...
-  //   game (game-info) at known offset
-  //
-  // We use the symbol approach: read fields from GOAL symbols that the
-  // engine maintains for us.
+  // target is a process-drawable.  We try two data sources:
+  // 1. *lib-jak-state-data* — a GOAL-allocated struct with rich state (if GOAL bridge code exists)
+  // 2. Direct memory read — root (offset 108) -> trans (offset 12), using known struct offsets
 
   u32 target_ptr = target_sym->value;
   if (target_ptr == 0 || target_ptr == s7.offset) {
@@ -141,21 +230,16 @@ void extract_jak_state() {
   }
 
   // Fallback: read position directly from *target* process memory.
-  // process-drawable has 'root' pointer at offset 112 (0x70).
-  // root (trsqv) has 'trans' vector at offset 16 (0x10).
-  // trans is a vector4: (x y z w) as 4 floats in GOAL units (4096 = 1 meter).
+  // process-drawable.root is a GOAL pointer at offset 108.
+  // root (trsqv).trans is a vector at offset 12 within root.
+  // Each component is a float in GOAL internal units (4096 = 1 meter).
   constexpr float METERS_TO_UNITS = 50.0f / 4096.0f;
-
-  // 'root' is a GOAL pointer at offset 108 in process-drawable.
-  // (process at offset ~96, then drawable fields, root at 108)
   u32 root_ptr = *(u32*)(g_ee_main_mem + target_ptr + 108);
 
   if (root_ptr == 0 || root_ptr == s7.offset) {
     return;
   }
 
-  // trans vector is at offset 12 within root (verified against known continue-point data).
-  // Each component is a float in GOAL's internal units (4096 per meter).
   float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
 
   std::lock_guard<std::mutex> lock(s_jak_state.mutex);
@@ -219,89 +303,327 @@ static void skin_vertex(const float* pos_in,
   }
 }
 
+/**
+ * Read bone transforms from *target*'s draw->skeleton->bones[] in GOAL memory.
+ *
+ * GOAL POINTER CONVENTION:
+ *   In OpenGOAL, GOAL pointers to basic types point PAST the 4-byte type tag.
+ *   So to access a field at all-types offset X, use: goal_ptr + (X - 4).
+ *   Structures (non-basic) do NOT have this adjustment.
+ *
+ * Memory layout with -4 adjustment for basic types:
+ *   process-drawable (basic):
+ *     all-types: root=112, node-list=116, draw=120, skel=124
+ *     actual:    root@+108, node-list@+112, draw@+116, skel@+120
+ *
+ *   draw-control (basic):
+ *     all-types: skeleton=24
+ *     actual:    skeleton@+20
+ *
+ *   skeleton (inline-array-class, basic):
+ *     all-types: length=4, data=16
+ *     actual:    length@+0, data@+12
+ *
+ *   bone (structure, NO -4):
+ *     transform (matrix 4x4) at +0 (64 bytes)
+ *     scale (vector) at +64 (16 bytes)
+ *     cache at +80 (16 bytes)
+ *     Total: 96 bytes per bone
+ */
+static void read_bones_from_goal() {
+  if (!g_ee_main_mem)
+    return;
+
+  auto target_sym = jak1::intern_from_c("*target*");
+  if (!target_sym.offset || target_sym->value == 0 || target_sym->value == s7.offset)
+    return;
+
+  u32 target_ptr = target_sym->value;
+
+  // draw-control at target+116 (all-types offset 120, -4 for basic)
+  u32 draw_ptr = *(u32*)(g_ee_main_mem + target_ptr + 116);
+  if (draw_ptr == 0 || draw_ptr == s7.offset || draw_ptr >= 0x8000000)
+    return;
+
+  // skeleton at draw+20 (all-types offset 24, -4 for basic)
+  u32 skel_ptr = *(u32*)(g_ee_main_mem + draw_ptr + 20);
+  if (skel_ptr == 0 || skel_ptr == s7.offset || skel_ptr >= 0x8000000)
+    return;
+
+  // skeleton length at skel+0 (all-types offset 4, -4 for basic)
+  u32 num_bones = *(u32*)(g_ee_main_mem + skel_ptr + 0);
+  if (num_bones == 0 || num_bones > 256) {
+    static bool warned = false;
+    if (!warned) {
+      lg::warn("[libjakopengoal] bad bone count {} from skel 0x{:x}", num_bones, skel_ptr);
+      warned = true;
+    }
+    return;
+  }
+
+  // One-time diagnostic dump
+  {
+    static bool probed = false;
+    if (!probed) {
+      lg::info("[libjakopengoal] draw=0x{:x} (from target+116), skel=0x{:x} (from draw+20), "
+               "num_bones={}",
+               draw_ptr, skel_ptr, num_bones);
+      probed = true;
+    }
+  }
+
+  // Cap to FR3 model's max_bones
+  {
+    std::lock_guard<std::mutex> fr3_lock(s_fr3_mutex);
+    if (s_fr3_model.loaded && s_fr3_model.max_bones > 0 && num_bones > s_fr3_model.max_bones) {
+      num_bones = s_fr3_model.max_bones;
+    }
+  }
+
+  std::lock_guard<std::mutex> lock(s_bone_mutex);
+  s_bone_matrices.resize(num_bones);
+
+  // Read bone transforms from skeleton's inline array
+  // Bones start at skel+12 (all-types data offset 16, -4 for basic)
+  constexpr u32 BONE_SIZE = 96;  // transform(64) + scale(16) + cache(16)
+  constexpr u32 BONES_DATA_OFFSET = 12;  // all-types 16 - 4
+
+  u32 valid_bones = 0;
+  for (u32 i = 0; i < num_bones; i++) {
+    u32 bone_addr = skel_ptr + BONES_DATA_OFFSET + i * BONE_SIZE;
+
+    // bone.transform is a 4x4 matrix at offset 0 within bone (64 bytes)
+    float* src_mat = (float*)(g_ee_main_mem + bone_addr);
+
+    // Copy the 4x4 transform matrix
+    for (int r = 0; r < 4; r++) {
+      for (int c = 0; c < 4; c++) {
+        s_bone_matrices[i].tmat[r][c] = src_mat[r * 4 + c];
+      }
+    }
+
+    // Compute normal matrix as inverse-transpose of upper 3x3
+    float* m = &s_bone_matrices[i].tmat[0][0];
+    float det = m[0] * (m[5] * m[10] - m[6] * m[9]) -
+                m[1] * (m[4] * m[10] - m[6] * m[8]) +
+                m[2] * (m[4] * m[9] - m[5] * m[8]);
+
+    if (std::fabs(det) > 0.0001f) {
+      float inv_det = 1.0f / det;
+      s_bone_matrices[i].nmat[0][0] = (m[5] * m[10] - m[6] * m[9]) * inv_det;
+      s_bone_matrices[i].nmat[0][1] = (m[2] * m[9] - m[1] * m[10]) * inv_det;
+      s_bone_matrices[i].nmat[0][2] = (m[1] * m[6] - m[2] * m[5]) * inv_det;
+      s_bone_matrices[i].nmat[1][0] = (m[6] * m[8] - m[4] * m[10]) * inv_det;
+      s_bone_matrices[i].nmat[1][1] = (m[0] * m[10] - m[2] * m[8]) * inv_det;
+      s_bone_matrices[i].nmat[1][2] = (m[2] * m[4] - m[0] * m[6]) * inv_det;
+      s_bone_matrices[i].nmat[2][0] = (m[4] * m[9] - m[5] * m[8]) * inv_det;
+      s_bone_matrices[i].nmat[2][1] = (m[1] * m[8] - m[0] * m[9]) * inv_det;
+      s_bone_matrices[i].nmat[2][2] = (m[0] * m[5] - m[1] * m[4]) * inv_det;
+    } else {
+      // Fallback: identity normal matrix
+      s_bone_matrices[i].nmat[0][0] = 1; s_bone_matrices[i].nmat[0][1] = 0; s_bone_matrices[i].nmat[0][2] = 0;
+      s_bone_matrices[i].nmat[1][0] = 0; s_bone_matrices[i].nmat[1][1] = 1; s_bone_matrices[i].nmat[1][2] = 0;
+      s_bone_matrices[i].nmat[2][0] = 0; s_bone_matrices[i].nmat[2][1] = 0; s_bone_matrices[i].nmat[2][2] = 1;
+    }
+    valid_bones++;
+  }
+
+  {
+    static int bone_log_count = 0;
+    bone_log_count++;
+    // Log first 5 reads, then every 60th
+    if (bone_log_count <= 5 || bone_log_count % 60 == 0) {
+      lg::info("[libjakopengoal] Bone read #{}: skel=0x{:x}, {} bones, {} valid", bone_log_count,
+               skel_ptr, num_bones, valid_bones);
+      // Print bone[0] and bone[3] transforms (bone[3] is often the main body bone)
+      for (u32 bi : {0u, 1u, 3u}) {
+        if (bi >= num_bones)
+          break;
+        lg::info("[libjakopengoal]   bone[{}] row0=({:.3f}, {:.3f}, {:.3f}, {:.3f})", bi,
+                 s_bone_matrices[bi].tmat[0][0], s_bone_matrices[bi].tmat[0][1],
+                 s_bone_matrices[bi].tmat[0][2], s_bone_matrices[bi].tmat[0][3]);
+        lg::info("[libjakopengoal]   bone[{}] row3(trans)=({:.3f}, {:.3f}, {:.3f}, {:.3f})", bi,
+                 s_bone_matrices[bi].tmat[3][0], s_bone_matrices[bi].tmat[3][1],
+                 s_bone_matrices[bi].tmat[3][2], s_bone_matrices[bi].tmat[3][3]);
+      }
+    }
+  }
+  // Only mark bones valid once we have non-zero transforms
+  // (skeleton is allocated with zeros, gets filled by do-joint-math!)
+  if (!s_bones_valid && num_bones >= 4) {
+    // Check bone[3] (main body bone) — if it has a non-zero transform, bones are ready
+    float check = std::fabs(s_bone_matrices[3].tmat[0][0]) +
+                  std::fabs(s_bone_matrices[3].tmat[1][1]) +
+                  std::fabs(s_bone_matrices[3].tmat[2][2]);
+    if (check > 0.01f) {
+      s_bones_valid = true;
+      lg::info("[libjakopengoal] Bones now valid! bone[3] diag=({:.3f}, {:.3f}, {:.3f})",
+               s_bone_matrices[3].tmat[0][0], s_bone_matrices[3].tmat[1][1],
+               s_bone_matrices[3].tmat[2][2]);
+    }
+  }
+
+  // Populate bone debug data for skeleton visualization
+  if (s_bones_valid) {
+    constexpr float METERS_TO_UNITS = 50.0f / 4096.0f;
+    std::lock_guard<std::mutex> dbg_lock(s_bone_debug.mutex);
+    s_bone_debug.num_bones = (int)num_bones;
+
+    for (u32 i = 0; i < num_bones && i < 256; i++) {
+      // Position is the translation row of the bone matrix (row 3)
+      s_bone_debug.positions[i][0] = s_bone_matrices[i].tmat[3][0] * METERS_TO_UNITS;
+      s_bone_debug.positions[i][1] = s_bone_matrices[i].tmat[3][1] * METERS_TO_UNITS;
+      s_bone_debug.positions[i][2] = s_bone_matrices[i].tmat[3][2] * METERS_TO_UNITS;
+      s_bone_debug.parent_indices[i] = -1;  // will be filled from cspace below
+    }
+
+    // Read parent indices from cspace-array (node-list)
+    // process-drawable: node-list at target+112 (all-types 116, -4 for basic)
+    u32 nodelist_ptr = *(u32*)(g_ee_main_mem + target_ptr + 112);
+    if (nodelist_ptr != 0 && nodelist_ptr != s7.offset && nodelist_ptr < 0x8000000) {
+      // cspace-array (inline-array-class, basic):
+      //   length at +0 (all-types 4, -4)
+      //   data starts at +12 (all-types 16, -4)
+      //   each cspace is 32 bytes
+      u32 cs_count = *(u32*)(g_ee_main_mem + nodelist_ptr + 0);
+      constexpr u32 CSPACE_SIZE = 32;
+      constexpr u32 CSPACE_DATA_OFFSET = 12;
+
+      if (cs_count > 0 && cs_count <= 256) {
+        // Build a map: cspace address -> index
+        for (u32 i = 0; i < cs_count && i < num_bones; i++) {
+          u32 cs_addr = nodelist_ptr + CSPACE_DATA_OFFSET + i * CSPACE_SIZE;
+          // parent is at offset 0 of cspace (it's a structure, no -4 adjustment)
+          u32 parent_ptr = *(u32*)(g_ee_main_mem + cs_addr + 0);
+          if (parent_ptr != 0 && parent_ptr != s7.offset && parent_ptr < 0x8000000) {
+            // Find parent index by computing offset from data start
+            if (parent_ptr >= nodelist_ptr + CSPACE_DATA_OFFSET) {
+              u32 parent_idx = (parent_ptr - (nodelist_ptr + CSPACE_DATA_OFFSET)) / CSPACE_SIZE;
+              if (parent_idx < num_bones) {
+                s_bone_debug.parent_indices[i] = (int)parent_idx;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!s_bone_debug.valid) {
+      // One-time log of skeleton hierarchy
+      int lines_with_parent = 0;
+      for (int i = 0; i < (int)num_bones && i < 256; i++) {
+        if (s_bone_debug.parent_indices[i] >= 0) lines_with_parent++;
+      }
+      lg::info("[libjakopengoal] Skeleton debug: {} bones, {} with parents", num_bones, lines_with_parent);
+      // Print first 20 bone parent mappings
+      for (int i = 0; i < (int)num_bones && i < 20; i++) {
+        lg::info("[libjakopengoal]   bone[{}]: parent={} pos=({:.1f}, {:.1f}, {:.1f})",
+                 i, s_bone_debug.parent_indices[i],
+                 s_bone_debug.positions[i][0], s_bone_debug.positions[i][1], s_bone_debug.positions[i][2]);
+      }
+    }
+    s_bone_debug.valid = true;
+  }
+}
+
 void extract_jak_mesh() {
-  if (!g_ee_main_mem) {
+  // Use FR3 model data + bone matrices for CPU skinning
+  std::lock_guard<std::mutex> fr3_lock(s_fr3_mutex);
+  if (!s_fr3_model.loaded) {
     return;
   }
-
-  // Check if we have bone data and mesh vertex data
-  // The mesh data pointer is provided by our GOAL bridge code
-  auto mesh_sym = jak1::intern_from_c("*lib-jak-mesh-data*");
-  auto mesh_count_sym = jak1::intern_from_c("*lib-jak-mesh-count*");
-
-  if (!mesh_sym.offset || mesh_sym->value == 0 ||
-      mesh_sym->value == s7.offset) {
-    return;
-  }
-  if (!mesh_count_sym.offset || mesh_count_sym->value == 0) {
-    return;
-  }
-
-  uint32_t vert_count = mesh_count_sym->value;
-  if (vert_count == 0 || vert_count > JAK_GEO_MAX_TRIANGLES * 3) {
-    return;
-  }
-
-  // The mesh data is a flat array of our vertex format in GOAL memory:
-  // struct { float pos[3]; float normal[3]; float uv[2]; u8 rgba[4]; u8 mats[3]; u8 weights_u8[3]; }
-  // = 44 bytes per vertex
-
-  struct GoalMeshVertex {
-    float pos[3];
-    float normal[3];
-    float uv[2];
-    uint8_t rgba[4];
-    uint8_t mats[3];
-    uint8_t pad;
-    float weights[3];
-    float pad2;
-  };
-  static_assert(sizeof(GoalMeshVertex) == 56);
-
-  // Alternate: use the tfrag3::MercVertex format (64 bytes) that's already in the vertex buffer
-  // We'll read whatever format our GOAL bridge provides
 
   std::lock_guard<std::mutex> bone_lock(s_bone_mutex);
+  // If real bones aren't available yet, use identity matrices (bind/T-pose)
+  bool using_identity_bones = false;
   if (!s_bones_valid || s_bone_matrices.empty()) {
+    if (s_fr3_model.max_bones == 0)
+      return;
+    s_bone_matrices.resize(s_fr3_model.max_bones);
+    for (u32 i = 0; i < s_fr3_model.max_bones; i++) {
+      // Identity 4x4 transform
+      for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+          s_bone_matrices[i].tmat[r][c] = (r == c) ? 1.0f : 0.0f;
+      // Identity 3x3 normal matrix
+      for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+          s_bone_matrices[i].nmat[r][c] = (r == c) ? 1.0f : 0.0f;
+    }
+    using_identity_bones = true;
+  }
+
+  // Count total output vertices from all draws
+  uint32_t total_verts = 0;
+  for (const auto& draw : s_fr3_model.draws) {
+    total_verts += draw.index_count;
+  }
+  if (total_verts == 0 || total_verts > JAK_GEO_MAX_TRIANGLES * 3) {
     return;
   }
 
-  uint8_t* vert_base = g_ee_main_mem + mesh_sym->value;
+  // The FR3 vertex positions are pre-scaled by xyz_scale and need to be
+  // transformed by bone matrices (which are in GOAL internal units).
+  // After skinning, convert from GOAL units to render units.
+  constexpr float METERS_TO_UNITS = 50.0f / 4096.0f;
 
   std::lock_guard<std::mutex> lock(s_mesh_state.mutex);
-  uint32_t num_verts = vert_count;
-  uint32_t num_tris = num_verts / 3;
+  s_mesh_state.positions.resize(total_verts * 3);
+  s_mesh_state.normals.resize(total_verts * 3);
+  s_mesh_state.colors.resize(total_verts * 3);  // RGB only (matches rendering VBO layout)
+  s_mesh_state.uvs.resize(total_verts * 2);
 
-  s_mesh_state.positions.resize(num_verts * 3);
-  s_mesh_state.normals.resize(num_verts * 3);
-  s_mesh_state.colors.resize(num_verts * 4);
-  s_mesh_state.uvs.resize(num_verts * 2);
+  uint32_t out_idx = 0;
+  for (const auto& draw : s_fr3_model.draws) {
+    for (uint32_t j = 0; j < draw.index_count; j++) {
+      u32 vi = s_fr3_model.indices[draw.first_index + j];
+      if (vi >= s_fr3_model.vertices.size()) {
+        memset(&s_mesh_state.positions[out_idx * 3], 0, 3 * sizeof(float));
+        memset(&s_mesh_state.normals[out_idx * 3], 0, 3 * sizeof(float));
+        memset(&s_mesh_state.colors[out_idx * 3], 0, 3 * sizeof(float));
+        memset(&s_mesh_state.uvs[out_idx * 2], 0, 2 * sizeof(float));
+        out_idx++;
+        continue;
+      }
 
-  for (uint32_t i = 0; i < num_verts; i++) {
-    auto* v = (GoalMeshVertex*)(vert_base + i * sizeof(GoalMeshVertex));
+      const auto& v = s_fr3_model.vertices[vi];
 
-    float skinned_pos[3], skinned_nrm[3];
-    skin_vertex(v->pos, v->normal, v->mats, v->weights, s_bone_matrices, skinned_pos,
-                skinned_nrm);
+      // The vertex position in the FR3 is in bone-local space, pre-multiplied by xyz_scale.
+      // We need to undo the scale, apply bone transform, then scale to render units.
+      float local_pos[3] = {v.pos[0] * s_fr3_model.xyz_scale,
+                            v.pos[1] * s_fr3_model.xyz_scale,
+                            v.pos[2] * s_fr3_model.xyz_scale};
 
-    s_mesh_state.positions[i * 3 + 0] = skinned_pos[0];
-    s_mesh_state.positions[i * 3 + 1] = skinned_pos[1];
-    s_mesh_state.positions[i * 3 + 2] = skinned_pos[2];
+      float skinned_pos[3], skinned_nrm[3];
+      skin_vertex(local_pos, v.normal, v.mats, v.weights, s_bone_matrices, skinned_pos,
+                  skinned_nrm);
 
-    s_mesh_state.normals[i * 3 + 0] = skinned_nrm[0];
-    s_mesh_state.normals[i * 3 + 1] = skinned_nrm[1];
-    s_mesh_state.normals[i * 3 + 2] = skinned_nrm[2];
+      // Convert from GOAL internal units to render units
+      s_mesh_state.positions[out_idx * 3 + 0] = skinned_pos[0] * METERS_TO_UNITS;
+      s_mesh_state.positions[out_idx * 3 + 1] = skinned_pos[1] * METERS_TO_UNITS;
+      s_mesh_state.positions[out_idx * 3 + 2] = skinned_pos[2] * METERS_TO_UNITS;
 
-    s_mesh_state.colors[i * 4 + 0] = v->rgba[0] / 255.0f;
-    s_mesh_state.colors[i * 4 + 1] = v->rgba[1] / 255.0f;
-    s_mesh_state.colors[i * 4 + 2] = v->rgba[2] / 255.0f;
-    s_mesh_state.colors[i * 4 + 3] = v->rgba[3] / 255.0f;
+      s_mesh_state.normals[out_idx * 3 + 0] = skinned_nrm[0];
+      s_mesh_state.normals[out_idx * 3 + 1] = skinned_nrm[1];
+      s_mesh_state.normals[out_idx * 3 + 2] = skinned_nrm[2];
 
-    s_mesh_state.uvs[i * 2 + 0] = v->uv[0];
-    s_mesh_state.uvs[i * 2 + 1] = v->uv[1];
+      s_mesh_state.colors[out_idx * 3 + 0] = v.rgba[0] / 255.0f;
+      s_mesh_state.colors[out_idx * 3 + 1] = v.rgba[1] / 255.0f;
+      s_mesh_state.colors[out_idx * 3 + 2] = v.rgba[2] / 255.0f;
+
+      s_mesh_state.uvs[out_idx * 2 + 0] = v.st[0];
+      s_mesh_state.uvs[out_idx * 2 + 1] = v.st[1];
+
+      out_idx++;
+    }
   }
 
-  s_mesh_state.num_triangles = num_tris;
+  s_mesh_state.num_triangles = out_idx / 3;
+  if (!s_mesh_state.valid && s_mesh_state.num_triangles > 0) {
+    lg::info("[libjakopengoal] First mesh extraction: {} triangles, {} bones ({})",
+             s_mesh_state.num_triangles, s_bone_matrices.size(),
+             using_identity_bones ? "IDENTITY/T-pose" : "from GOAL");
+  }
   s_mesh_state.valid = true;
 }
 
@@ -586,27 +908,19 @@ uint64_t goal_provide_bone_data(uint64_t bone_data_offset, uint64_t num_bones) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Write external camera rotation into *math-camera*'s inv-camera-rot and
- * inv-camera-rot-smooth matrices so Jak's stick input is relative to the
- * external camera's yaw angle.
+ * Write external camera yaw into *math-camera*'s inv-camera-rot (offset 432)
+ * and inv-camera-rot-smooth (offset 496) so stick input is relative to the
+ * external camera.  GOAL's read-pad calls (matrix-local->world #t #f) which
+ * returns inv-camera-rot-smooth to rotate the stick vector into world space.
  *
- * The GOAL engine uses (matrix-local->world #t #f) which returns
- * inv-camera-rot-smooth (offset 496).  We also write inv-camera-rot (432)
- * for anything that reads the non-smooth variant.
- *
- * A GOAL matrix is column-major, 4 vectors of 4 floats (64 bytes).
- * For a Y-rotation by angle θ (the camera's yaw):
- *   inv-camera-rot = Ry(-θ)  (inverse = negate the angle)
- *   col0 = ( cos θ,  0,  sin θ,  0)   right
- *   col1 = (     0,  1,      0,  0)   up
- *   col2 = (-sin θ,  0,  cos θ,  0)   forward
- *   col3 = (     0,  0,      0,  1)   translation (zero)
+ * Matrix is column-major Ry(yaw):
+ *   col0 = ( cos, 0, sin, 0)   col1 = (0, 1, 0, 0)
+ *   col2 = (-sin, 0, cos, 0)   col3 = (0, 0, 0, 1)
  */
 static void inject_camera_rotation() {
   if (!g_ee_main_mem)
     return;
 
-  // Read the camera look direction from pad state
   float cam_x, cam_z;
   {
     std::lock_guard<std::mutex> lock(s_pad_state.mutex);
@@ -616,52 +930,26 @@ static void inject_camera_rotation() {
     cam_z = s_pad_state.current_inputs.cam_z;
   }
 
-  // cam_x, cam_z is the camera look direction vector (target - eye).
-  // Compute camera yaw angle from it.
+  // Normalize the look direction to get cos/sin of camera yaw
   float len = sqrtf(cam_x * cam_x + cam_z * cam_z);
   if (len < 0.001f)
     return;
-  cam_x /= len;
-  cam_z /= len;
+  float cos_y = cam_z / len;
+  float sin_y = cam_x / len;
 
-  // The inverse rotation matrix (what GOAL uses) has:
-  //   cos θ = cam_z / len  (forward Z component = cos of yaw)
-  //   sin θ = cam_x / len  (forward X component = sin of yaw)
-  // But since this is the *inverse* (camera-space to world-space):
-  float cos_y = cam_z;  // forward Z
-  float sin_y = cam_x;  // forward X
-
-  // Find *math-camera* symbol
   auto mc_sym = jak1::intern_from_c("*math-camera*");
   if (!mc_sym.offset || mc_sym->value == 0 || mc_sym->value == s7.offset)
     return;
 
   u32 mc_ptr = mc_sym->value;
 
-  // Write to both inv-camera-rot (offset 432) and inv-camera-rot-smooth (offset 496)
-  // Matrix is column-major: 4 columns of 4 floats
+  // Write Y-rotation matrix to both inv-camera-rot and inv-camera-rot-smooth
   for (int offset : {432, 496}) {
-    float* mat = (float*)(g_ee_main_mem + mc_ptr + offset);
-    // col 0 (right vector)
-    mat[0] = cos_y;
-    mat[1] = 0.0f;
-    mat[2] = sin_y;
-    mat[3] = 0.0f;
-    // col 1 (up vector)
-    mat[4] = 0.0f;
-    mat[5] = 1.0f;
-    mat[6] = 0.0f;
-    mat[7] = 0.0f;
-    // col 2 (forward vector)
-    mat[8] = -sin_y;
-    mat[9] = 0.0f;
-    mat[10] = cos_y;
-    mat[11] = 0.0f;
-    // col 3 (translation — zero)
-    mat[12] = 0.0f;
-    mat[13] = 0.0f;
-    mat[14] = 0.0f;
-    mat[15] = 1.0f;
+    float* m = (float*)(g_ee_main_mem + mc_ptr + offset);
+    m[0] = cos_y;   m[1] = 0.0f;  m[2] = sin_y;   m[3] = 0.0f;   // col 0 (right)
+    m[4] = 0.0f;    m[5] = 1.0f;  m[6] = 0.0f;     m[7] = 0.0f;   // col 1 (up)
+    m[8] = -sin_y;  m[9] = 0.0f;  m[10] = cos_y;   m[11] = 0.0f;  // col 2 (forward)
+    m[12] = 0.0f;   m[13] = 0.0f; m[14] = 0.0f;    m[15] = 1.0f;  // col 3 (translation)
   }
 }
 
@@ -690,6 +978,14 @@ void initialize_bridge() {
   // #t in GOAL is represented as s7 + FIX_SYM_TRUE
   jak1::intern_from_c("*lib-jak-enabled*")->value = (s7 + jak1_symbols::FIX_SYM_TRUE).offset;
 
+  // Load Jak's merc model from FR3 data for CPU-side mesh skinning.
+  // Try GAME.fr3 first (common data), then village1 as fallback.
+  if (!load_jak_model_from_fr3("GAME")) {
+    if (!load_jak_model_from_fr3("village1")) {
+      lg::warn("[libjakopengoal] Could not load eichar-lod0 model from any FR3 file");
+    }
+  }
+
   lg::info("[libjakopengoal] Bridge initialized.");
 
   // Auto-set runtime ready since GOAL scripts are loaded and bridge is active.
@@ -698,10 +994,37 @@ void initialize_bridge() {
   lg::info("[libjakopengoal] Runtime marked as ready.");
 }
 
+/**
+ * Force GOAL settings that conflict with library mode every frame.
+ * - border-mode must be #f or Jak gets killed for leaving the level boundary.
+ *
+ * *setting-control* is a setting-control (basic) with:
+ *   default (setting-data :inline :offset 432)
+ *     border-mode (symbol :offset 0 within setting-data)
+ * So default.border-mode is at offset 432 from the setting-control object.
+ * #f in GOAL = s7.offset (the false symbol).
+ */
+static void force_settings() {
+  if (!g_ee_main_mem)
+    return;
+
+  auto sc_sym = jak1::intern_from_c("*setting-control*");
+  if (!sc_sym.offset || sc_sym->value == 0 || sc_sym->value == s7.offset)
+    return;
+
+  u32 sc_ptr = sc_sym->value;
+
+  // default.border-mode at offset 432 — force to #f
+  u32* border_mode = (u32*)(g_ee_main_mem + sc_ptr + 432);
+  *border_mode = s7.offset;
+}
+
 void bridge_tick() {
   process_commands();
+  force_settings();
   inject_camera_rotation();
   extract_jak_state();
+  read_bones_from_goal();
   extract_jak_mesh();
 }
 
