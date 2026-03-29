@@ -4,8 +4,12 @@
 
 #include "game/graphics/display.h"
 #include "game/graphics/gfx.h"
+#include "game/kernel/common/kboot.h"
 #include "game/kernel/common/kernel_types.h"
 #include "game/system/hid/input_bindings.h"
+#ifdef BUILD_LIBJAKOPENGOAL
+#include "libjakopengoal/src/jak_bridge.h"
+#endif
 
 /*!
  * @file libpad.cpp
@@ -65,6 +69,34 @@ int scePadRead(int port, int /*slot*/, u8* rdata) {
   cpad->valid = 0;  // success
 
   cpad->status = 0x70 /* (dualshock2) */ | (20 / 2); /* (dualshock2 data size) */
+
+#ifdef BUILD_LIBJAKOPENGOAL
+  // If libjakopengoal bridge is active and we have external inputs, use those
+  // instead of reading from SDL/input manager (which won't exist headlessly)
+  if (masterConfig.lib_jak_bridge && port == 0) {
+    auto& pad_state = jak_bridge::get_pad_state();
+    std::lock_guard<std::mutex> lock(pad_state.mutex);
+    if (pad_state.has_input) {
+      auto& inputs = pad_state.current_inputs;
+
+      // Convert normalized stick [-1,1] to uint8 [0,255] with 127 = neutral
+      cpad->leftx = (u8)(127 + (int)(inputs.stick_x * 127.0f));
+      cpad->lefty = (u8)(127 - (int)(inputs.stick_y * 127.0f));  // inverted Y
+      cpad->rightx = (u8)(127 + (int)(inputs.r_stick_x * 127.0f));
+      cpad->righty = (u8)(127 - (int)(inputs.r_stick_y * 127.0f));
+
+      // Button bitmask - note: PS2 buttons are active-LOW, but OpenGOAL
+      // inverts them in service-cpads. We pass them as active-HIGH here
+      // since the game code handles it.
+      cpad->button0 = inputs.buttons;
+
+      // Zero pressure data
+      memset(cpad->abutton, 0, sizeof(cpad->abutton));
+
+      return 32;
+    }
+  }
+#endif
 
   std::optional<std::shared_ptr<PadData>> pad_data = std::nullopt;
   if (Display::GetMainDisplay()) {

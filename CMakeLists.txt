@@ -281,6 +281,12 @@ add_subdirectory(goalc)
 # build standalone tools
 add_subdirectory(tools)
 
+# build libjakopengoal (embeddable Jak library, inspired by libsm64)
+option(BUILD_LIBJAKOPENGOAL "Build the libjakopengoal embeddable library" ON)
+if(BUILD_LIBJAKOPENGOAL)
+    add_subdirectory(libjakopengoal)
+endif()
+
 # build the gtest libraries
 if(WIN32)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)

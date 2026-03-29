@@ -2101,6 +2101,7 @@
 (goal-src "pc/debug/default-menu-pc.gc" "anim-tester-x" "part-tester" "entity-debug")
 (goal-src "pc/debug/pc-debug-common.gc" "pckernel-impl" "entity-h" "game-info-h" "level-h" "settings-h" "gsound-h" "target-util")
 (goal-src "pc/debug/pc-debug-methods.gc" "pc-debug-common")
+(goal-src "pc/lib-jak-bridge.gc" "pckernel" "target-h")
 (goal-src "levels/test-zone/test-zone-obs.gc" "process-drawable")
 
 (group-list "all-code"

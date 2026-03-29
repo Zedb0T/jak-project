@@ -24,6 +24,9 @@
 #include "game/kernel/jak1/klisten.h"
 #include "game/kernel/jak1/kmachine.h"
 #include "game/sce/libscf.h"
+#ifdef BUILD_LIBJAKOPENGOAL
+#include "libjakopengoal/src/jak_bridge.h"
+#endif
 
 using namespace ee;
 
@@ -145,6 +148,13 @@ void KernelCheckAndDispatch() {
     }
 
     ClearPending();
+
+#ifdef BUILD_LIBJAKOPENGOAL
+    // Run the libjakopengoal bridge tick after each kernel dispatch
+    if (masterConfig.lib_jak_bridge) {
+      jak_bridge::bridge_tick();
+    }
+#endif
 
     // if the listener function changed, it means the kernel ran it, so we should notify compiler.
     if (MasterDebug && ListenerFunction->value != old_listener) {
