@@ -15,6 +15,8 @@
 
 ;; DECOMP BEGINS
 
+(define-extern *lib-jak-enabled* symbol)
+
 (defbehavior build-conversions target ((arg0 vector))
   (surface-mult! (-> self control unknown-surface01) (-> self control unknown-surface00) (-> self control surf))
   (when (and (and (= (-> self fact eco-type) (pickup-type eco-blue)) (>= (-> self fact eco-level) 1.0))
@@ -959,6 +961,12 @@
                    (new 'static 'rgba :r #x40 :b #x40 :a #x80)))
       (set! (-> self control reaction) target-collision-reaction)
       (fill-cache-integrate-and-collide! (-> self control) (-> self control transv) (-> self control root-prim collide-with))
+      ;; Debug: check collision result when lib-jak is active
+      (when *lib-jak-enabled*
+        (when (not (logtest? (-> self control status) (cshape-moving-flags onsurf)))
+          (format 0 "[TARGET] NOT on-surf! pos-y=~f vel-y=~f tris=~D prims=~D~%"
+                  (-> self control trans y) (-> self control transv y)
+                  (-> *collide-cache* num-tris) (-> *collide-cache* num-prims))))
       (if (logtest? (-> self control root-prim prim-core action) (collide-action edgegrab-possible))
         (find-edge-grabs! *target* *collide-cache*))
       (if *debug-segment*

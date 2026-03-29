@@ -430,17 +430,65 @@ static void skel_mesh_draw(SkelMesh* sm) {
 #define GROUND_CZ 500
 #define GROUND_Y 42
 
-static struct SM64Surface sm64_ground[] = {
+/* Raised platform — a box the characters can walk onto */
+#define PLAT_CX 500
+#define PLAT_CZ 500
+#define PLAT_W  1500      /* half-width */
+#define PLAT_D  1500      /* half-depth */
+#define PLAT_Y  200       /* top surface height */
+#define PLAT_BOT GROUND_Y /* bottom = ground level */
+
+/* All static collision surfaces: ground (2 tris) + platform top (2 tris) + 4 ramp/side faces (8 tris) */
+static struct SM64Surface sm64_surfaces[] = {
+    /* Ground plane (2 tris) */
     {0, 0, 0, {{GROUND_CX - GROUND_SIZE, GROUND_Y, GROUND_CZ + GROUND_SIZE},
                {GROUND_CX + GROUND_SIZE, GROUND_Y, GROUND_CZ - GROUND_SIZE},
                {GROUND_CX - GROUND_SIZE, GROUND_Y, GROUND_CZ - GROUND_SIZE}}},
     {0, 0, 0, {{GROUND_CX - GROUND_SIZE, GROUND_Y, GROUND_CZ + GROUND_SIZE},
                {GROUND_CX + GROUND_SIZE, GROUND_Y, GROUND_CZ + GROUND_SIZE},
                {GROUND_CX + GROUND_SIZE, GROUND_Y, GROUND_CZ - GROUND_SIZE}}},
-};
-static const int sm64_ground_count = 2;
 
-/* Ground mesh for rendering */
+    /* Platform top (2 tris) */
+    {0, 0, 0, {{PLAT_CX - PLAT_W, PLAT_Y, PLAT_CZ + PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y, PLAT_CZ - PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_Y, PLAT_CZ - PLAT_D}}},
+    {0, 0, 0, {{PLAT_CX - PLAT_W, PLAT_Y, PLAT_CZ + PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y, PLAT_CZ + PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y, PLAT_CZ - PLAT_D}}},
+
+    /* Platform sides — walls so characters don't clip through from below */
+    /* Front face (Z+) */
+    {0, 0, 0, {{PLAT_CX - PLAT_W, PLAT_BOT, PLAT_CZ + PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y,   PLAT_CZ + PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_Y,   PLAT_CZ + PLAT_D}}},
+    {0, 0, 0, {{PLAT_CX - PLAT_W, PLAT_BOT, PLAT_CZ + PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_BOT, PLAT_CZ + PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y,   PLAT_CZ + PLAT_D}}},
+    /* Back face (Z-) */
+    {0, 0, 0, {{PLAT_CX + PLAT_W, PLAT_BOT, PLAT_CZ - PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_Y,   PLAT_CZ - PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y,   PLAT_CZ - PLAT_D}}},
+    {0, 0, 0, {{PLAT_CX + PLAT_W, PLAT_BOT, PLAT_CZ - PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_BOT, PLAT_CZ - PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_Y,   PLAT_CZ - PLAT_D}}},
+    /* Left face (X-) */
+    {0, 0, 0, {{PLAT_CX - PLAT_W, PLAT_BOT, PLAT_CZ - PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_Y,   PLAT_CZ + PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_Y,   PLAT_CZ - PLAT_D}}},
+    {0, 0, 0, {{PLAT_CX - PLAT_W, PLAT_BOT, PLAT_CZ - PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_BOT, PLAT_CZ + PLAT_D},
+               {PLAT_CX - PLAT_W, PLAT_Y,   PLAT_CZ + PLAT_D}}},
+    /* Right face (X+) */
+    {0, 0, 0, {{PLAT_CX + PLAT_W, PLAT_BOT, PLAT_CZ + PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y,   PLAT_CZ - PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y,   PLAT_CZ + PLAT_D}}},
+    {0, 0, 0, {{PLAT_CX + PLAT_W, PLAT_BOT, PLAT_CZ + PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_BOT, PLAT_CZ - PLAT_D},
+               {PLAT_CX + PLAT_W, PLAT_Y,   PLAT_CZ - PLAT_D}}},
+};
+static const int sm64_surface_count = 12;  /* 2 ground + 2 top + 8 sides */
+
+/* Ground mesh for rendering (just the flat ground plane) */
 static float ground_positions[] = {
     GROUND_CX - GROUND_SIZE, GROUND_Y, GROUND_CZ - GROUND_SIZE,
     GROUND_CX + GROUND_SIZE, GROUND_Y, GROUND_CZ - GROUND_SIZE,
@@ -457,6 +505,45 @@ static float ground_colors[] = {
     0.3f,0.5f,0.3f, 0.3f,0.5f,0.3f, 0.3f,0.5f,0.3f,
     0.3f,0.5f,0.3f, 0.3f,0.5f,0.3f, 0.3f,0.5f,0.3f,
 };
+
+/* Platform mesh for rendering (top + 4 sides = 10 tris = 30 verts) */
+static float platform_positions[] = {
+    /* Top face */
+    PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,  PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,  PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,
+    PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,  PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,  PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,
+    /* Front face (Z+) */
+    PLAT_CX-PLAT_W, PLAT_BOT, PLAT_CZ+PLAT_D,  PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,  PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,
+    PLAT_CX-PLAT_W, PLAT_BOT, PLAT_CZ+PLAT_D,  PLAT_CX+PLAT_W, PLAT_BOT, PLAT_CZ+PLAT_D,  PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,
+    /* Back face (Z-) */
+    PLAT_CX+PLAT_W, PLAT_BOT, PLAT_CZ-PLAT_D,  PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,  PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,
+    PLAT_CX+PLAT_W, PLAT_BOT, PLAT_CZ-PLAT_D,  PLAT_CX-PLAT_W, PLAT_BOT, PLAT_CZ-PLAT_D,  PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,
+    /* Left face (X-) */
+    PLAT_CX-PLAT_W, PLAT_BOT, PLAT_CZ-PLAT_D,  PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,  PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,
+    PLAT_CX-PLAT_W, PLAT_BOT, PLAT_CZ-PLAT_D,  PLAT_CX-PLAT_W, PLAT_BOT, PLAT_CZ+PLAT_D,  PLAT_CX-PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,
+    /* Right face (X+) */
+    PLAT_CX+PLAT_W, PLAT_BOT, PLAT_CZ+PLAT_D,  PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,  PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ+PLAT_D,
+    PLAT_CX+PLAT_W, PLAT_BOT, PLAT_CZ+PLAT_D,  PLAT_CX+PLAT_W, PLAT_BOT, PLAT_CZ-PLAT_D,  PLAT_CX+PLAT_W, PLAT_Y, PLAT_CZ-PLAT_D,
+};
+static float platform_normals[] = {
+    /* Top */     0,1,0,  0,1,0,  0,1,0,   0,1,0,  0,1,0,  0,1,0,
+    /* Front */   0,0,1,  0,0,1,  0,0,1,   0,0,1,  0,0,1,  0,0,1,
+    /* Back */    0,0,-1, 0,0,-1, 0,0,-1,  0,0,-1, 0,0,-1, 0,0,-1,
+    /* Left */   -1,0,0, -1,0,0, -1,0,0,  -1,0,0, -1,0,0, -1,0,0,
+    /* Right */   1,0,0,  1,0,0,  1,0,0,   1,0,0,  1,0,0,  1,0,0,
+};
+static float platform_colors[] = {
+    /* Top — tan/brown */
+    0.6f,0.5f,0.3f, 0.6f,0.5f,0.3f, 0.6f,0.5f,0.3f,  0.6f,0.5f,0.3f, 0.6f,0.5f,0.3f, 0.6f,0.5f,0.3f,
+    /* Front — slightly darker */
+    0.5f,0.4f,0.25f, 0.5f,0.4f,0.25f, 0.5f,0.4f,0.25f,  0.5f,0.4f,0.25f, 0.5f,0.4f,0.25f, 0.5f,0.4f,0.25f,
+    /* Back */
+    0.45f,0.35f,0.2f, 0.45f,0.35f,0.2f, 0.45f,0.35f,0.2f,  0.45f,0.35f,0.2f, 0.45f,0.35f,0.2f, 0.45f,0.35f,0.2f,
+    /* Left */
+    0.5f,0.4f,0.25f, 0.5f,0.4f,0.25f, 0.5f,0.4f,0.25f,  0.5f,0.4f,0.25f, 0.5f,0.4f,0.25f, 0.5f,0.4f,0.25f,
+    /* Right */
+    0.55f,0.45f,0.28f, 0.55f,0.45f,0.28f, 0.55f,0.45f,0.28f,  0.55f,0.45f,0.28f, 0.55f,0.45f,0.28f, 0.55f,0.45f,0.28f,
+};
+static const int PLATFORM_TRI_COUNT = 10;
 
 /* -------------------------------------------------------------------------- */
 /*  Callbacks                                                                  */
@@ -654,7 +741,7 @@ int main(int argc, char** argv) {
     sm64_worker.geo.numTrianglesUsed = 0;
 
     std::thread sm64_thread([&]() {
-        sm64_worker.thread_func(rom, sm64_tex, sm64_ground, sm64_ground_count,
+        sm64_worker.thread_func(rom, sm64_tex, sm64_surfaces, sm64_surface_count,
                                 GROUND_CX, GROUND_Y, GROUND_CZ);
     });
 
@@ -695,6 +782,11 @@ int main(int argc, char** argv) {
     CharMesh ground_mesh;
     char_mesh_init(&ground_mesh, 2);
     char_mesh_update(&ground_mesh, ground_positions, ground_normals, ground_colors, 2);
+
+    /* Platform mesh */
+    CharMesh plat_mesh;
+    char_mesh_init(&plat_mesh, PLATFORM_TRI_COUNT);
+    char_mesh_update(&plat_mesh, platform_positions, platform_normals, platform_colors, PLATFORM_TRI_COUNT);
 
     /* Mario mesh */
     CharMesh mario_mesh;
@@ -828,6 +920,27 @@ int main(int argc, char** argv) {
         if (btn_a) jak_inputs.buttons |= JAK_BUTTON_X;
         if (btn_b) jak_inputs.buttons |= JAK_BUTTON_CIRCLE;
 
+        /* Auto-walk: start AFTER Jak has landed (frame 900 = ~15 sec) */
+        {
+            static int auto_frame = 0;
+            auto_frame++;
+            int auto_start = 900;
+            int auto_end = 1200;
+            if (auto_frame >= auto_start && auto_frame < auto_end) {
+                jak_inputs.stick_x = 0.0f;
+                jak_inputs.stick_y = 0.7f;
+                if (auto_frame == auto_start)
+                    printf("[AUTO] Starting auto-walk at frame %d, Jak Y=%.1f\n", auto_frame, jak_state.position[1]);
+                if ((auto_frame - auto_start) % 10 == 0)
+                    printf("[AUTO] frame %d  Jak Y=%.2f\n", auto_frame, jak_state.position[1]);
+            } else if (auto_frame == auto_end) {
+                printf("[AUTO] Stopping auto-walk at frame %d, Jak Y=%.1f\n", auto_frame, jak_state.position[1]);
+            }
+            /* Also log Y every 60 frames BEFORE auto-walk to track landing */
+            if (auto_frame < auto_start && auto_frame % 60 == 0)
+                printf("[PRE] frame %d  Jak Y=%.2f\n", auto_frame, jak_state.position[1]);
+        }
+
         /* Physics ticks at 30fps */
         while (tick_accum >= 1.0f/30.0f) {
             tick_accum -= 1.0f/30.0f;
@@ -841,17 +954,17 @@ int main(int argc, char** argv) {
                 jak_ready = true;
                 LOG("Jak runtime ready!\n");
 
-                /* Share collision with Jak */
-                JakSurface jak_surfs[2];
-                for (int i = 0; i < 2; i++) {
+                /* Share ALL collision surfaces with Jak (ground + platform) */
+                JakSurface jak_surfs[12];
+                for (int i = 0; i < sm64_surface_count; i++) {
                     jak_surfs[i].type = JAK_SURFACE_STONE;
                     jak_surfs[i].flags = 0;
                     for (int v = 0; v < 3; v++)
                         for (int c = 0; c < 3; c++)
-                            jak_surfs[i].vertices[v][c] = (float)sm64_ground[i].vertices[v][c];
+                            jak_surfs[i].vertices[v][c] = (float)sm64_surfaces[i].vertices[v][c];
                     memset(jak_surfs[i].normal, 0, sizeof(float)*3);
                 }
-                jak_static_surfaces_load(jak_surfs, 2);
+                jak_static_surfaces_load(jak_surfs, sm64_surface_count);
 
                 jak_id = jak_create(GROUND_CX + 300.0f, GROUND_Y + 100.0f, GROUND_CZ);
                 printf("[INIT] Jak spawned (id=%d)\n", jak_id);
@@ -919,6 +1032,9 @@ int main(int argc, char** argv) {
         /* Draw ground */
         glDisable(GL_CULL_FACE);
         char_mesh_draw(&ground_mesh);
+
+        /* Draw platform */
+        char_mesh_draw(&plat_mesh);
         glEnable(GL_CULL_FACE);
 
         /* Draw Mario */
