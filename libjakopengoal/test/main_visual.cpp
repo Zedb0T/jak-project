@@ -687,6 +687,127 @@ static float spawn_colors[] = {
 static const int SPAWN_TRI_COUNT = 10;
 
 /* -------------------------------------------------------------------------- */
+/*  Moving platform — SM64 surface object with oscillation + rotation          */
+/* -------------------------------------------------------------------------- */
+
+/* Platform slab dimensions (local space, centered at origin) */
+#define MP_W  200       /* half-width (X) */
+#define MP_D  200       /* half-depth (Z) */
+#define MP_H  20        /* half-height (Y thickness) */
+
+/* Animation parameters */
+#define MP_CENTER_X  0.0f
+#define MP_CENTER_Y  350.0f   /* above static platform (PLAT_Y=200) */
+#define MP_CENTER_Z  500.0f
+#define MP_AMPLITUDE 400.0f   /* oscillation distance in X */
+#define MP_PERIOD    4.0f     /* seconds per full oscillation */
+#define MP_ROT_SPEED 30.0f    /* degrees per second (Y rotation) — SM64 uses degrees */
+
+/* Local-space SM64 surfaces for the moving platform slab (top + bottom + 4 sides = 12 tris) */
+static struct SM64Surface mp_sm64_surfaces[] = {
+    /* Top face (2 tris) — normal up */
+    {0, 0, 0, {{ -MP_W, MP_H,  MP_D},
+               {  MP_W, MP_H, -MP_D},
+               { -MP_W, MP_H, -MP_D}}},
+    {0, 0, 0, {{ -MP_W, MP_H,  MP_D},
+               {  MP_W, MP_H,  MP_D},
+               {  MP_W, MP_H, -MP_D}}},
+    /* Bottom face (2 tris) — normal down */
+    {0, 0, 0, {{ -MP_W, -MP_H, -MP_D},
+               {  MP_W, -MP_H,  MP_D},
+               { -MP_W, -MP_H,  MP_D}}},
+    {0, 0, 0, {{ -MP_W, -MP_H, -MP_D},
+               {  MP_W, -MP_H, -MP_D},
+               {  MP_W, -MP_H,  MP_D}}},
+    /* Front face Z+ (2 tris) */
+    {0, 0, 0, {{ -MP_W, -MP_H,  MP_D},
+               {  MP_W,  MP_H,  MP_D},
+               { -MP_W,  MP_H,  MP_D}}},
+    {0, 0, 0, {{ -MP_W, -MP_H,  MP_D},
+               {  MP_W, -MP_H,  MP_D},
+               {  MP_W,  MP_H,  MP_D}}},
+    /* Back face Z- (2 tris) */
+    {0, 0, 0, {{  MP_W, -MP_H, -MP_D},
+               { -MP_W,  MP_H, -MP_D},
+               {  MP_W,  MP_H, -MP_D}}},
+    {0, 0, 0, {{  MP_W, -MP_H, -MP_D},
+               { -MP_W, -MP_H, -MP_D},
+               { -MP_W,  MP_H, -MP_D}}},
+    /* Left face X- (2 tris) */
+    {0, 0, 0, {{ -MP_W, -MP_H, -MP_D},
+               { -MP_W,  MP_H,  MP_D},
+               { -MP_W,  MP_H, -MP_D}}},
+    {0, 0, 0, {{ -MP_W, -MP_H, -MP_D},
+               { -MP_W, -MP_H,  MP_D},
+               { -MP_W,  MP_H,  MP_D}}},
+    /* Right face X+ (2 tris) */
+    {0, 0, 0, {{  MP_W, -MP_H,  MP_D},
+               {  MP_W,  MP_H, -MP_D},
+               {  MP_W,  MP_H,  MP_D}}},
+    {0, 0, 0, {{  MP_W, -MP_H,  MP_D},
+               {  MP_W, -MP_H, -MP_D},
+               {  MP_W,  MP_H, -MP_D}}},
+};
+static const int MP_SURFACE_COUNT = 12;
+static const int MP_TRI_COUNT = 12;  /* for rendering */
+
+/**
+ * Build the render mesh for the moving platform, transformed by position + Y rotation.
+ * Writes into caller-provided arrays (must hold MP_TRI_COUNT*3 verts = 36 verts).
+ */
+static void mp_build_render_mesh(float px, float py, float pz, float yaw,
+                                  float* out_pos, float* out_nrm, float* out_col) {
+    float cy = cosf(yaw), sy = sinf(yaw);
+
+    /* Local-space vertices matching the SM64 surfaces above */
+    struct { float x, y, z; } local_verts[MP_TRI_COUNT * 3];
+    struct { float nx, ny, nz; } local_norms[MP_TRI_COUNT * 3];
+
+    /* Build from the surface array */
+    for (int t = 0; t < MP_TRI_COUNT; t++) {
+        for (int v = 0; v < 3; v++) {
+            int idx = t * 3 + v;
+            local_verts[idx].x = (float)mp_sm64_surfaces[t].vertices[v][0];
+            local_verts[idx].y = (float)mp_sm64_surfaces[t].vertices[v][1];
+            local_verts[idx].z = (float)mp_sm64_surfaces[t].vertices[v][2];
+        }
+        /* Compute face normal from cross product */
+        float ax = local_verts[t*3+1].x - local_verts[t*3].x;
+        float ay = local_verts[t*3+1].y - local_verts[t*3].y;
+        float az = local_verts[t*3+1].z - local_verts[t*3].z;
+        float bx = local_verts[t*3+2].x - local_verts[t*3].x;
+        float by = local_verts[t*3+2].y - local_verts[t*3].y;
+        float bz = local_verts[t*3+2].z - local_verts[t*3].z;
+        float nx = ay*bz - az*by, ny = az*bx - ax*bz, nz = ax*by - ay*bx;
+        float len = sqrtf(nx*nx + ny*ny + nz*nz);
+        if (len > 0.0001f) { nx /= len; ny /= len; nz /= len; }
+        for (int v = 0; v < 3; v++) {
+            local_norms[t*3+v].nx = nx;
+            local_norms[t*3+v].ny = ny;
+            local_norms[t*3+v].nz = nz;
+        }
+    }
+
+    /* Transform to world space (Y-axis rotation + translation) */
+    for (int i = 0; i < MP_TRI_COUNT * 3; i++) {
+        float lx = local_verts[i].x, ly = local_verts[i].y, lz = local_verts[i].z;
+        out_pos[i*3+0] = px + lx * cy + lz * sy;
+        out_pos[i*3+1] = py + ly;
+        out_pos[i*3+2] = pz - lx * sy + lz * cy;
+
+        float lnx = local_norms[i].nx, lny = local_norms[i].ny, lnz = local_norms[i].nz;
+        out_nrm[i*3+0] = lnx * cy + lnz * sy;
+        out_nrm[i*3+1] = lny;
+        out_nrm[i*3+2] = -lnx * sy + lnz * cy;
+
+        /* Orange/red color for moving platform */
+        out_col[i*3+0] = 0.9f;
+        out_col[i*3+1] = 0.4f;
+        out_col[i*3+2] = 0.1f;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Callbacks                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -716,10 +837,16 @@ struct SM64Worker {
     SM64MarioState  state  = {};
     SM64MarioGeometryBuffers geo = {};
 
-    // Pending surface object to create/delete on the worker thread
+    // Pending surface object to create/delete on the worker thread (spawned platform)
     SM64SurfaceObject* pending_surface_obj = nullptr;
     int32_t pending_surface_delete = -1;  // object ID to delete, or -1
     uint32_t last_surface_obj_id = 0;     // ID returned by sm64_surface_object_create
+
+    // Moving platform — separate tracking from spawned platform
+    SM64SurfaceObject* pending_mp_create = nullptr;
+    uint32_t mp_surface_id = 0;
+    bool mp_created = false;
+    SM64ObjectTransform* pending_mp_move = nullptr;  // queued transform update
 
     void thread_func(uint8_t* rom, uint8_t* tex,
                      SM64Surface* ground, int ground_count,
@@ -748,6 +875,10 @@ struct SM64Worker {
             pending_surface_obj = nullptr;
             int32_t surf_to_delete = pending_surface_delete;
             pending_surface_delete = -1;
+            SM64SurfaceObject* mp_to_create = pending_mp_create;
+            pending_mp_create = nullptr;
+            SM64ObjectTransform* mp_to_move = pending_mp_move;
+            pending_mp_move = nullptr;
             lock.unlock();
 
             // Create/delete surface objects on this thread (SM64 not thread-safe)
@@ -756,6 +887,17 @@ struct SM64Worker {
             }
             if (surf_to_delete >= 0) {
                 sm64_surface_object_delete((uint32_t)surf_to_delete);
+            }
+
+            // Moving platform create/move
+            if (mp_to_create) {
+                mp_surface_id = sm64_surface_object_create(mp_to_create);
+                mp_created = true;
+                printf("[MP] Created SM64 surface object id=%u\n", mp_surface_id);
+                fflush(stdout);
+            }
+            if (mp_to_move && mp_created) {
+                sm64_surface_object_move(mp_surface_id, mp_to_move);
             }
 
             if (mario_id >= 0) {
@@ -917,6 +1059,23 @@ int main(int argc, char** argv) {
         }
         marioId = sm64_worker.mario_id;
         LOG("[INIT] SM64 init complete. Mario id=%d\n", marioId);
+
+        /* Create the moving platform as an SM64 surface object */
+        static SM64SurfaceObject mp_obj = {};
+        mp_obj.transform.position[0] = MP_CENTER_X;
+        mp_obj.transform.position[1] = MP_CENTER_Y;
+        mp_obj.transform.position[2] = MP_CENTER_Z;
+        mp_obj.transform.eulerRotation[0] = 0;
+        mp_obj.transform.eulerRotation[1] = 0;
+        mp_obj.transform.eulerRotation[2] = 0;
+        mp_obj.surfaceCount = MP_SURFACE_COUNT;
+        mp_obj.surfaces = mp_sm64_surfaces;
+        {
+            std::lock_guard<std::mutex> lock(sm64_worker.mtx);
+            sm64_worker.pending_mp_create = &mp_obj;
+        }
+        LOG("[INIT] Queued moving platform creation at (%.0f, %.0f, %.0f)\n",
+            MP_CENTER_X, MP_CENTER_Y, MP_CENTER_Z);
     } else {
         LOG("[INIT] SM64 disabled (no ROM)\n");
     }
@@ -971,6 +1130,15 @@ int main(int argc, char** argv) {
     bool spawn_visible = false;
     int jump_count = 0;
     bool prev_btn_a = false;
+
+    /* Moving platform mesh + animation state */
+    CharMesh mp_mesh;
+    char_mesh_init(&mp_mesh, MP_TRI_COUNT);
+    float mp_time = 0.0f;
+    static SM64ObjectTransform mp_transform = {};  /* persists for worker thread pointer */
+    float mp_render_pos[MP_TRI_COUNT * 3 * 3];
+    float mp_render_nrm[MP_TRI_COUNT * 3 * 3];
+    float mp_render_col[MP_TRI_COUNT * 3 * 3];
 
     /* Mario mesh */
     CharMesh mario_mesh;
@@ -1202,6 +1370,24 @@ int main(int argc, char** argv) {
         while (tick_accum >= 1.0f/30.0f) {
             tick_accum -= 1.0f/30.0f;
 
+            /* Animate moving platform */
+            if (sm64_enabled) {
+                mp_time += 1.0f / 30.0f;
+                float t = mp_time * 2.0f * (float)M_PI / MP_PERIOD;
+                mp_transform.position[0] = MP_CENTER_X + MP_AMPLITUDE * sinf(t);
+                mp_transform.position[1] = MP_CENTER_Y;
+                mp_transform.position[2] = MP_CENTER_Z;
+                mp_transform.eulerRotation[0] = 0;
+                mp_transform.eulerRotation[1] = fmodf(mp_time * MP_ROT_SPEED, 360.0f);  /* degrees for SM64 */
+                mp_transform.eulerRotation[2] = 0;
+
+                /* Queue move on worker thread */
+                {
+                    std::lock_guard<std::mutex> lock(sm64_worker.mtx);
+                    sm64_worker.pending_mp_move = &mp_transform;
+                }
+            }
+
             if (sm64_enabled && marioId >= 0) {
                 sm64_worker.request_tick(mario_inputs);
             }
@@ -1256,6 +1442,16 @@ int main(int argc, char** argv) {
                     logged_first_tick = true;
                 }
             }
+        }
+
+        /* Update moving platform render mesh */
+        if (sm64_enabled) {
+            /* SM64 CONVERT_ANGLE negates: -(deg)/180*32768, so negate yaw for render to match */
+            float yaw_rad = -mp_transform.eulerRotation[1] * (float)M_PI / 180.0f;
+            mp_build_render_mesh(mp_transform.position[0], mp_transform.position[1],
+                                 mp_transform.position[2], yaw_rad,
+                                 mp_render_pos, mp_render_nrm, mp_render_col);
+            char_mesh_update(&mp_mesh, mp_render_pos, mp_render_nrm, mp_render_col, MP_TRI_COUNT);
         }
 
         /* Update meshes */
@@ -1316,6 +1512,10 @@ int main(int argc, char** argv) {
         /* Draw spawned platform (if visible) */
         if (spawn_visible)
             char_mesh_draw(&spawn_mesh);
+
+        /* Draw moving platform */
+        if (sm64_enabled)
+            char_mesh_draw(&mp_mesh);
         glEnable(GL_CULL_FACE);
 
         /* Draw Mario */
@@ -1407,6 +1607,27 @@ int main(int argc, char** argv) {
                        mario_state.position[0], mario_state.position[1], mario_state.position[2],
                        jak_state.position[0], jak_state.position[1], jak_state.position[2],
                        jak_ready ? 1 : 0, jak_id);
+                if (sm64_enabled) {
+                    float mp_px = mp_transform.position[0];
+                    float mp_py = mp_transform.position[1];
+                    float mp_pz = mp_transform.position[2];
+                    float mp_yaw = mp_transform.eulerRotation[1];
+                    float mp_top = mp_py + MP_H;
+                    float mario_dx = mario_state.position[0] - mp_px;
+                    float mario_dy = mario_state.position[1] - mp_top;
+                    float mario_dz = mario_state.position[2] - mp_pz;
+                    bool mario_above = (mario_dy >= -5.0f && mario_dy < 50.0f);
+                    bool mario_in_xz = (fabsf(mario_dx) < MP_W + 50 && fabsf(mario_dz) < MP_D + 50);
+                    printf("[MP] pos=(%.1f, %.1f, %.1f) yaw=%.2f top=%.1f | Mario dist=(%.1f, %.1f, %.1f) on_plat=%s\n",
+                           mp_px, mp_py, mp_pz, mp_yaw, mp_top,
+                           mario_dx, mario_dy, mario_dz,
+                           (mario_above && mario_in_xz) ? "YES" : "no");
+                    /* Print first render tri to verify mesh transform */
+                    printf("[MP MESH] v0=(%.1f,%.1f,%.1f) v1=(%.1f,%.1f,%.1f) v2=(%.1f,%.1f,%.1f)\n",
+                           mp_render_pos[0], mp_render_pos[1], mp_render_pos[2],
+                           mp_render_pos[3], mp_render_pos[4], mp_render_pos[5],
+                           mp_render_pos[6], mp_render_pos[7], mp_render_pos[8]);
+                }
                 fflush(stdout);
             }
         }
