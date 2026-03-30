@@ -908,14 +908,20 @@ static void inject_camera_rotation() {
     cam_z = s_pad_state.current_inputs.cam_z;
   }
 
-  // Normalize the look direction to get cos/sin of camera yaw.
-  // cam_x/cam_z point from camera toward target, but GOAL's inv-camera-rot
-  // is the inverse rotation, so we negate to get camera-facing direction.
+  // Normalize the look direction to build inv-camera-rot.
+  // cam_x/cam_z point from camera toward target (the look direction).
+  // GOAL's inv-camera-rot transforms camera-local to world (column-major):
+  //   col0 = right   = (-cam_z, 0, cam_x) / len   (left-handed: up × forward)
+  //   col1 = up      = (0, 1, 0)
+  //   col2 = forward = (cam_x, 0, cam_z) / len     (look direction)
+  // read-pad creates (0,0,1) for stick-up, multiplied by this matrix gives col2 = forward.
   float len = sqrtf(cam_x * cam_x + cam_z * cam_z);
   if (len < 0.001f)
     return;
-  float cos_y = -cam_z / len;
-  float sin_y = -cam_x / len;
+  float fwd_x = cam_x / len;
+  float fwd_z = cam_z / len;
+  float right_x = fwd_z;     //  cam_z / len
+  float right_z = -fwd_x;    // -cam_x / len
 
   auto mc_sym = jak1::intern_from_c("*math-camera*");
   if (!mc_sym.offset || mc_sym->value == 0 || mc_sym->value == s7.offset)
@@ -923,14 +929,14 @@ static void inject_camera_rotation() {
 
   u32 mc_ptr = mc_sym->value;
 
-  // Write Y-rotation matrix to both inv-camera-rot and inv-camera-rot-smooth
+  // Write rotation matrix to both inv-camera-rot and inv-camera-rot-smooth
   // math-camera is a basic type: all-types offsets 432 and 496, -4 for basic = 428 and 492
   for (int offset : {428, 492}) {
     float* m = (float*)(g_ee_main_mem + mc_ptr + offset);
-    m[0] = cos_y;   m[1] = 0.0f;  m[2] = sin_y;   m[3] = 0.0f;   // col 0 (right)
-    m[4] = 0.0f;    m[5] = 1.0f;  m[6] = 0.0f;     m[7] = 0.0f;   // col 1 (up)
-    m[8] = -sin_y;  m[9] = 0.0f;  m[10] = cos_y;   m[11] = 0.0f;  // col 2 (forward)
-    m[12] = 0.0f;   m[13] = 0.0f; m[14] = 0.0f;    m[15] = 1.0f;  // col 3 (translation)
+    m[0] = right_x;  m[1] = 0.0f;  m[2] = right_z;  m[3] = 0.0f;   // col 0 (right)
+    m[4] = 0.0f;     m[5] = 1.0f;  m[6] = 0.0f;     m[7] = 0.0f;   // col 1 (up)
+    m[8] = fwd_x;    m[9] = 0.0f;  m[10] = fwd_z;   m[11] = 0.0f;  // col 2 (forward)
+    m[12] = 0.0f;    m[13] = 0.0f; m[14] = 0.0f;    m[15] = 1.0f;  // col 3 (translation)
   }
 }
 
