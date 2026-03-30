@@ -69,6 +69,7 @@ struct Fr3ModelData {
     u32 index_count;
     bool no_strip;  // true = triangle list, false = triangle strip with UINT32_MAX restart
     s32 tree_tex_id;  // index into level.textures for this draw's texture
+    u8 eye_id;        // 0xff = not eye, otherwise (slot<<1)|is_right
   };
   std::vector<DrawRange> draws;
   float xyz_scale = 1.0f;
@@ -80,6 +81,9 @@ struct Fr3ModelData {
   u32 atlas_width = 0;
   u32 atlas_height = 0;
   bool textures_loaded = false;
+
+  // Eye texture: index into atlas_rects for the iris texture used for eye draws
+  s32 eye_tex_id = -1;  // -1 = no eye texture found
 };
 static Fr3ModelData s_fr3_model;
 static std::mutex s_fr3_mutex;
@@ -137,7 +141,7 @@ static bool load_jak_model_from_fr3(const std::string& fr3_name) {
 
   for (const auto& effect : jak_model->effects) {
     for (const auto& draw : effect.all_draws) {
-      s_fr3_model.draws.push_back({draw.first_index, draw.index_count, draw.no_strip, draw.tree_tex_id});
+      s_fr3_model.draws.push_back({draw.first_index, draw.index_count, draw.no_strip, draw.tree_tex_id, draw.eye_id});
     }
   }
 
@@ -156,12 +160,41 @@ static bool load_jak_model_from_fr3(const std::string& fr3_name) {
            total_tris);
 
   // Build texture atlas from FR3 level textures
+  // Find the iris texture for eye rendering
+  s32 iris_tex_id = -1;
+  for (u32 ti = 0; ti < level.textures.size(); ti++) {
+    if (level.textures[ti].debug_name == "bam-iris-16x16" &&
+        level.textures[ti].debug_tpage_name == "eichar") {
+      iris_tex_id = (s32)ti;
+      break;
+    }
+  }
+  if (iris_tex_id < 0) {
+    // Fallback: try any iris texture
+    for (u32 ti = 0; ti < level.textures.size(); ti++) {
+      if (level.textures[ti].debug_name.find("iris") != std::string::npos) {
+        iris_tex_id = (s32)ti;
+        break;
+      }
+    }
+  }
+  s_fr3_model.eye_tex_id = iris_tex_id;
+  if (iris_tex_id >= 0) {
+    lg::info("[libjakopengoal] Using texture [{}] '{}' {}x{} for static eye rendering",
+             iris_tex_id, level.textures[iris_tex_id].debug_name,
+             level.textures[iris_tex_id].w, level.textures[iris_tex_id].h);
+  }
+
   // Collect unique texture IDs used by draws
   std::set<s32> used_tex_ids;
   for (const auto& d : s_fr3_model.draws) {
     if (d.tree_tex_id >= 0 && (u32)d.tree_tex_id < level.textures.size()) {
       used_tex_ids.insert(d.tree_tex_id);
     }
+  }
+  // Also include the iris texture in the atlas
+  if (iris_tex_id >= 0) {
+    used_tex_ids.insert(iris_tex_id);
   }
 
   lg::info("[libjakopengoal] {} unique textures referenced by draws, {} total in level",
@@ -990,7 +1023,12 @@ void extract_jak_mesh() {
       if (s_fr3_model.textures_loaded && tri_idx < triangle_draw_ids.size()) {
         u32 didx = triangle_draw_ids[tri_idx];
         if (didx < s_fr3_model.draws.size()) {
-          s32 tex_id = s_fr3_model.draws[didx].tree_tex_id;
+          const auto& draw = s_fr3_model.draws[didx];
+          // For eye draws, use the iris texture instead of the placeholder
+          s32 tex_id = draw.tree_tex_id;
+          if (draw.eye_id != 0xff && s_fr3_model.eye_tex_id >= 0) {
+            tex_id = s_fr3_model.eye_tex_id;
+          }
           if (tex_id >= 0 && (u32)tex_id < s_fr3_model.atlas_rects.size()) {
             const auto& rect = s_fr3_model.atlas_rects[tex_id];
             if (rect.w > 0 && rect.h > 0) {
@@ -1019,6 +1057,18 @@ void extract_jak_mesh() {
     lg::info("[libjakopengoal] First mesh extraction: {} triangles, {} bones ({})",
              s_mesh_state.num_triangles, s_bone_matrices.size(),
              using_identity_bones ? "IDENTITY/T-pose" : "from GOAL");
+    // Log eye draw vertex info
+    if (s_fr3_model.eye_tex_id >= 0) {
+      u32 eye_verts = 0;
+      for (u32 i = 0; i < (u32)triangle_draw_ids.size(); i++) {
+        u32 didx = triangle_draw_ids[i];
+        if (didx < s_fr3_model.draws.size() && s_fr3_model.draws[didx].eye_id != 0xff) {
+          eye_verts += 3;
+        }
+      }
+      lg::info("[libjakopengoal] Eye triangles: {} ({} vertices), using iris tex [{}]",
+               eye_verts / 3, eye_verts, s_fr3_model.eye_tex_id);
+    }
     // Log sample UV values
     if (s_fr3_model.textures_loaded) {
       lg::info("[libjakopengoal] UV sample (first 10 verts, atlas-remapped):");
