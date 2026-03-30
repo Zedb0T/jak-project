@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <set>
 
 #include "common/custom_data/Tfrag3Data.h"
 #include "common/log/log.h"
@@ -35,6 +36,8 @@ static MeshState s_mesh_state;
 static CommandQueue s_command_queue;
 static std::atomic<bool> s_runtime_ready{false};
 static BoneDebugData s_bone_debug;
+static TextureAtlasInfo s_texture_atlas_info;
+static uint8_t* s_texture_output = nullptr;
 
 // Bone matrix storage for CPU skinning
 struct BoneMatrix {
@@ -51,6 +54,11 @@ static bool s_bones_valid = false;
 static std::vector<BoneMatrix> s_bind_pose_matrices;
 static bool s_bind_poses_loaded = false;
 
+// Atlas sub-texture rectangle (in pixel coordinates within the atlas)
+struct AtlasRect {
+  u32 x, y, w, h;
+};
+
 // FR3 model data for Jak's mesh (loaded once at init)
 struct Fr3ModelData {
   std::vector<tfrag3::MercVertex> vertices;  // base-pose vertices (indexed by indices)
@@ -60,11 +68,18 @@ struct Fr3ModelData {
     u32 first_index;
     u32 index_count;
     bool no_strip;  // true = triangle list, false = triangle strip with UINT32_MAX restart
+    s32 tree_tex_id;  // index into level.textures for this draw's texture
   };
   std::vector<DrawRange> draws;
   float xyz_scale = 1.0f;
   u32 max_bones = 0;
   bool loaded = false;
+
+  // Texture atlas data
+  std::vector<AtlasRect> atlas_rects;  // per-texture atlas placement (indexed by tree_tex_id)
+  u32 atlas_width = 0;
+  u32 atlas_height = 0;
+  bool textures_loaded = false;
 };
 static Fr3ModelData s_fr3_model;
 static std::mutex s_fr3_mutex;
@@ -122,7 +137,7 @@ static bool load_jak_model_from_fr3(const std::string& fr3_name) {
 
   for (const auto& effect : jak_model->effects) {
     for (const auto& draw : effect.all_draws) {
-      s_fr3_model.draws.push_back({draw.first_index, draw.index_count, draw.no_strip});
+      s_fr3_model.draws.push_back({draw.first_index, draw.index_count, draw.no_strip, draw.tree_tex_id});
     }
   }
 
@@ -139,6 +154,93 @@ static bool load_jak_model_from_fr3(const std::string& fr3_name) {
   lg::info("[libjakopengoal] Loaded eichar-lod0: {} vertices, {} indices, {} draws, ~{} triangles",
            s_fr3_model.vertices.size(), s_fr3_model.indices.size(), s_fr3_model.draws.size(),
            total_tris);
+
+  // Build texture atlas from FR3 level textures
+  // Collect unique texture IDs used by draws
+  std::set<s32> used_tex_ids;
+  for (const auto& d : s_fr3_model.draws) {
+    if (d.tree_tex_id >= 0 && (u32)d.tree_tex_id < level.textures.size()) {
+      used_tex_ids.insert(d.tree_tex_id);
+    }
+  }
+
+  lg::info("[libjakopengoal] {} unique textures referenced by draws, {} total in level",
+           used_tex_ids.size(), level.textures.size());
+
+  // Pack textures into the atlas using a simple shelf-packing algorithm
+  u32 atlas_w = JAK_TEXTURE_WIDTH;
+  u32 atlas_h = JAK_TEXTURE_HEIGHT;
+  s_fr3_model.atlas_width = atlas_w;
+  s_fr3_model.atlas_height = atlas_h;
+
+  // Allocate atlas rects for all textures (even unused ones get empty rects)
+  s_fr3_model.atlas_rects.resize(level.textures.size());
+
+  // Shelf packing: place textures left-to-right, top-to-bottom
+  u32 shelf_x = 0, shelf_y = 0, shelf_h = 0;
+  std::vector<u32> atlas_pixels(atlas_w * atlas_h, 0);  // RGBA8
+
+  for (s32 tex_id : used_tex_ids) {
+    const auto& tex = level.textures[tex_id];
+    if (tex.w == 0 || tex.h == 0 || tex.data.empty()) {
+      lg::warn("[libjakopengoal] Texture {} ({}) has no data ({}x{})",
+               tex_id, tex.debug_name, tex.w, tex.h);
+      continue;
+    }
+
+    // Check if texture fits on current shelf
+    if (shelf_x + tex.w > atlas_w) {
+      // Move to next shelf
+      shelf_y += shelf_h;
+      shelf_x = 0;
+      shelf_h = 0;
+    }
+
+    if (shelf_y + tex.h > atlas_h) {
+      lg::warn("[libjakopengoal] Atlas overflow! Cannot fit texture {} ({}x{}) at y={}",
+               tex_id, tex.w, tex.h, shelf_y);
+      continue;
+    }
+
+    // Place texture
+    s_fr3_model.atlas_rects[tex_id] = {shelf_x, shelf_y, tex.w, tex.h};
+
+    // Copy pixel data into atlas
+    for (u32 row = 0; row < tex.h; row++) {
+      for (u32 col = 0; col < tex.w; col++) {
+        u32 src_idx = row * tex.w + col;
+        u32 dst_idx = (shelf_y + row) * atlas_w + (shelf_x + col);
+        if (src_idx < tex.data.size() && dst_idx < atlas_pixels.size()) {
+          atlas_pixels[dst_idx] = tex.data[src_idx];
+        }
+      }
+    }
+
+    lg::info("[libjakopengoal]   tex[{}] '{}' {}x{} -> atlas ({},{})-({}x{})",
+             tex_id, tex.debug_name, tex.w, tex.h,
+             shelf_x, shelf_y, tex.w, tex.h);
+
+    shelf_x += tex.w;
+    if (tex.h > shelf_h) shelf_h = tex.h;
+  }
+
+  // Write atlas to the output texture buffer if provided
+  if (s_texture_output) {
+    memcpy(s_texture_output, atlas_pixels.data(), atlas_w * atlas_h * 4);
+    lg::info("[libjakopengoal] Wrote {}x{} texture atlas to output buffer ({} bytes)",
+             atlas_w, atlas_h, atlas_w * atlas_h * 4);
+  }
+
+  s_fr3_model.textures_loaded = !used_tex_ids.empty();
+
+  // Update texture atlas info
+  {
+    auto& tai = get_texture_atlas_info();
+    tai.atlas_width = atlas_w;
+    tai.atlas_height = atlas_h;
+    tai.num_textures = (u32)used_tex_ids.size();
+    tai.valid = s_fr3_model.textures_loaded;
+  }
 
   return true;
 }
@@ -160,6 +262,15 @@ CommandQueue& get_command_queue() {
 }
 BoneDebugData& get_bone_debug_data() {
   return s_bone_debug;
+}
+TextureAtlasInfo& get_texture_atlas_info() {
+  return s_texture_atlas_info;
+}
+void set_texture_output(uint8_t* ptr) {
+  s_texture_output = ptr;
+}
+uint8_t* get_texture_output() {
+  return s_texture_output;
 }
 
 bool is_runtime_ready() {
@@ -706,10 +817,14 @@ void extract_jak_mesh() {
   // Convert triangle strips to triangle lists.
   // FR3 index buffers use UINT32_MAX as primitive restart markers for strips.
   // We need to expand strips into individual triangles.
+  // Also track which draw each triangle came from (for UV atlas remapping).
   std::vector<u32> triangle_indices;
+  std::vector<u32> triangle_draw_ids;  // one per triangle (not per vertex)
   triangle_indices.reserve(JAK_GEO_MAX_TRIANGLES * 3);
+  triangle_draw_ids.reserve(JAK_GEO_MAX_TRIANGLES);
 
-  for (const auto& draw : s_fr3_model.draws) {
+  for (u32 draw_idx = 0; draw_idx < s_fr3_model.draws.size(); draw_idx++) {
+    const auto& draw = s_fr3_model.draws[draw_idx];
     if (draw.no_strip) {
       // Triangle list: indices are already grouped in triples, skip UINT32_MAX
       for (uint32_t j = 0; j + 2 < draw.index_count; j += 3) {
@@ -720,6 +835,7 @@ void extract_jak_mesh() {
         triangle_indices.push_back(i0);
         triangle_indices.push_back(i1);
         triangle_indices.push_back(i2);
+        triangle_draw_ids.push_back(draw_idx);
       }
     } else {
       // Triangle strip with primitive restart (UINT32_MAX)
@@ -748,6 +864,7 @@ void extract_jak_mesh() {
                 triangle_indices.push_back(idx2);
                 triangle_indices.push_back(idx1);
               }
+              triangle_draw_ids.push_back(draw_idx);
             }
           }
           strip_start = j + 1;
@@ -864,8 +981,35 @@ void extract_jak_mesh() {
     s_mesh_state.colors[out_idx * 3 + 1] = v.rgba[1] / 255.0f;
     s_mesh_state.colors[out_idx * 3 + 2] = v.rgba[2] / 255.0f;
 
-    s_mesh_state.uvs[out_idx * 2 + 0] = v.st[0];
-    s_mesh_state.uvs[out_idx * 2 + 1] = v.st[1];
+    // Remap UVs from per-texture space to atlas space
+    {
+      u32 tri_idx = ti / 3;
+      float u = v.st[0];
+      float v_coord = v.st[1];
+
+      if (s_fr3_model.textures_loaded && tri_idx < triangle_draw_ids.size()) {
+        u32 didx = triangle_draw_ids[tri_idx];
+        if (didx < s_fr3_model.draws.size()) {
+          s32 tex_id = s_fr3_model.draws[didx].tree_tex_id;
+          if (tex_id >= 0 && (u32)tex_id < s_fr3_model.atlas_rects.size()) {
+            const auto& rect = s_fr3_model.atlas_rects[tex_id];
+            if (rect.w > 0 && rect.h > 0) {
+              // Wrap UVs to [0,1] range first (textures repeat)
+              u = u - std::floor(u);
+              v_coord = v_coord - std::floor(v_coord);
+              // Remap to atlas sub-rect in normalized [0,1] atlas space
+              float atlas_w = (float)s_fr3_model.atlas_width;
+              float atlas_h = (float)s_fr3_model.atlas_height;
+              u = ((float)rect.x + u * (float)rect.w) / atlas_w;
+              v_coord = ((float)rect.y + v_coord * (float)rect.h) / atlas_h;
+            }
+          }
+        }
+      }
+
+      s_mesh_state.uvs[out_idx * 2 + 0] = u;
+      s_mesh_state.uvs[out_idx * 2 + 1] = v_coord;
+    }
 
     out_idx++;
   }
@@ -875,6 +1019,20 @@ void extract_jak_mesh() {
     lg::info("[libjakopengoal] First mesh extraction: {} triangles, {} bones ({})",
              s_mesh_state.num_triangles, s_bone_matrices.size(),
              using_identity_bones ? "IDENTITY/T-pose" : "from GOAL");
+    // Log sample UV values
+    if (s_fr3_model.textures_loaded) {
+      lg::info("[libjakopengoal] UV sample (first 10 verts, atlas-remapped):");
+      for (u32 i = 0; i < 10 && i < out_idx; i++) {
+        lg::info("  v[{}]: uv=({:.4f}, {:.4f})", i, s_mesh_state.uvs[i*2], s_mesh_state.uvs[i*2+1]);
+      }
+      // Count vertices with UVs in valid range [0,1]
+      u32 in_range = 0;
+      for (u32 i = 0; i < out_idx; i++) {
+        float u = s_mesh_state.uvs[i*2], v = s_mesh_state.uvs[i*2+1];
+        if (u >= 0.0f && u <= 1.0f && v >= 0.0f && v <= 1.0f) in_range++;
+      }
+      lg::info("[libjakopengoal] UV range: {}/{} verts in [0,1]", in_range, out_idx);
+    }
   }
   s_mesh_state.valid = true;
 
@@ -1321,10 +1479,20 @@ void bridge_tick() {
   // (gFrameNum stops incrementing, VAG clock stops, sound dies after ~1s).
   iop::LIBRARY_signal_vblank();
 
-  // Throttle the GOAL runtime — without display/vsync it runs too fast.
-  // ~16ms sleep per tick brings it from uncapped to roughly 60fps,
-  // which feels like ~50% speed since the game expects vsync-paced frames.
-  std::this_thread::sleep_for(std::chrono::milliseconds(16));
+  // Throttle the GOAL runtime to ~60fps — without display/vsync it runs uncapped.
+  // We measure wall-clock time since the last tick and sleep for the remainder of 16.67ms.
+  {
+    using clock = std::chrono::steady_clock;
+    static auto last_tick = clock::now();
+    constexpr auto FRAME_TIME = std::chrono::microseconds(16667);  // 60fps
+
+    auto now = clock::now();
+    auto elapsed = now - last_tick;
+    if (elapsed < FRAME_TIME) {
+      std::this_thread::sleep_for(FRAME_TIME - elapsed);
+    }
+    last_tick = clock::now();
+  }
 }
 
 }  // namespace jak_bridge

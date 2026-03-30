@@ -106,13 +106,32 @@ void extract_jak_state();
 /*  Mesh / geometry extraction                                                */
 /* -------------------------------------------------------------------------- */
 
+struct TextureAtlasInfo {
+  uint32_t atlas_width = 0;
+  uint32_t atlas_height = 0;
+  uint32_t num_textures = 0;
+  bool valid = false;
+};
+
+TextureAtlasInfo& get_texture_atlas_info();
+
+/**
+ * Set the texture output buffer pointer (called from libjakopengoal.cpp during init).
+ */
+void set_texture_output(uint8_t* ptr);
+
+/**
+ * Get the texture output buffer pointer.
+ */
+uint8_t* get_texture_output();
+
 struct MeshState {
   std::mutex mutex;
   // Pre-skinned vertex data (CPU-side bone transform applied)
   std::vector<float> positions;  // x,y,z per vertex
   std::vector<float> normals;    // nx,ny,nz per vertex
   std::vector<float> colors;     // r,g,b,a per vertex
-  std::vector<float> uvs;        // u,v per vertex
+  std::vector<float> uvs;        // u,v per vertex (atlas-remapped)
   uint32_t num_triangles = 0;
   bool valid = false;
 };

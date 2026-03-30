@@ -86,6 +86,7 @@ JAK_LIB_FN int32_t jak_global_init(const char* game_data_path, uint8_t* out_text
 
   s_game_data_path = game_data_path ? game_data_path : "";
   s_texture_output = out_texture;
+  jak_bridge::set_texture_output(out_texture);
 
   // Initialize logging
   lg::set_file_level(lg::level::info);
@@ -474,10 +475,11 @@ JAK_LIB_FN float jak_find_floor_height(float x, float y, float z) {
 /* -------------------------------------------------------------------------- */
 
 JAK_LIB_FN struct JakTextureInfo jak_get_texture_info(void) {
+  auto& tai = jak_bridge::get_texture_atlas_info();
   JakTextureInfo info;
-  info.width = JAK_TEXTURE_WIDTH;
-  info.height = JAK_TEXTURE_HEIGHT;
-  info.num_textures = 0;  // TODO: populate from loaded texture data
+  info.width = tai.valid ? tai.atlas_width : JAK_TEXTURE_WIDTH;
+  info.height = tai.valid ? tai.atlas_height : JAK_TEXTURE_HEIGHT;
+  info.num_textures = tai.num_textures;
   return info;
 }
 

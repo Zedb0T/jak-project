@@ -97,6 +97,45 @@ void main() {
 }
 )";
 
+/* Textured shader — used for Jak's mesh with texture atlas */
+static const char* TEX_VERT_SRC = R"(
+#version 330 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec3 aColor;
+layout(location = 3) in vec2 aUV;
+
+uniform mat4 uMVP;
+out vec3 vColor;
+out vec3 vNormal;
+out vec2 vUV;
+
+void main() {
+    gl_Position = uMVP * vec4(aPos, 1.0);
+    vColor = aColor;
+    vNormal = aNormal;
+    vUV = aUV;
+}
+)";
+
+static const char* TEX_FRAG_SRC = R"(
+#version 330 core
+in vec3 vColor;
+in vec3 vNormal;
+in vec2 vUV;
+out vec4 FragColor;
+
+uniform sampler2D uTexture;
+
+void main() {
+    vec3 light = normalize(vec3(1.0, 1.0, 0.5));
+    float diff = 0.4 + 0.6 * max(dot(normalize(vNormal), light), 0.0);
+    vec4 texColor = texture(uTexture, vUV);
+    // Multiply texture by vertex color and lighting (like merc2 shader)
+    FragColor = vec4(vColor * texColor.rgb * diff * 2.0, texColor.a);
+}
+)";
+
 /* -------------------------------------------------------------------------- */
 /*  Math helpers (minimal 4x4 matrix ops)                                      */
 /* -------------------------------------------------------------------------- */
@@ -269,12 +308,14 @@ static GLuint create_program(const char* vs, const char* fs) {
 /* -------------------------------------------------------------------------- */
 
 struct CharMesh {
-    GLuint vao, vbo_pos, vbo_nrm, vbo_col;
+    GLuint vao, vbo_pos, vbo_nrm, vbo_col, vbo_uv;
     int num_verts;
+    bool has_uv;
 };
 
-static void char_mesh_init(CharMesh* cm, int max_tris) {
+static void char_mesh_init(CharMesh* cm, int max_tris, bool with_uv = false) {
     int max_verts = max_tris * 3;
+    cm->has_uv = with_uv;
     glGenVertexArrays(1, &cm->vao);
     glBindVertexArray(cm->vao);
 
@@ -296,11 +337,20 @@ static void char_mesh_init(CharMesh* cm, int max_tris) {
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 
+    cm->vbo_uv = 0;
+    if (with_uv) {
+        glGenBuffers(1, &cm->vbo_uv);
+        glBindBuffer(GL_ARRAY_BUFFER, cm->vbo_uv);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 2 * max_verts, NULL, GL_DYNAMIC_DRAW);
+        glEnableVertexAttribArray(3);
+        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+    }
+
     glBindVertexArray(0);
     cm->num_verts = 0;
 }
 
-static void char_mesh_update(CharMesh* cm, float* pos, float* nrm, float* col, int num_tris) {
+static void char_mesh_update(CharMesh* cm, float* pos, float* nrm, float* col, int num_tris, float* uv = NULL) {
     cm->num_verts = num_tris * 3;
     glBindBuffer(GL_ARRAY_BUFFER, cm->vbo_pos);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 3 * cm->num_verts, pos);
@@ -308,6 +358,10 @@ static void char_mesh_update(CharMesh* cm, float* pos, float* nrm, float* col, i
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 3 * cm->num_verts, nrm);
     glBindBuffer(GL_ARRAY_BUFFER, cm->vbo_col);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 3 * cm->num_verts, col);
+    if (cm->has_uv && uv) {
+        glBindBuffer(GL_ARRAY_BUFFER, cm->vbo_uv);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 2 * cm->num_verts, uv);
+    }
 }
 
 static void char_mesh_draw(CharMesh* cm) {
@@ -773,18 +827,19 @@ int main(int argc, char** argv) {
     printf("Jak data: %s\n\n", jak_data);
 
     /* ---- Load SM64 ROM ---- */
+    uint8_t* rom = NULL;
+    size_t rom_size = 0;
     FILE* f = fopen(rom_path, "rb");
     if (!f) {
-        printf("ERROR: Cannot open ROM '%s'\n", rom_path);
-        printf("Usage: %s --rom <path-to-baserom.us.z64> --jak-data <path-to-jak-project>\n", argv[0]);
-        return 1;
+        printf("WARNING: Cannot open ROM '%s' — Mario will be disabled\n", rom_path);
+    } else {
+        fseek(f, 0, SEEK_END);
+        rom_size = ftell(f);
+        rewind(f);
+        rom = (uint8_t*)malloc(rom_size);
+        fread(rom, 1, rom_size, f);
+        fclose(f);
     }
-    fseek(f, 0, SEEK_END);
-    size_t rom_size = ftell(f);
-    rewind(f);
-    uint8_t* rom = (uint8_t*)malloc(rom_size);
-    fread(rom, 1, rom_size, f);
-    fclose(f);
 
     /* ---- Init SDL3 + OpenGL ---- */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
@@ -828,34 +883,43 @@ int main(int argc, char** argv) {
     }
 
     /* ---- Init libsm64 ---- */
-    LOG("[INIT] sm64_register_debug_print...\n");
-    sm64_register_debug_print_function(sm64_debug);
-    LOG("[INIT] Allocating SM64 texture...\n");
-    uint8_t* sm64_tex = (uint8_t*)malloc(4 * SM64_TEXTURE_WIDTH * SM64_TEXTURE_HEIGHT);
-    if (!sm64_tex) { LOG("ERROR: Failed to allocate SM64 texture\n"); return 1; }
-    memset(sm64_tex, 0, 4 * SM64_TEXTURE_WIDTH * SM64_TEXTURE_HEIGHT);
-
-    /* SM64 must init+tick on the SAME thread (it uses thread-local state internally) */
-    LOG("[INIT] Starting SM64 worker thread...\n");
+    uint8_t* sm64_tex = NULL;
     SM64Worker sm64_worker;
-    sm64_worker.geo.position = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
-    sm64_worker.geo.normal   = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
-    sm64_worker.geo.color    = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
-    sm64_worker.geo.uv       = (float*)malloc(sizeof(float) * 6 * SM64_GEO_MAX_TRIANGLES);
-    sm64_worker.geo.numTrianglesUsed = 0;
+    std::thread sm64_thread;
+    int32_t marioId = -1;
+    bool sm64_enabled = (rom != NULL);
 
-    std::thread sm64_thread([&]() {
-        sm64_worker.thread_func(rom, sm64_tex, sm64_surfaces, sm64_surface_count,
-                                GROUND_CX, GROUND_Y, GROUND_CZ);
-    });
+    if (sm64_enabled) {
+        LOG("[INIT] sm64_register_debug_print...\n");
+        sm64_register_debug_print_function(sm64_debug);
+        LOG("[INIT] Allocating SM64 texture...\n");
+        sm64_tex = (uint8_t*)malloc(4 * SM64_TEXTURE_WIDTH * SM64_TEXTURE_HEIGHT);
+        if (!sm64_tex) { LOG("ERROR: Failed to allocate SM64 texture\n"); return 1; }
+        memset(sm64_tex, 0, 4 * SM64_TEXTURE_WIDTH * SM64_TEXTURE_HEIGHT);
 
-    /* Pump events while SM64 inits so Windows doesn't kill us */
-    while (!sm64_worker.init_done.load()) {
-        SDL_PumpEvents();
-        SDL_Delay(16);
+        /* SM64 must init+tick on the SAME thread (it uses thread-local state internally) */
+        LOG("[INIT] Starting SM64 worker thread...\n");
+        sm64_worker.geo.position = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
+        sm64_worker.geo.normal   = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
+        sm64_worker.geo.color    = (float*)malloc(sizeof(float) * 9 * SM64_GEO_MAX_TRIANGLES);
+        sm64_worker.geo.uv       = (float*)malloc(sizeof(float) * 6 * SM64_GEO_MAX_TRIANGLES);
+        sm64_worker.geo.numTrianglesUsed = 0;
+
+        sm64_thread = std::thread([&]() {
+            sm64_worker.thread_func(rom, sm64_tex, sm64_surfaces, sm64_surface_count,
+                                    GROUND_CX, GROUND_Y, GROUND_CZ);
+        });
+
+        /* Pump events while SM64 inits so Windows doesn't kill us */
+        while (!sm64_worker.init_done.load()) {
+            SDL_PumpEvents();
+            SDL_Delay(16);
+        }
+        marioId = sm64_worker.mario_id;
+        LOG("[INIT] SM64 init complete. Mario id=%d\n", marioId);
+    } else {
+        LOG("[INIT] SM64 disabled (no ROM)\n");
     }
-    int32_t marioId = sm64_worker.mario_id;
-    LOG("[INIT] SM64 init complete. Mario id=%d\n", marioId);
 
     /* ---- Init libjakopengoal ---- */
     LOG("[INIT] jak_register_debug_print...\n");
@@ -871,6 +935,15 @@ int main(int argc, char** argv) {
     /* ---- GL setup ---- */
     GLuint prog = create_program(VERT_SRC, FRAG_SRC);
     GLint uMVP = glGetUniformLocation(prog, "uMVP");
+
+    /* Textured shader for Jak */
+    GLuint tex_prog = create_program(TEX_VERT_SRC, TEX_FRAG_SRC);
+    GLint tex_uMVP = glGetUniformLocation(tex_prog, "uMVP");
+    GLint tex_uTexture = glGetUniformLocation(tex_prog, "uTexture");
+
+    /* Jak texture atlas GL object — created later when atlas data is ready */
+    GLuint jak_gl_texture = 0;
+    bool jak_texture_created = false;
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -908,9 +981,9 @@ int main(int argc, char** argv) {
     SM64MarioState& mario_state = sm64_worker.state;
     SM64MarioInputs mario_inputs = {};
 
-    /* Jak mesh */
+    /* Jak mesh (with UV support for textures) */
     CharMesh jak_mesh;
-    char_mesh_init(&jak_mesh, JAK_GEO_MAX_TRIANGLES);
+    char_mesh_init(&jak_mesh, JAK_GEO_MAX_TRIANGLES, true);
 
     /* Skeleton debug mesh */
     SkelMesh jak_skel;
@@ -1129,7 +1202,7 @@ int main(int argc, char** argv) {
         while (tick_accum >= 1.0f/30.0f) {
             tick_accum -= 1.0f/30.0f;
 
-            if (marioId >= 0) {
+            if (sm64_enabled && marioId >= 0) {
                 sm64_worker.request_tick(mario_inputs);
             }
 
@@ -1152,6 +1225,26 @@ int main(int argc, char** argv) {
 
                 jak_id = jak_create(GROUND_CX + 300.0f, GROUND_Y + 100.0f, GROUND_CZ);
                 printf("[INIT] Jak spawned (id=%d)\n", jak_id);
+
+                /* Create GL texture from the Jak texture atlas (populated during FR3 load) */
+                JakTextureInfo tex_info = jak_get_texture_info();
+                printf("[INIT] Jak texture atlas: %ux%u, %u textures\n",
+                       tex_info.width, tex_info.height, tex_info.num_textures);
+                if (tex_info.num_textures > 0 && jak_tex) {
+                    glGenTextures(1, &jak_gl_texture);
+                    glBindTexture(GL_TEXTURE_2D, jak_gl_texture);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+                                 tex_info.width, tex_info.height, 0,
+                                 GL_RGBA, GL_UNSIGNED_BYTE, jak_tex);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                    jak_texture_created = true;
+                    printf("[INIT] Created GL texture for Jak atlas (%ux%u)\n",
+                           tex_info.width, tex_info.height);
+                }
             }
 
             /* Tick Jak (once per frame — engine runs at its own rate internally) */
@@ -1192,7 +1285,7 @@ int main(int argc, char** argv) {
                 printed_tri = true;
             }
             char_mesh_update(&jak_mesh, jak_geo.position, jak_geo.normal,
-                           jak_geo.color, jak_geo.num_triangles_used);
+                           jak_geo.color, jak_geo.num_triangles_used, jak_geo.uv);
         }
 
         /* ---- Render ---- */
@@ -1230,8 +1323,23 @@ int main(int argc, char** argv) {
 
         /* Draw Jak mesh (disable culling — GOAL winding order differs) */
         glDisable(GL_CULL_FACE);
-        if (jak_mesh.num_verts > 0)
-            char_mesh_draw(&jak_mesh);
+        if (jak_mesh.num_verts > 0) {
+            if (jak_texture_created && jak_gl_texture) {
+                /* Use textured shader */
+                glUseProgram(tex_prog);
+                glUniformMatrix4fv(tex_uMVP, 1, GL_FALSE, mvp);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, jak_gl_texture);
+                glUniform1i(tex_uTexture, 0);
+                char_mesh_draw(&jak_mesh);
+                glBindTexture(GL_TEXTURE_2D, 0);
+                /* Switch back to non-textured shader */
+                glUseProgram(prog);
+                glUniformMatrix4fv(uMVP, 1, GL_FALSE, mvp);
+            } else {
+                char_mesh_draw(&jak_mesh);
+            }
+        }
         glEnable(GL_CULL_FACE);
 
         /* Draw Jak skeleton & debug markers (toggle with draw_debug_skeleton) */
@@ -1313,16 +1421,20 @@ int main(int argc, char** argv) {
     printf("Cleaning up...\n");
 
     /* Stop SM64 worker thread (it will call sm64_mario_delete/terminate on its thread) */
-    sm64_worker.stop();
-    sm64_thread.join();
-    if (marioId >= 0) sm64_mario_delete(marioId);
-    sm64_global_terminate();
+    if (sm64_enabled) {
+        sm64_worker.stop();
+        sm64_thread.join();
+        if (marioId >= 0) sm64_mario_delete(marioId);
+        sm64_global_terminate();
+    }
 
     if (jak_id >= 0) jak_delete(jak_id);
     if (jak_result >= 0) jak_global_terminate();
 
-    free(sm64_worker.geo.position); free(sm64_worker.geo.normal);
-    free(sm64_worker.geo.color); free(sm64_worker.geo.uv);
+    if (sm64_enabled) {
+        free(sm64_worker.geo.position); free(sm64_worker.geo.normal);
+        free(sm64_worker.geo.color); free(sm64_worker.geo.uv);
+    }
     free(jak_geo.position); free(jak_geo.normal);
     free(jak_geo.color); free(jak_geo.uv);
 
