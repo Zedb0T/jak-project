@@ -662,8 +662,10 @@ struct SM64Worker {
     SM64MarioState  state  = {};
     SM64MarioGeometryBuffers geo = {};
 
-    // Pending surface object to create on the worker thread
+    // Pending surface object to create/delete on the worker thread
     SM64SurfaceObject* pending_surface_obj = nullptr;
+    int32_t pending_surface_delete = -1;  // object ID to delete, or -1
+    uint32_t last_surface_obj_id = 0;     // ID returned by sm64_surface_object_create
 
     void thread_func(uint8_t* rom, uint8_t* tex,
                      SM64Surface* ground, int ground_count,
@@ -690,11 +692,16 @@ struct SM64Worker {
             SM64MarioInputs local_inputs = inputs;
             SM64SurfaceObject* surf_to_create = pending_surface_obj;
             pending_surface_obj = nullptr;
+            int32_t surf_to_delete = pending_surface_delete;
+            pending_surface_delete = -1;
             lock.unlock();
 
-            // Create any pending surface objects on this thread (SM64 not thread-safe)
+            // Create/delete surface objects on this thread (SM64 not thread-safe)
             if (surf_to_create) {
-                sm64_surface_object_create(surf_to_create);
+                last_surface_obj_id = sm64_surface_object_create(surf_to_create);
+            }
+            if (surf_to_delete >= 0) {
+                sm64_surface_object_delete((uint32_t)surf_to_delete);
             }
 
             if (mario_id >= 0) {
@@ -962,6 +969,7 @@ int main(int argc, char** argv) {
         const bool* kb = SDL_GetKeyboardState(NULL);
         float ix = 0, iy = 0;
         bool btn_a = false, btn_b = false, btn_z = false;
+        bool btn_square = false, btn_circle = false, btn_l1 = false, btn_r1 = false;
 
         if (gamepad && SDL_GamepadConnected(gamepad)) {
             float lx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
@@ -970,17 +978,25 @@ int main(int argc, char** argv) {
             if (lx * lx + ly * ly > 0.04f) { ix = lx; iy = ly; }
             float rx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
             if (fabsf(rx) > 0.2f) cam_rot += rx * dt * 3.0f;
-            btn_a = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
-            btn_b = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST);
+            btn_a = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH);       /* X / A */
+            btn_b = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST);        /* Square / X */
             btn_z = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+            btn_square = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST);   /* Square */
+            btn_circle = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST);   /* Circle */
+            btn_l1 = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+            btn_r1 = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
         } else {
             if (kb[SDL_SCANCODE_UP])    iy = -1;
             if (kb[SDL_SCANCODE_DOWN])  iy =  1;
             if (kb[SDL_SCANCODE_LEFT])  ix = -1;
             if (kb[SDL_SCANCODE_RIGHT]) ix =  1;
-            btn_a = kb[SDL_SCANCODE_X];
-            btn_b = kb[SDL_SCANCODE_C];
-            btn_z = kb[SDL_SCANCODE_Z];
+            btn_a = kb[SDL_SCANCODE_X];          /* X button (jump) */
+            btn_b = kb[SDL_SCANCODE_C];          /* Mario B */
+            btn_z = kb[SDL_SCANCODE_Z];          /* Mario Z */
+            btn_square = kb[SDL_SCANCODE_S];     /* Square (punch/spin) */
+            btn_circle = kb[SDL_SCANCODE_C];     /* Circle (roll/attack) */
+            btn_l1 = kb[SDL_SCANCODE_Q];         /* L1 */
+            btn_r1 = kb[SDL_SCANCODE_E];         /* R1 */
         }
         if (kb[SDL_SCANCODE_LSHIFT]) cam_rot += dt * 2.0f;
         if (kb[SDL_SCANCODE_RSHIFT]) cam_rot -= dt * 2.0f;
@@ -1021,15 +1037,20 @@ int main(int argc, char** argv) {
         jak_inputs.stick_x = ix;
         jak_inputs.stick_y = -iy;
         jak_inputs.buttons = 0;
-        if (btn_a) jak_inputs.buttons |= JAK_BUTTON_X;
-        if (btn_b) jak_inputs.buttons |= JAK_BUTTON_CIRCLE;
+        if (btn_a)      jak_inputs.buttons |= JAK_BUTTON_X;        /* jump */
+        if (btn_square)  jak_inputs.buttons |= JAK_BUTTON_SQUARE;   /* punch/spin kick */
+        if (btn_circle)  jak_inputs.buttons |= JAK_BUTTON_CIRCLE;   /* roll/yellow eco */
+        if (btn_l1)      jak_inputs.buttons |= JAK_BUTTON_L1;
+        if (btn_r1)      jak_inputs.buttons |= JAK_BUTTON_R1;
 
-        /* Track jump presses — spawn a new platform after 4 jumps */
-        if (btn_a && !prev_btn_a && !spawn_visible) {
+        /* Track jump presses — spawn platform after 4 jumps, despawn after 7 */
+        if (btn_a && !prev_btn_a) {
             jump_count++;
-            printf("[JUMP] Jump #%d/4\n", jump_count);
-            fflush(stdout);
-            if (jump_count >= 4) {
+            if (!spawn_visible && jump_count <= 4) {
+                printf("[JUMP] Jump #%d/4\n", jump_count);
+                fflush(stdout);
+            }
+            if (jump_count == 4 && !spawn_visible) {
                 printf("[SPAWN] Spawning new platform!\n");
                 fflush(stdout);
 
@@ -1073,6 +1094,32 @@ int main(int argc, char** argv) {
                 /* Upload render mesh */
                 char_mesh_update(&spawn_mesh, spawn_positions, spawn_normals, spawn_colors, SPAWN_TRI_COUNT);
                 spawn_visible = true;
+            } else if (jump_count == 7 && spawn_visible) {
+                printf("[DESPAWN] Removing spawned platform!\n");
+                fflush(stdout);
+
+                /* Queue SM64 surface object deletion on the worker thread */
+                {
+                    std::lock_guard<std::mutex> lock(sm64_worker.mtx);
+                    sm64_worker.pending_surface_delete = (int32_t)sm64_worker.last_surface_obj_id;
+                }
+
+                /* Reload Jak collision with only the original surfaces */
+                if (jak_ready) {
+                    JakSurface* orig_surfs = new JakSurface[sm64_surface_count];
+                    for (int i = 0; i < sm64_surface_count; i++) {
+                        orig_surfs[i].type = JAK_SURFACE_STONE;
+                        orig_surfs[i].flags = 0;
+                        for (int v = 0; v < 3; v++)
+                            for (int c = 0; c < 3; c++)
+                                orig_surfs[i].vertices[v][c] = (float)sm64_surfaces[i].vertices[v][c];
+                        memset(orig_surfs[i].normal, 0, sizeof(float)*3);
+                    }
+                    jak_static_surfaces_load(orig_surfs, sm64_surface_count);
+                    delete[] orig_surfs;
+                }
+
+                spawn_visible = false;
             }
         }
         prev_btn_a = btn_a;
