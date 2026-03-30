@@ -161,6 +161,10 @@ void KernelCheckAndDispatch() {
       SendAck();
     }
 
+#ifdef BUILD_LIBJAKOPENGOAL
+    // In library mode, bridge_tick() handles frame timing — skip extra sleep
+    if (!masterConfig.lib_jak_bridge)
+#endif
     if (time_ms < 4) {
       std::this_thread::sleep_for(std::chrono::microseconds(1000));
     }
