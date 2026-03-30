@@ -831,12 +831,7 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
   //  between what the GOAL compiler uses and what all-types.gc declares)
   *num_tris_ptr = existing_tris + tris_added;
 
-  static int fill_call_count = 0;
-  fill_call_count++;
-  if (fill_call_count <= 5 || (fill_call_count % 300 == 0)) {
-    lg::info("[COLLIDE DBG] fill #{}: existing={} added={} total={}",
-             fill_call_count, existing_tris, tris_added, *num_tris_ptr);
-  }
+
 
   return tris_added;
 }
