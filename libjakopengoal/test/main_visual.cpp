@@ -933,7 +933,8 @@ int main(int argc, char** argv) {
     /* ---- Camera ---- */
     float cam_rot = 0.0f;
     float cam_pos[3] = {0, 500, 1500};
-    bool cam_follow_jak = false;  /* Tab toggles between Mario/Jak */
+    bool cam_follow_jak = true;   /* Tab toggles between Mario/Jak */
+    bool draw_debug_skeleton = false;  /* Toggle skeleton/sphere debug drawing */
 
     /* ---- Main loop ---- */
     LOG("\n[INIT] Setup complete. Ground at (%d, %d, %d)\n", GROUND_CX, GROUND_Y, GROUND_CZ);
@@ -1227,67 +1228,67 @@ int main(int argc, char** argv) {
         /* Draw Mario */
         char_mesh_draw(&mario_mesh);
 
-        /* Draw Jak skeleton (bone lines instead of triangle mesh for debug) */
-        {
-            auto& bone_data = jak_bridge::get_bone_debug_data();
-            std::lock_guard<std::mutex> block(bone_data.mutex);
-            if (bone_data.valid && bone_data.num_bones > 0) {
-                skel_mesh_update(&jak_skel, bone_data);
-                glDisable(GL_DEPTH_TEST);  /* Draw skeleton on top */
-                glLineWidth(3.0f);
-                skel_mesh_draw(&jak_skel);
-                glLineWidth(1.0f);
-                glEnable(GL_DEPTH_TEST);
-            }
-        }
-        {
-            static int jak_dbg = 0;
-            if (++jak_dbg % 120 == 1) {
+        /* Draw Jak mesh (disable culling — GOAL winding order differs) */
+        glDisable(GL_CULL_FACE);
+        if (jak_mesh.num_verts > 0)
+            char_mesh_draw(&jak_mesh);
+        glEnable(GL_CULL_FACE);
+
+        /* Draw Jak skeleton & debug markers (toggle with draw_debug_skeleton) */
+        if (draw_debug_skeleton) {
+            {
                 auto& bone_data = jak_bridge::get_bone_debug_data();
                 std::lock_guard<std::mutex> block(bone_data.mutex);
-                printf("[JAK DBG] bones=%d valid=%d ready=%d id=%d",
-                       bone_data.num_bones, bone_data.valid?1:0, jak_ready?1:0, jak_id);
-                if (bone_data.valid && bone_data.num_bones > 3) {
-                    printf(" bone3=(%.1f,%.1f,%.1f)",
-                           bone_data.positions[3][0], bone_data.positions[3][1], bone_data.positions[3][2]);
+                if (bone_data.valid && bone_data.num_bones > 0) {
+                    skel_mesh_update(&jak_skel, bone_data);
+                    glDisable(GL_DEPTH_TEST);
+                    glLineWidth(3.0f);
+                    skel_mesh_draw(&jak_skel);
+                    glLineWidth(1.0f);
+                    glEnable(GL_DEPTH_TEST);
                 }
-                printf("\n");
-                fflush(stdout);
             }
-        }
-
-        /* Draw debug marker spheres at character positions */
-        {
-            mat4 model, vp, sphere_mvp;
-            mat4_mul(vp, proj, view);
-
-            /* Mario marker (red sphere at Mario's position + 100 up) */
-            if (marioId >= 0) {
-                mat4_translate(model, mario_state.position[0],
-                               mario_state.position[1] + 100.0f,
-                               mario_state.position[2]);
-                mat4_mul(sphere_mvp, vp, model);
-                glUniformMatrix4fv(uMVP, 1, GL_FALSE, sphere_mvp);
-                sphere_mesh_draw(&mario_sphere);
-            }
-
-            /* Jak marker (green sphere at Jak's position + 100 up) */
-            /* If position is zero, show at spawn point instead */
-            if (jak_ready) {
-                float jx = jak_state.position[0];
-                float jy = jak_state.position[1];
-                float jz = jak_state.position[2];
-                if (jx == 0.0f && jy == 0.0f && jz == 0.0f) {
-                    jx = GROUND_CX + 300.0f; jy = (float)GROUND_Y; jz = (float)GROUND_CZ;
+            {
+                static int jak_dbg = 0;
+                if (++jak_dbg % 120 == 1) {
+                    auto& bone_data = jak_bridge::get_bone_debug_data();
+                    std::lock_guard<std::mutex> block(bone_data.mutex);
+                    printf("[JAK DBG] bones=%d valid=%d ready=%d id=%d",
+                           bone_data.num_bones, bone_data.valid?1:0, jak_ready?1:0, jak_id);
+                    if (bone_data.valid && bone_data.num_bones > 3) {
+                        printf(" bone3=(%.1f,%.1f,%.1f)",
+                               bone_data.positions[3][0], bone_data.positions[3][1], bone_data.positions[3][2]);
+                    }
+                    printf("\n");
+                    fflush(stdout);
                 }
-                mat4_translate(model, jx, jy + 100.0f, jz);
-                mat4_mul(sphere_mvp, vp, model);
-                glUniformMatrix4fv(uMVP, 1, GL_FALSE, sphere_mvp);
-                sphere_mesh_draw(&jak_sphere);
             }
-
-            /* Reset MVP for next frame */
-            glUniformMatrix4fv(uMVP, 1, GL_FALSE, mvp);
+            /* Debug marker spheres */
+            {
+                mat4 model, vp, sphere_mvp;
+                mat4_mul(vp, proj, view);
+                if (marioId >= 0) {
+                    mat4_translate(model, mario_state.position[0],
+                                   mario_state.position[1] + 100.0f,
+                                   mario_state.position[2]);
+                    mat4_mul(sphere_mvp, vp, model);
+                    glUniformMatrix4fv(uMVP, 1, GL_FALSE, sphere_mvp);
+                    sphere_mesh_draw(&mario_sphere);
+                }
+                if (jak_ready) {
+                    float jx = jak_state.position[0];
+                    float jy = jak_state.position[1];
+                    float jz = jak_state.position[2];
+                    if (jx == 0.0f && jy == 0.0f && jz == 0.0f) {
+                        jx = GROUND_CX + 300.0f; jy = (float)GROUND_Y; jz = (float)GROUND_CZ;
+                    }
+                    mat4_translate(model, jx, jy + 100.0f, jz);
+                    mat4_mul(sphere_mvp, vp, model);
+                    glUniformMatrix4fv(uMVP, 1, GL_FALSE, sphere_mvp);
+                    sphere_mesh_draw(&jak_sphere);
+                }
+                glUniformMatrix4fv(uMVP, 1, GL_FALSE, mvp);
+            }
         }
 
         /* Print positions periodically */

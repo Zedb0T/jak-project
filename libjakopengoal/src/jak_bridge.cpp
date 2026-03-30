@@ -43,6 +43,12 @@ static std::mutex s_bone_mutex;
 static std::vector<BoneMatrix> s_bone_matrices;
 static bool s_bones_valid = false;
 
+// Joint bind-pose matrices (read once from art-joint-geo)
+// These transform model-space vertices into bone-local space.
+// Skinning matrix = bone_world_transform * bind_pose
+static std::vector<BoneMatrix> s_bind_pose_matrices;
+static bool s_bind_poses_loaded = false;
+
 // FR3 model data for Jak's mesh (loaded once at init)
 struct Fr3ModelData {
   std::vector<tfrag3::MercVertex> vertices;  // base-pose vertices (indexed by indices)
@@ -51,6 +57,7 @@ struct Fr3ModelData {
   struct DrawRange {
     u32 first_index;
     u32 index_count;
+    bool no_strip;  // true = triangle list, false = triangle strip with UINT32_MAX restart
   };
   std::vector<DrawRange> draws;
   float xyz_scale = 1.0f;
@@ -113,7 +120,7 @@ static bool load_jak_model_from_fr3(const std::string& fr3_name) {
 
   for (const auto& effect : jak_model->effects) {
     for (const auto& draw : effect.all_draws) {
-      s_fr3_model.draws.push_back({draw.first_index, draw.index_count});
+      s_fr3_model.draws.push_back({draw.first_index, draw.index_count, draw.no_strip});
     }
   }
 
@@ -253,11 +260,29 @@ void extract_jak_state() {
 /*  Mesh extraction (CPU-side bone skinning)                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Multiply two 4x4 matrices stored as float[4][4] in GOAL column-major order.
+ * result = A * B, where tmat[col][row] is the convention.
+ */
+static void mat4_mul_goal(float out[4][4], const float a[4][4], const float b[4][4]) {
+  // out_col[j] = A * b_col[j]
+  // out[j][r] = sum_c(a[c][r] * b[j][c]) for the 3x3 rotation part
+  for (int j = 0; j < 4; j++) {
+    for (int r = 0; r < 4; r++) {
+      float v = 0.0f;
+      for (int c = 0; c < 4; c++) {
+        v += a[c][r] * b[j][c];
+      }
+      out[j][r] = v;
+    }
+  }
+}
+
 static void skin_vertex(const float* pos_in,
                          const float* nrm_in,
                          const uint8_t* mats,
                          const float* weights,
-                         const std::vector<BoneMatrix>& bones,
+                         const std::vector<BoneMatrix>& skinning_matrices,
                          float* pos_out,
                          float* nrm_out) {
   pos_out[0] = pos_out[1] = pos_out[2] = 0.0f;
@@ -269,25 +294,26 @@ static void skin_vertex(const float* pos_in,
       continue;
 
     uint8_t bone_idx = mats[b];
-    if (bone_idx >= bones.size())
+    if (bone_idx >= skinning_matrices.size())
       continue;
 
-    const auto& bone = bones[bone_idx];
+    const auto& skin = skinning_matrices[bone_idx];
 
-    // Transform position: pos_out += w * (bone.tmat * pos_in)
+    // Transform position: result[r] = sum_c(tmat[c][r] * pos[c]) + tmat[3][r]
+    // tmat is stored as tmat[col][row] in GOAL column-major convention.
     for (int r = 0; r < 3; r++) {
-      float v = bone.tmat[r][3];  // translation component
+      float v = skin.tmat[3][r];  // translation column
       for (int c = 0; c < 3; c++) {
-        v += bone.tmat[r][c] * pos_in[c];
+        v += skin.tmat[c][r] * pos_in[c];
       }
       pos_out[r] += w * v;
     }
 
-    // Transform normal: nrm_out += w * (bone.nmat * nrm_in)
+    // Transform normal: result[r] = sum_c(nmat[c][r] * n[c])
     for (int r = 0; r < 3; r++) {
       float v = 0.0f;
       for (int c = 0; c < 3; c++) {
-        v += bone.nmat[r][c] * nrm_in[c];
+        v += skin.nmat[c][r] * nrm_in[c];
       }
       nrm_out[r] += w * v;
     }
@@ -372,11 +398,62 @@ static void read_bones_from_goal() {
     }
   }
 
-  // Cap to FR3 model's max_bones
+  // Cap to FR3 model's max_bones (+1 because max_bones is the highest index used)
   {
     std::lock_guard<std::mutex> fr3_lock(s_fr3_mutex);
-    if (s_fr3_model.loaded && s_fr3_model.max_bones > 0 && num_bones > s_fr3_model.max_bones) {
-      num_bones = s_fr3_model.max_bones;
+    if (s_fr3_model.loaded && s_fr3_model.max_bones > 0 &&
+        num_bones > s_fr3_model.max_bones + 1) {
+      num_bones = s_fr3_model.max_bones + 1;
+    }
+  }
+
+  // Read joint bind-pose matrices once from art-joint-geo
+  // These are needed for proper skinning: skinning_mat = bone_world * bind_pose
+  if (!s_bind_poses_loaded) {
+    // draw-control.jgeo (art-joint-geo) at all-types offset 12, -4 for basic = 8
+    u32 jgeo_ptr = *(u32*)(g_ee_main_mem + draw_ptr + 8);
+    if (jgeo_ptr != 0 && jgeo_ptr != s7.offset && jgeo_ptr < 0x8000000) {
+      // art.length at all-types offset 12, -4 for basic = 8
+      u32 num_joints = *(u32*)(g_ee_main_mem + jgeo_ptr + 8);
+      // art-joint-geo.data[0] at all-types offset 32, -4 for basic = 28
+      // data is a dynamic array of joint pointers; data[0] = first joint pointer
+      u32 first_joint_ptr = *(u32*)(g_ee_main_mem + jgeo_ptr + 28);
+
+      if (num_joints > 0 && num_joints <= 256 && first_joint_ptr != 0 &&
+          first_joint_ptr != s7.offset && first_joint_ptr < 0x8000000) {
+        // Joints are stored as an inline array starting at first_joint_ptr.
+        // Each joint is 0x50 (80) bytes (basic type).
+        // bind-pose (matrix 4x4) is at all-types offset 16, -4 for basic = 12.
+        constexpr u32 JOINT_SIZE = 0x50;   // 80 bytes per joint
+        constexpr u32 BIND_POSE_OFFSET = 12;  // all-types 16 - 4
+
+        s_bind_pose_matrices.resize(num_joints);
+        for (u32 i = 0; i < num_joints; i++) {
+          u32 joint_addr = first_joint_ptr + i * JOINT_SIZE;
+          float* bp_mat = (float*)(g_ee_main_mem + joint_addr + BIND_POSE_OFFSET);
+          // Copy bind-pose 4x4 matrix (same layout as bone transform)
+          for (int r = 0; r < 4; r++) {
+            for (int c = 0; c < 4; c++) {
+              s_bind_pose_matrices[i].tmat[r][c] = bp_mat[r * 4 + c];
+            }
+          }
+          // Normal matrix not needed for bind pose (computed from combined skinning matrix)
+        }
+
+        s_bind_poses_loaded = true;
+        lg::info("[libjakopengoal] Loaded {} joint bind-pose matrices from jgeo=0x{:x}",
+                 num_joints, jgeo_ptr);
+
+        // Log first bind-pose for diagnostics
+        if (num_joints > 0) {
+          lg::info("[libjakopengoal]   bind_pose[0] col0=({:.3f}, {:.3f}, {:.3f}, {:.3f})",
+                   s_bind_pose_matrices[0].tmat[0][0], s_bind_pose_matrices[0].tmat[0][1],
+                   s_bind_pose_matrices[0].tmat[0][2], s_bind_pose_matrices[0].tmat[0][3]);
+          lg::info("[libjakopengoal]   bind_pose[0] col3=({:.3f}, {:.3f}, {:.3f}, {:.3f})",
+                   s_bind_pose_matrices[0].tmat[3][0], s_bind_pose_matrices[0].tmat[3][1],
+                   s_bind_pose_matrices[0].tmat[3][2], s_bind_pose_matrices[0].tmat[3][3]);
+        }
+      }
     }
   }
 
@@ -539,8 +616,8 @@ void extract_jak_mesh() {
   if (!s_bones_valid || s_bone_matrices.empty()) {
     if (s_fr3_model.max_bones == 0)
       return;
-    s_bone_matrices.resize(s_fr3_model.max_bones);
-    for (u32 i = 0; i < s_fr3_model.max_bones; i++) {
+    s_bone_matrices.resize(s_fr3_model.max_bones + 1);
+    for (u32 i = 0; i <= s_fr3_model.max_bones; i++) {
       // Identity 4x4 transform
       for (int r = 0; r < 4; r++)
         for (int c = 0; c < 4; c++)
@@ -553,17 +630,194 @@ void extract_jak_mesh() {
     using_identity_bones = true;
   }
 
-  // Count total output vertices from all draws
-  uint32_t total_verts = 0;
-  for (const auto& draw : s_fr3_model.draws) {
-    total_verts += draw.index_count;
+  // Compute skinning matrices: skinning[b] = bone_transform[b] * bind_pose[b-1]
+  // This matches GOAL's new-bones-mtx-calc-asm:
+  //   output[i+1] = bone[i+1].transform * joints[i].bind_pose
+  // So for bone index b: skinning[b] = bone[b] * bind_pose[b-1]
+  u32 num_skinning = (u32)s_bone_matrices.size();
+  std::vector<BoneMatrix> skinning_matrices(num_skinning);
+
+  if (s_bind_poses_loaded && !using_identity_bones) {
+    // Bone 0: use raw bone transform (no bind pose for bone 0)
+    skinning_matrices[0] = s_bone_matrices[0];
+    // Compute combined skinning for bones 1+
+    for (u32 b = 1; b < num_skinning; b++) {
+      u32 joint_idx = b - 1;  // bone[b] pairs with joint[b-1]
+      if (joint_idx < s_bind_pose_matrices.size()) {
+        // skinning = bone_world * bind_pose (column-major multiply)
+        mat4_mul_goal(skinning_matrices[b].tmat, s_bone_matrices[b].tmat,
+                      s_bind_pose_matrices[joint_idx].tmat);
+      } else {
+        skinning_matrices[b] = s_bone_matrices[b];
+      }
+
+      // Compute normal matrix as inverse-transpose of upper 3x3
+      float* m = &skinning_matrices[b].tmat[0][0];
+      float det = m[0] * (m[5] * m[10] - m[6] * m[9]) -
+                  m[1] * (m[4] * m[10] - m[6] * m[8]) +
+                  m[2] * (m[4] * m[9] - m[5] * m[8]);
+      if (std::fabs(det) > 0.0001f) {
+        float inv_det = 1.0f / det;
+        skinning_matrices[b].nmat[0][0] = (m[5] * m[10] - m[6] * m[9]) * inv_det;
+        skinning_matrices[b].nmat[0][1] = (m[2] * m[9] - m[1] * m[10]) * inv_det;
+        skinning_matrices[b].nmat[0][2] = (m[1] * m[6] - m[2] * m[5]) * inv_det;
+        skinning_matrices[b].nmat[1][0] = (m[6] * m[8] - m[4] * m[10]) * inv_det;
+        skinning_matrices[b].nmat[1][1] = (m[0] * m[10] - m[2] * m[8]) * inv_det;
+        skinning_matrices[b].nmat[1][2] = (m[2] * m[4] - m[0] * m[6]) * inv_det;
+        skinning_matrices[b].nmat[2][0] = (m[4] * m[9] - m[5] * m[8]) * inv_det;
+        skinning_matrices[b].nmat[2][1] = (m[1] * m[8] - m[0] * m[9]) * inv_det;
+        skinning_matrices[b].nmat[2][2] = (m[0] * m[5] - m[1] * m[4]) * inv_det;
+      } else {
+        for (int r = 0; r < 3; r++)
+          for (int c = 0; c < 3; c++)
+            skinning_matrices[b].nmat[r][c] = (r == c) ? 1.0f : 0.0f;
+      }
+    }
+    // Also compute normal matrix for bone 0
+    {
+      float* m = &skinning_matrices[0].tmat[0][0];
+      float det = m[0] * (m[5] * m[10] - m[6] * m[9]) -
+                  m[1] * (m[4] * m[10] - m[6] * m[8]) +
+                  m[2] * (m[4] * m[9] - m[5] * m[8]);
+      if (std::fabs(det) > 0.0001f) {
+        float inv_det = 1.0f / det;
+        skinning_matrices[0].nmat[0][0] = (m[5] * m[10] - m[6] * m[9]) * inv_det;
+        skinning_matrices[0].nmat[0][1] = (m[2] * m[9] - m[1] * m[10]) * inv_det;
+        skinning_matrices[0].nmat[0][2] = (m[1] * m[6] - m[2] * m[5]) * inv_det;
+        skinning_matrices[0].nmat[1][0] = (m[6] * m[8] - m[4] * m[10]) * inv_det;
+        skinning_matrices[0].nmat[1][1] = (m[0] * m[10] - m[2] * m[8]) * inv_det;
+        skinning_matrices[0].nmat[1][2] = (m[2] * m[4] - m[0] * m[6]) * inv_det;
+        skinning_matrices[0].nmat[2][0] = (m[4] * m[9] - m[5] * m[8]) * inv_det;
+        skinning_matrices[0].nmat[2][1] = (m[1] * m[8] - m[0] * m[9]) * inv_det;
+        skinning_matrices[0].nmat[2][2] = (m[0] * m[5] - m[1] * m[4]) * inv_det;
+      } else {
+        for (int r = 0; r < 3; r++)
+          for (int c = 0; c < 3; c++)
+            skinning_matrices[0].nmat[r][c] = (r == c) ? 1.0f : 0.0f;
+      }
+    }
+  } else {
+    // No bind poses: use raw bone matrices as before
+    skinning_matrices.assign(s_bone_matrices.begin(), s_bone_matrices.end());
   }
+
+  // Convert triangle strips to triangle lists.
+  // FR3 index buffers use UINT32_MAX as primitive restart markers for strips.
+  // We need to expand strips into individual triangles.
+  std::vector<u32> triangle_indices;
+  triangle_indices.reserve(JAK_GEO_MAX_TRIANGLES * 3);
+
+  for (const auto& draw : s_fr3_model.draws) {
+    if (draw.no_strip) {
+      // Triangle list: indices are already grouped in triples, skip UINT32_MAX
+      for (uint32_t j = 0; j + 2 < draw.index_count; j += 3) {
+        u32 i0 = s_fr3_model.indices[draw.first_index + j + 0];
+        u32 i1 = s_fr3_model.indices[draw.first_index + j + 1];
+        u32 i2 = s_fr3_model.indices[draw.first_index + j + 2];
+        if (i0 == UINT32_MAX || i1 == UINT32_MAX || i2 == UINT32_MAX) continue;
+        triangle_indices.push_back(i0);
+        triangle_indices.push_back(i1);
+        triangle_indices.push_back(i2);
+      }
+    } else {
+      // Triangle strip with primitive restart (UINT32_MAX)
+      // Walk through indices, building strips and emitting triangles
+      uint32_t strip_start = 0;
+      for (uint32_t j = 0; j <= draw.index_count; j++) {
+        bool is_restart = (j == draw.index_count) ||
+                          (s_fr3_model.indices[draw.first_index + j] == UINT32_MAX);
+        if (is_restart) {
+          // Process strip from strip_start to j-1
+          uint32_t strip_len = j - strip_start;
+          if (strip_len >= 3) {
+            for (uint32_t k = 0; k + 2 < strip_len; k++) {
+              u32 idx0 = s_fr3_model.indices[draw.first_index + strip_start + k + 0];
+              u32 idx1 = s_fr3_model.indices[draw.first_index + strip_start + k + 1];
+              u32 idx2 = s_fr3_model.indices[draw.first_index + strip_start + k + 2];
+              // Skip degenerate triangles
+              if (idx0 == idx1 || idx1 == idx2 || idx0 == idx2) continue;
+              // Flip winding for even/odd triangles in the strip
+              if (k % 2 == 0) {
+                triangle_indices.push_back(idx0);
+                triangle_indices.push_back(idx1);
+                triangle_indices.push_back(idx2);
+              } else {
+                triangle_indices.push_back(idx0);
+                triangle_indices.push_back(idx2);
+                triangle_indices.push_back(idx1);
+              }
+            }
+          }
+          strip_start = j + 1;
+        }
+      }
+    }
+  }
+
+  uint32_t total_verts = (uint32_t)triangle_indices.size();
   if (total_verts == 0 || total_verts > JAK_GEO_MAX_TRIANGLES * 3) {
     return;
   }
 
-  // The FR3 vertex positions are pre-scaled by xyz_scale and need to be
-  // transformed by bone matrices (which are in GOAL internal units).
+  // One-time diagnostic: log bone usage and skinning matrix translations
+  {
+    static bool logged_bones = false;
+    if (!logged_bones && !using_identity_bones && s_bind_poses_loaded) {
+      logged_bones = true;
+      // Count vertices per bone index
+      u32 bone_usage[256] = {};
+      for (u32 ti = 0; ti < total_verts; ti++) {
+        u32 vi = triangle_indices[ti];
+        if (vi < s_fr3_model.vertices.size()) {
+          const auto& vtx = s_fr3_model.vertices[vi];
+          for (int b = 0; b < 3; b++) {
+            if (vtx.weights[b] > 0.0f) {
+              bone_usage[vtx.mats[b]]++;
+            }
+          }
+        }
+      }
+      lg::info("[libjakopengoal] Bone index usage in FR3 model:");
+      for (u32 bi = 0; bi < 256; bi++) {
+        if (bone_usage[bi] == 0)
+          continue;
+        if (bi < skinning_matrices.size()) {
+          const auto& sm = skinning_matrices[bi];
+          float tx = sm.tmat[3][0] * (50.0f / 4096.0f);
+          float ty = sm.tmat[3][1] * (50.0f / 4096.0f);
+          float tz = sm.tmat[3][2] * (50.0f / 4096.0f);
+          // Check rotation column magnitudes
+          float col0_len = std::sqrt(sm.tmat[0][0]*sm.tmat[0][0] + sm.tmat[0][1]*sm.tmat[0][1] + sm.tmat[0][2]*sm.tmat[0][2]);
+          float col1_len = std::sqrt(sm.tmat[1][0]*sm.tmat[1][0] + sm.tmat[1][1]*sm.tmat[1][1] + sm.tmat[1][2]*sm.tmat[1][2]);
+          float col2_len = std::sqrt(sm.tmat[2][0]*sm.tmat[2][0] + sm.tmat[2][1]*sm.tmat[2][1] + sm.tmat[2][2]*sm.tmat[2][2]);
+          lg::info("  bone[{}]: {} verts, trans=({:.1f},{:.1f},{:.1f}) col_lens=({:.2f},{:.2f},{:.2f})",
+                   bi, bone_usage[bi], tx, ty, tz, col0_len, col1_len, col2_len);
+        } else {
+          lg::info("  bone[{}]: {} verts, OUT OF RANGE (max={})", bi, bone_usage[bi],
+                   skinning_matrices.size());
+        }
+      }
+      // Log a few sample skinned vertex positions
+      lg::info("[libjakopengoal] Sample skinned vertex positions:");
+      int samples = 0;
+      for (const auto& draw : s_fr3_model.draws) {
+        for (uint32_t j = 0; j < draw.index_count && samples < 10; j += draw.index_count / 3) {
+          u32 vi = s_fr3_model.indices[draw.first_index + j];
+          if (vi >= s_fr3_model.vertices.size()) continue;
+          const auto& vtx = s_fr3_model.vertices[vi];
+          float pos[3] = {vtx.pos[0], vtx.pos[1], vtx.pos[2]};
+          float spos[3] = {0,0,0}, snrm[3] = {0,0,0};
+          skin_vertex(pos, vtx.normal, vtx.mats, vtx.weights, skinning_matrices, spos, snrm);
+          float scale = 50.0f / 4096.0f;
+          lg::info("  vtx[{}] local=({:.1f},{:.1f},{:.1f}) bone={} w={:.2f} -> skinned=({:.1f},{:.1f},{:.1f})",
+                   vi, pos[0], pos[1], pos[2], vtx.mats[0], vtx.weights[0],
+                   spos[0]*scale, spos[1]*scale, spos[2]*scale);
+          samples++;
+        }
+      }
+    }
+  }
+
   // After skinning, convert from GOAL units to render units.
   constexpr float METERS_TO_UNITS = 50.0f / 4096.0f;
 
@@ -574,48 +828,44 @@ void extract_jak_mesh() {
   s_mesh_state.uvs.resize(total_verts * 2);
 
   uint32_t out_idx = 0;
-  for (const auto& draw : s_fr3_model.draws) {
-    for (uint32_t j = 0; j < draw.index_count; j++) {
-      u32 vi = s_fr3_model.indices[draw.first_index + j];
-      if (vi >= s_fr3_model.vertices.size()) {
-        memset(&s_mesh_state.positions[out_idx * 3], 0, 3 * sizeof(float));
-        memset(&s_mesh_state.normals[out_idx * 3], 0, 3 * sizeof(float));
-        memset(&s_mesh_state.colors[out_idx * 3], 0, 3 * sizeof(float));
-        memset(&s_mesh_state.uvs[out_idx * 2], 0, 2 * sizeof(float));
-        out_idx++;
-        continue;
-      }
-
-      const auto& v = s_fr3_model.vertices[vi];
-
-      // The vertex position in the FR3 is in bone-local space, pre-multiplied by xyz_scale.
-      // We need to undo the scale, apply bone transform, then scale to render units.
-      float local_pos[3] = {v.pos[0] * s_fr3_model.xyz_scale,
-                            v.pos[1] * s_fr3_model.xyz_scale,
-                            v.pos[2] * s_fr3_model.xyz_scale};
-
-      float skinned_pos[3], skinned_nrm[3];
-      skin_vertex(local_pos, v.normal, v.mats, v.weights, s_bone_matrices, skinned_pos,
-                  skinned_nrm);
-
-      // Convert from GOAL internal units to render units
-      s_mesh_state.positions[out_idx * 3 + 0] = skinned_pos[0] * METERS_TO_UNITS;
-      s_mesh_state.positions[out_idx * 3 + 1] = skinned_pos[1] * METERS_TO_UNITS;
-      s_mesh_state.positions[out_idx * 3 + 2] = skinned_pos[2] * METERS_TO_UNITS;
-
-      s_mesh_state.normals[out_idx * 3 + 0] = skinned_nrm[0];
-      s_mesh_state.normals[out_idx * 3 + 1] = skinned_nrm[1];
-      s_mesh_state.normals[out_idx * 3 + 2] = skinned_nrm[2];
-
-      s_mesh_state.colors[out_idx * 3 + 0] = v.rgba[0] / 255.0f;
-      s_mesh_state.colors[out_idx * 3 + 1] = v.rgba[1] / 255.0f;
-      s_mesh_state.colors[out_idx * 3 + 2] = v.rgba[2] / 255.0f;
-
-      s_mesh_state.uvs[out_idx * 2 + 0] = v.st[0];
-      s_mesh_state.uvs[out_idx * 2 + 1] = v.st[1];
-
+  for (uint32_t ti = 0; ti < total_verts; ti++) {
+    u32 vi = triangle_indices[ti];
+    if (vi >= s_fr3_model.vertices.size()) {
+      memset(&s_mesh_state.positions[out_idx * 3], 0, 3 * sizeof(float));
+      memset(&s_mesh_state.normals[out_idx * 3], 0, 3 * sizeof(float));
+      memset(&s_mesh_state.colors[out_idx * 3], 0, 3 * sizeof(float));
+      memset(&s_mesh_state.uvs[out_idx * 2], 0, 2 * sizeof(float));
       out_idx++;
+      continue;
     }
+
+    const auto& v = s_fr3_model.vertices[vi];
+
+    // FR3 vertex positions are already scaled by xyz_scale during extraction.
+    // They are in model/bind-pose space, ready for skinning matrix transform.
+    float local_pos[3] = {v.pos[0], v.pos[1], v.pos[2]};
+
+    float skinned_pos[3], skinned_nrm[3];
+    skin_vertex(local_pos, v.normal, v.mats, v.weights, skinning_matrices, skinned_pos,
+                skinned_nrm);
+
+    // Convert from GOAL internal units to render units
+    s_mesh_state.positions[out_idx * 3 + 0] = skinned_pos[0] * METERS_TO_UNITS;
+    s_mesh_state.positions[out_idx * 3 + 1] = skinned_pos[1] * METERS_TO_UNITS;
+    s_mesh_state.positions[out_idx * 3 + 2] = skinned_pos[2] * METERS_TO_UNITS;
+
+    s_mesh_state.normals[out_idx * 3 + 0] = skinned_nrm[0];
+    s_mesh_state.normals[out_idx * 3 + 1] = skinned_nrm[1];
+    s_mesh_state.normals[out_idx * 3 + 2] = skinned_nrm[2];
+
+    s_mesh_state.colors[out_idx * 3 + 0] = v.rgba[0] / 255.0f;
+    s_mesh_state.colors[out_idx * 3 + 1] = v.rgba[1] / 255.0f;
+    s_mesh_state.colors[out_idx * 3 + 2] = v.rgba[2] / 255.0f;
+
+    s_mesh_state.uvs[out_idx * 2 + 0] = v.st[0];
+    s_mesh_state.uvs[out_idx * 2 + 1] = v.st[1];
+
+    out_idx++;
   }
 
   s_mesh_state.num_triangles = out_idx / 3;
@@ -625,6 +875,16 @@ void extract_jak_mesh() {
              using_identity_bones ? "IDENTITY/T-pose" : "from GOAL");
   }
   s_mesh_state.valid = true;
+
+  // One-time triangle count log after strip conversion
+  {
+    static bool logged_strip_stats = false;
+    if (!logged_strip_stats && !using_identity_bones) {
+      logged_strip_stats = true;
+      lg::info("[libjakopengoal] Strip conversion: {} raw indices -> {} triangle verts ({} tris)",
+               s_fr3_model.indices.size(), total_verts, total_verts / 3);
+    }
+  }
 }
 
 /* -------------------------------------------------------------------------- */
