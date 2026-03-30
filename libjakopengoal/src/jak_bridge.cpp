@@ -2,10 +2,12 @@
  * jak_bridge.cpp - Bridge between the C API and the GOAL runtime.
  */
 
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include "jak_bridge.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 #include <set>
 
@@ -1258,7 +1260,19 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
   }
 
   // Also add dynamic object surfaces
+  static int dyn_log_counter = 0;
+  bool should_log_dyn = (++dyn_log_counter % 120 == 1);
+  int dyn_obj_count = (int)s_collision_state.dynamic_objects.size();
+  if (should_log_dyn && dyn_obj_count > 0) {
+    lg::info("[collide-fill] {} dynamic objects, {} static tris already", dyn_obj_count, tris_added);
+  }
   for (auto& obj : s_collision_state.dynamic_objects) {
+    if (should_log_dyn) {
+      lg::info("[collide-fill] obj id={} pos=({:.1f},{:.1f},{:.1f}) rot=({:.1f},{:.1f},{:.1f}) surfs={}",
+               obj.id, obj.transform.position[0], obj.transform.position[1], obj.transform.position[2],
+               obj.transform.rotation[0], obj.transform.rotation[1], obj.transform.rotation[2],
+               obj.surfaces.size());
+    }
     for (auto& surf : obj.surfaces) {
       if ((existing_tris + tris_added) >= MAX_TRIS)
         break;
@@ -1266,9 +1280,10 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
       int tri_idx = existing_tris + tris_added;
       uint8_t* tri_base = cache + TRI_OFFSET + tri_idx * 64;
 
-      // Apply object transform to vertices
-      float cos_y = std::cos(obj.transform.rotation[1]);
-      float sin_y = std::sin(obj.transform.rotation[1]);
+      // Apply object transform to vertices (rotation is in degrees, convert to radians)
+      float yaw_rad = obj.transform.rotation[1] * (float)M_PI / 180.0f;
+      float cos_y = std::cos(yaw_rad);
+      float sin_y = std::sin(yaw_rad);
 
       for (int vi = 0; vi < 3; vi++) {
         float lx = surf.vertices[vi][0];
@@ -1291,6 +1306,14 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
       *pat = (uint32_t)(surf.type & 0x7);
       uint16_t* prim_idx = (uint16_t*)(tri_base + 52);
       *prim_idx = 0;
+
+      /* Log first dynamic tri vertex in GOAL meters (should be ~28672 for Y=350) */
+      if (should_log_dyn && &surf == &obj.surfaces[0]) {
+        float* v0 = (float*)(tri_base);
+        lg::info("[collide-fill] dyn tri v0 GOAL=({:.1f},{:.1f},{:.1f}) render=({:.1f},{:.1f},{:.1f})",
+                 v0[0], v0[1], v0[2],
+                 v0[0] / UNITS_TO_METERS, v0[1] / UNITS_TO_METERS, v0[2] / UNITS_TO_METERS);
+      }
 
       tris_added++;
     }
@@ -1515,10 +1538,102 @@ static void force_settings() {
   *(float*)(g_ee_main_mem + sc_ptr + TARGET_BASE + 140) = AMBIENT_VOL;
 }
 
+/**
+ * Apply platform rider displacement — if Jak is standing on a dynamic surface object,
+ * move him along with it by adding the platform's velocity to his position in GOAL memory.
+ */
+static void apply_rider_displacement() {
+  if (!g_ee_main_mem)
+    return;
+
+  auto target_sym = jak1::intern_from_c("*target*");
+  if (!target_sym.offset || target_sym->value == 0 || target_sym->value == s7.offset)
+    return;
+
+  u32 target_ptr = target_sym->value;
+  u32 root_ptr = *(u32*)(g_ee_main_mem + target_ptr + 108);
+  if (root_ptr == 0 || root_ptr == s7.offset)
+    return;
+
+  float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
+  constexpr float METERS_TO_UNITS = 50.0f / 4096.0f;
+  constexpr float UNITS_TO_METERS = 4096.0f / 50.0f;
+
+  // Jak's position in render units
+  float jak_x = trans[0] * METERS_TO_UNITS;
+  float jak_y = trans[1] * METERS_TO_UNITS;
+  float jak_z = trans[2] * METERS_TO_UNITS;
+
+  auto& coll = s_collision_state;
+  std::lock_guard<std::mutex> lock(coll.mutex);
+
+  for (auto& obj : coll.dynamic_objects) {
+    // Only apply displacement once per move call (host moves at 30fps, bridge ticks at 60fps)
+    if (obj.velocity_applied)
+      continue;
+
+    // Use PREVIOUS transform to check if Jak WAS on this platform before it moved
+    float prev_top = obj.prev_transform.position[1] + obj.half_height;
+    float dy = jak_y - prev_top;
+
+    // Check if Jak is standing on this platform (within tolerance)
+    if (dy < -10.0f || dy > 30.0f)
+      continue;
+
+    // Check XZ overlap against PREVIOUS transform (where was the platform last frame?)
+    float prev_yaw_rad = obj.prev_transform.rotation[1] * (float)M_PI / 180.0f;
+    float prev_cos = cosf(prev_yaw_rad);
+    float prev_sin = sinf(prev_yaw_rad);
+    float old_rel_x = jak_x - obj.prev_transform.position[0];
+    float old_rel_z = jak_z - obj.prev_transform.position[2];
+    // Inverse rotation to get local-space position on the OLD platform
+    float local_x =  prev_cos * old_rel_x + prev_sin * old_rel_z;
+    float local_z = -prev_sin * old_rel_x + prev_cos * old_rel_z;
+
+    if (fabsf(local_x) > obj.half_width + 20.0f || fabsf(local_z) > obj.half_depth + 20.0f)
+      continue;
+
+    obj.velocity_applied = true;
+
+    // Compute Jak's new world position:
+    // 1. Take Jak's offset from OLD platform center
+    // 2. Rotate that offset by the yaw delta
+    // 3. Place at NEW platform center + rotated offset
+    float new_yaw_rad = obj.transform.rotation[1] * (float)M_PI / 180.0f;
+    float dyaw = new_yaw_rad - prev_yaw_rad;
+    float cd = cosf(dyaw);
+    float sd = sinf(dyaw);
+    float rotated_rel_x = cd * old_rel_x - sd * old_rel_z;
+    float rotated_rel_z = sd * old_rel_x + cd * old_rel_z;
+
+    float new_jak_x = obj.transform.position[0] + rotated_rel_x;
+    float new_jak_z = obj.transform.position[2] + rotated_rel_z;
+    float new_jak_y = jak_y + obj.velocity[1];  // vertical displacement
+
+    float vx = new_jak_x - jak_x;
+    float vy = new_jak_y - jak_y;
+    float vz = new_jak_z - jak_z;
+
+    if (fabsf(vx) > 0.001f || fabsf(vy) > 0.001f || fabsf(vz) > 0.001f) {
+      trans[0] += vx * UNITS_TO_METERS;
+      trans[1] += vy * UNITS_TO_METERS;
+      trans[2] += vz * UNITS_TO_METERS;
+
+      static int rider_log = 0;
+      if (++rider_log % 60 == 1) {
+        lg::info("[rider] Displacing Jak by ({:.2f},{:.2f},{:.2f}) on platform id={}",
+                 vx, vy, vz, obj.id);
+      }
+    }
+    break;  // only ride one platform at a time
+  }
+}
+
 void bridge_tick() {
   process_commands();
   force_settings();
   inject_camera_rotation();
+  apply_rider_displacement();
   extract_jak_state();
   read_bones_from_goal();
   extract_jak_mesh();
