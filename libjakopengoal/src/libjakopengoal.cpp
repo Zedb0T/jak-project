@@ -61,10 +61,9 @@ static void runtime_thread_func() {
   // Build argv for the GOAL runtime
   // -boot -debug: boots game in debug mode (skips title, spawns Jak in village1)
   // -fakeiso: use extracted game data instead of ISO
-  // -nosound: disable audio system
   // -lib-jak: our custom flag to enable the bridge
-  const char* argv[] = {"libjakopengoal", "-boot", "-fakeiso", "-debug", "-nosound", "-lib-jak"};
-  int argc = 6;
+  const char* argv[] = {"libjakopengoal", "-boot", "-fakeiso", "-debug", "-lib-jak"};
+  int argc = 5;
 
   lg::info("[libjakopengoal] Starting GOAL runtime...");
   RuntimeExitStatus status = exec_runtime(options, argc, argv);

@@ -44,6 +44,7 @@ void snd_ContinueAllSoundsInGroup(u8 groups);
 void snd_PauseAllSoundsInGroup(u8 groups);
 void snd_SetMIDIRegister(s32 handle, u8 reg, u8 value);
 void snd_SetGlobalExcite(u8 value);
+void snd_SetMinMasterVolume(s32 min_volume);
 
 s32 snd_PlaySoundVolPanPMPB(snd::BankHandle bank_handle,
                             s32 sound_id,

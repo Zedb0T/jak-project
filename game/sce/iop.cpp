@@ -64,6 +64,13 @@ void LIBRARY_kill() {
   iop->kill_from_ee();
 }
 
+void LIBRARY_signal_vblank() {
+  if (iop) {
+    iop->kernel.signal_vblank();
+    iop->signal_run_iop();
+  }
+}
+
 /*!
  * How much free memory is there, in bytes?
  */

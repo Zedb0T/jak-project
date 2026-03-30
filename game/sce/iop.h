@@ -173,4 +173,5 @@ void sceSifInit();
 void LIBRARY_INIT();
 void LIBRARY_register(::IOP* i);
 void LIBRARY_kill();
+void LIBRARY_signal_vblank();
 }  // namespace iop
