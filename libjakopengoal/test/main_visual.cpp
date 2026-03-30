@@ -545,6 +545,93 @@ static float platform_colors[] = {
 };
 static const int PLATFORM_TRI_COUNT = 10;
 
+/* Spawned platform — appears after 4 jumps, positioned to the left of spawn */
+#define SPAWN_CX  -800
+#define SPAWN_CZ  500
+#define SPAWN_W   600       /* half-width */
+#define SPAWN_D   600       /* half-depth */
+#define SPAWN_Y   350       /* top surface height (higher than existing platform) */
+#define SPAWN_BOT GROUND_Y  /* bottom = ground level */
+
+/* SM64 surfaces for the spawned platform (2 top + 8 sides = 10 tris) */
+static struct SM64Surface spawn_sm64_surfaces[] = {
+    /* Top (2 tris) */
+    {0, 0, 0, {{SPAWN_CX - SPAWN_W, SPAWN_Y, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y, SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_Y, SPAWN_CZ - SPAWN_D}}},
+    {0, 0, 0, {{SPAWN_CX - SPAWN_W, SPAWN_Y, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y, SPAWN_CZ - SPAWN_D}}},
+    /* Front (Z+) */
+    {0, 0, 0, {{SPAWN_CX - SPAWN_W, SPAWN_BOT, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y,   SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_Y,   SPAWN_CZ + SPAWN_D}}},
+    {0, 0, 0, {{SPAWN_CX - SPAWN_W, SPAWN_BOT, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_BOT, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y,   SPAWN_CZ + SPAWN_D}}},
+    /* Back (Z-) */
+    {0, 0, 0, {{SPAWN_CX + SPAWN_W, SPAWN_BOT, SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_Y,   SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y,   SPAWN_CZ - SPAWN_D}}},
+    {0, 0, 0, {{SPAWN_CX + SPAWN_W, SPAWN_BOT, SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_BOT, SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_Y,   SPAWN_CZ - SPAWN_D}}},
+    /* Left (X-) */
+    {0, 0, 0, {{SPAWN_CX - SPAWN_W, SPAWN_BOT, SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_Y,   SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_Y,   SPAWN_CZ - SPAWN_D}}},
+    {0, 0, 0, {{SPAWN_CX - SPAWN_W, SPAWN_BOT, SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_BOT, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX - SPAWN_W, SPAWN_Y,   SPAWN_CZ + SPAWN_D}}},
+    /* Right (X+) */
+    {0, 0, 0, {{SPAWN_CX + SPAWN_W, SPAWN_BOT, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y,   SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y,   SPAWN_CZ + SPAWN_D}}},
+    {0, 0, 0, {{SPAWN_CX + SPAWN_W, SPAWN_BOT, SPAWN_CZ + SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_BOT, SPAWN_CZ - SPAWN_D},
+               {SPAWN_CX + SPAWN_W, SPAWN_Y,   SPAWN_CZ - SPAWN_D}}},
+};
+static const int SPAWN_SURFACE_COUNT = 10;
+
+/* Render mesh for spawned platform (same layout as platform mesh) */
+static float spawn_positions[] = {
+    /* Top face */
+    SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,
+    SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,
+    /* Front (Z+) */
+    SPAWN_CX-SPAWN_W, SPAWN_BOT, SPAWN_CZ+SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,
+    SPAWN_CX-SPAWN_W, SPAWN_BOT, SPAWN_CZ+SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_BOT, SPAWN_CZ+SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,
+    /* Back (Z-) */
+    SPAWN_CX+SPAWN_W, SPAWN_BOT, SPAWN_CZ-SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,
+    SPAWN_CX+SPAWN_W, SPAWN_BOT, SPAWN_CZ-SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_BOT, SPAWN_CZ-SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,
+    /* Left (X-) */
+    SPAWN_CX-SPAWN_W, SPAWN_BOT, SPAWN_CZ-SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,
+    SPAWN_CX-SPAWN_W, SPAWN_BOT, SPAWN_CZ-SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_BOT, SPAWN_CZ+SPAWN_D,  SPAWN_CX-SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,
+    /* Right (X+) */
+    SPAWN_CX+SPAWN_W, SPAWN_BOT, SPAWN_CZ+SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ+SPAWN_D,
+    SPAWN_CX+SPAWN_W, SPAWN_BOT, SPAWN_CZ+SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_BOT, SPAWN_CZ-SPAWN_D,  SPAWN_CX+SPAWN_W, SPAWN_Y, SPAWN_CZ-SPAWN_D,
+};
+static float spawn_normals[] = {
+    /* Top */     0,1,0,  0,1,0,  0,1,0,   0,1,0,  0,1,0,  0,1,0,
+    /* Front */   0,0,1,  0,0,1,  0,0,1,   0,0,1,  0,0,1,  0,0,1,
+    /* Back */    0,0,-1, 0,0,-1, 0,0,-1,  0,0,-1, 0,0,-1, 0,0,-1,
+    /* Left */   -1,0,0, -1,0,0, -1,0,0,  -1,0,0, -1,0,0, -1,0,0,
+    /* Right */   1,0,0,  1,0,0,  1,0,0,   1,0,0,  1,0,0,  1,0,0,
+};
+static float spawn_colors[] = {
+    /* Top — bright blue/purple */
+    0.3f,0.3f,0.9f, 0.3f,0.3f,0.9f, 0.3f,0.3f,0.9f,  0.3f,0.3f,0.9f, 0.3f,0.3f,0.9f, 0.3f,0.3f,0.9f,
+    /* Front */
+    0.25f,0.25f,0.75f, 0.25f,0.25f,0.75f, 0.25f,0.25f,0.75f,  0.25f,0.25f,0.75f, 0.25f,0.25f,0.75f, 0.25f,0.25f,0.75f,
+    /* Back */
+    0.2f,0.2f,0.65f, 0.2f,0.2f,0.65f, 0.2f,0.2f,0.65f,  0.2f,0.2f,0.65f, 0.2f,0.2f,0.65f, 0.2f,0.2f,0.65f,
+    /* Left */
+    0.25f,0.25f,0.75f, 0.25f,0.25f,0.75f, 0.25f,0.25f,0.75f,  0.25f,0.25f,0.75f, 0.25f,0.25f,0.75f, 0.25f,0.25f,0.75f,
+    /* Right */
+    0.28f,0.28f,0.8f, 0.28f,0.28f,0.8f, 0.28f,0.28f,0.8f,  0.28f,0.28f,0.8f, 0.28f,0.28f,0.8f, 0.28f,0.28f,0.8f,
+};
+static const int SPAWN_TRI_COUNT = 10;
+
 /* -------------------------------------------------------------------------- */
 /*  Callbacks                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -575,6 +662,9 @@ struct SM64Worker {
     SM64MarioState  state  = {};
     SM64MarioGeometryBuffers geo = {};
 
+    // Pending surface object to create on the worker thread
+    SM64SurfaceObject* pending_surface_obj = nullptr;
+
     void thread_func(uint8_t* rom, uint8_t* tex,
                      SM64Surface* ground, int ground_count,
                      int cx, int cy, int cz) {
@@ -598,7 +688,14 @@ struct SM64Worker {
 
             // Do the tick (with lock released so main thread can continue)
             SM64MarioInputs local_inputs = inputs;
+            SM64SurfaceObject* surf_to_create = pending_surface_obj;
+            pending_surface_obj = nullptr;
             lock.unlock();
+
+            // Create any pending surface objects on this thread (SM64 not thread-safe)
+            if (surf_to_create) {
+                sm64_surface_object_create(surf_to_create);
+            }
 
             if (mario_id >= 0) {
                 sm64_mario_tick(mario_id, &local_inputs, &state, &geo);
@@ -788,6 +885,13 @@ int main(int argc, char** argv) {
     char_mesh_init(&plat_mesh, PLATFORM_TRI_COUNT);
     char_mesh_update(&plat_mesh, platform_positions, platform_normals, platform_colors, PLATFORM_TRI_COUNT);
 
+    /* Spawned platform mesh (created after 4 jumps) */
+    CharMesh spawn_mesh;
+    char_mesh_init(&spawn_mesh, SPAWN_TRI_COUNT);
+    bool spawn_visible = false;
+    int jump_count = 0;
+    bool prev_btn_a = false;
+
     /* Mario mesh */
     CharMesh mario_mesh;
     char_mesh_init(&mario_mesh, SM64_GEO_MAX_TRIANGLES);
@@ -920,26 +1024,58 @@ int main(int argc, char** argv) {
         if (btn_a) jak_inputs.buttons |= JAK_BUTTON_X;
         if (btn_b) jak_inputs.buttons |= JAK_BUTTON_CIRCLE;
 
-        /* Auto-walk: start AFTER Jak has landed (frame 900 = ~15 sec) */
-        {
-            static int auto_frame = 0;
-            auto_frame++;
-            int auto_start = 900;
-            int auto_end = 1200;
-            if (auto_frame >= auto_start && auto_frame < auto_end) {
-                jak_inputs.stick_x = 0.0f;
-                jak_inputs.stick_y = 0.7f;
-                if (auto_frame == auto_start)
-                    printf("[AUTO] Starting auto-walk at frame %d, Jak Y=%.1f\n", auto_frame, jak_state.position[1]);
-                if ((auto_frame - auto_start) % 10 == 0)
-                    printf("[AUTO] frame %d  Jak Y=%.2f\n", auto_frame, jak_state.position[1]);
-            } else if (auto_frame == auto_end) {
-                printf("[AUTO] Stopping auto-walk at frame %d, Jak Y=%.1f\n", auto_frame, jak_state.position[1]);
+        /* Track jump presses — spawn a new platform after 4 jumps */
+        if (btn_a && !prev_btn_a && !spawn_visible) {
+            jump_count++;
+            printf("[JUMP] Jump #%d/4\n", jump_count);
+            fflush(stdout);
+            if (jump_count >= 4) {
+                printf("[SPAWN] Spawning new platform!\n");
+                fflush(stdout);
+
+                /* Queue SM64 surface object creation on the worker thread */
+                static SM64SurfaceObject spawn_obj = {};
+                spawn_obj.transform.position[0] = 0;
+                spawn_obj.transform.position[1] = 0;
+                spawn_obj.transform.position[2] = 0;
+                spawn_obj.surfaceCount = SPAWN_SURFACE_COUNT;
+                spawn_obj.surfaces = spawn_sm64_surfaces;
+                {
+                    std::lock_guard<std::mutex> lock(sm64_worker.mtx);
+                    sm64_worker.pending_surface_obj = &spawn_obj;
+                }
+
+                /* Reload Jak collision with original + spawned surfaces */
+                if (jak_ready) {
+                    int total = sm64_surface_count + SPAWN_SURFACE_COUNT;
+                    JakSurface* all_surfs = new JakSurface[total];
+                    for (int i = 0; i < sm64_surface_count; i++) {
+                        all_surfs[i].type = JAK_SURFACE_STONE;
+                        all_surfs[i].flags = 0;
+                        for (int v = 0; v < 3; v++)
+                            for (int c = 0; c < 3; c++)
+                                all_surfs[i].vertices[v][c] = (float)sm64_surfaces[i].vertices[v][c];
+                        memset(all_surfs[i].normal, 0, sizeof(float)*3);
+                    }
+                    for (int i = 0; i < SPAWN_SURFACE_COUNT; i++) {
+                        int idx = sm64_surface_count + i;
+                        all_surfs[idx].type = JAK_SURFACE_STONE;
+                        all_surfs[idx].flags = 0;
+                        for (int v = 0; v < 3; v++)
+                            for (int c = 0; c < 3; c++)
+                                all_surfs[idx].vertices[v][c] = (float)spawn_sm64_surfaces[i].vertices[v][c];
+                        memset(all_surfs[idx].normal, 0, sizeof(float)*3);
+                    }
+                    jak_static_surfaces_load(all_surfs, total);
+                    delete[] all_surfs;
+                }
+
+                /* Upload render mesh */
+                char_mesh_update(&spawn_mesh, spawn_positions, spawn_normals, spawn_colors, SPAWN_TRI_COUNT);
+                spawn_visible = true;
             }
-            /* Also log Y every 60 frames BEFORE auto-walk to track landing */
-            if (auto_frame < auto_start && auto_frame % 60 == 0)
-                printf("[PRE] frame %d  Jak Y=%.2f\n", auto_frame, jak_state.position[1]);
         }
+        prev_btn_a = btn_a;
 
         /* Physics ticks at 30fps */
         while (tick_accum >= 1.0f/30.0f) {
@@ -1035,6 +1171,10 @@ int main(int argc, char** argv) {
 
         /* Draw platform */
         char_mesh_draw(&plat_mesh);
+
+        /* Draw spawned platform (if visible) */
+        if (spawn_visible)
+            char_mesh_draw(&spawn_mesh);
         glEnable(GL_CULL_FACE);
 
         /* Draw Mario */
