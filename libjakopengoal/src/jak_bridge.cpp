@@ -19,6 +19,8 @@
 #include "game/kernel/common/kscheme.h"
 #include "game/kernel/jak1/kscheme.h"
 #include "game/runtime.h"
+#include "game/sce/iop.h"
+#include "game/sound/sndshim.h"
 
 namespace jak_bridge {
 
@@ -1235,6 +1237,11 @@ void initialize_bridge() {
 
   lg::info("[libjakopengoal] Bridge initialized.");
 
+  // Set a minimum master volume floor to prevent the GOAL settings system from
+  // fading all audio to zero. In library mode, save data isn't loaded so the
+  // game's volume defaults/targets can end up at 0.
+  snd_SetMinMasterVolume(512);  // ~50% of max (1024)
+
   // Auto-set runtime ready since GOAL scripts are loaded and bridge is active.
   // The GOAL side can also call lib-jak-notify-target-ready explicitly if needed.
   set_runtime_ready(true);
@@ -1261,9 +1268,43 @@ static void force_settings() {
 
   u32 sc_ptr = sc_sym->value;
 
-  // default.border-mode at offset 432 — force to #f
-  u32* border_mode = (u32*)(g_ee_main_mem + sc_ptr + 432);
-  *border_mode = s7.offset;
+  // GOAL basic object pointer is 4 bytes after the allocation start.
+  // all-types offset-assert values are relative to allocation start,
+  // so subtract 4 to get the offset from the object pointer.
+  // default setting-data is at offset-assert 432 → pointer offset 428.
+  // setting-data field offsets: border-mode(+0), sfx-volume(+4), music-volume(+8),
+  //   dialog-volume(+12), ambient-volume(+140)
+  // GOAL basic object pointer is 4 bytes after the allocation start.
+  // all-types offset-assert values are relative to allocation start,
+  // so subtract 4 to get the offset from the object pointer.
+  // setting-data field offsets: border-mode(+0), sfx-volume(+4), music-volume(+8),
+  //   dialog-volume(+12), ambient-volume(+140)
+  constexpr int DEFAULT_BASE = 428;  // offset-assert 432 - 4
+  constexpr int TARGET_BASE = 220;   // offset-assert 224 - 4
+
+  // default.border-mode — force to #f so Jak doesn't get killed for leaving level boundary
+  *(u32*)(g_ee_main_mem + sc_ptr + DEFAULT_BASE + 0) = s7.offset;
+
+  // Force default AND target volume settings to stay at reasonable levels.
+  // Default alone isn't enough because apply-settings copies default to target then
+  // game engine overrides can set volumes to 0 (e.g. during transitions/loading).
+  // By forcing both, we ensure the seek target is always our desired volume.
+  constexpr float SFX_VOL = 100.0f;
+  constexpr float MUSIC_VOL = 80.0f;
+  constexpr float DIALOG_VOL = 100.0f;
+  constexpr float AMBIENT_VOL = 50.0f;
+
+  // Force default volumes
+  *(float*)(g_ee_main_mem + sc_ptr + DEFAULT_BASE + 4) = SFX_VOL;
+  *(float*)(g_ee_main_mem + sc_ptr + DEFAULT_BASE + 8) = MUSIC_VOL;
+  *(float*)(g_ee_main_mem + sc_ptr + DEFAULT_BASE + 12) = DIALOG_VOL;
+  *(float*)(g_ee_main_mem + sc_ptr + DEFAULT_BASE + 140) = AMBIENT_VOL;
+
+  // Force target volumes (overrides engine setting modifications)
+  *(float*)(g_ee_main_mem + sc_ptr + TARGET_BASE + 4) = SFX_VOL;
+  *(float*)(g_ee_main_mem + sc_ptr + TARGET_BASE + 8) = MUSIC_VOL;
+  *(float*)(g_ee_main_mem + sc_ptr + TARGET_BASE + 12) = DIALOG_VOL;
+  *(float*)(g_ee_main_mem + sc_ptr + TARGET_BASE + 140) = AMBIENT_VOL;
 }
 
 void bridge_tick() {
@@ -1273,6 +1314,12 @@ void bridge_tick() {
   extract_jak_state();
   read_bones_from_goal();
   extract_jak_mesh();
+
+  // Signal vblank to the IOP kernel — in normal game mode this is driven by
+  // the display vsync callback, but in library mode display is disabled.
+  // Without this, VBlank_Handler never fires and the sound system stalls
+  // (gFrameNum stops incrementing, VAG clock stops, sound dies after ~1s).
+  iop::LIBRARY_signal_vblank();
 
   // Throttle the GOAL runtime — without display/vsync it runs too fast.
   // ~16ms sleep per tick brings it from uncapped to roughly 60fps,

@@ -401,6 +401,13 @@ std::optional<time_stamp> IOP_Kernel::dispatch() {
   updateDelay();
   processWakeups();
 
+  // Check vblank interrupt before scheduling — in library mode, all IOP threads
+  // may be idle but the vblank handler still needs to fire to drive the sound system.
+  if (vblank_handler != nullptr && vblank_recieved) {
+    vblank_handler(nullptr);
+    vblank_recieved = false;
+  }
+
   // Run until all threads are idle
   IopThread* next = schedNext();
   if (next) {

@@ -119,8 +119,17 @@ void snd_SetSoundVolPan(s32 sound_handle, s32 vol, s32 pan) {
   }
 }
 
+static s32 g_min_master_volume = 0;
+
+void snd_SetMinMasterVolume(s32 min_volume) {
+  g_min_master_volume = min_volume;
+}
+
 void snd_SetMasterVolume(s32 which, s32 volume) {
   if (player) {
+    if (volume < g_min_master_volume) {
+      volume = g_min_master_volume;
+    }
     player->SetMasterVolume(which, volume);
   }
 }
