@@ -1170,6 +1170,8 @@ int main(int argc, char** argv) {
     /* ---- Jak state ---- */
     bool jak_ready = false;
     int32_t jak_id = -1;
+    uint32_t jak_mp_id = 0;       /* Jak moving platform surface object ID */
+    bool jak_mp_created = false;
 
     /* ---- Camera ---- */
     float cam_rot = 0.0f;
@@ -1371,21 +1373,33 @@ int main(int argc, char** argv) {
             tick_accum -= 1.0f/30.0f;
 
             /* Animate moving platform */
-            if (sm64_enabled) {
+            {
                 mp_time += 1.0f / 30.0f;
                 float t = mp_time * 2.0f * (float)M_PI / MP_PERIOD;
                 mp_transform.position[0] = MP_CENTER_X + MP_AMPLITUDE * sinf(t);
                 mp_transform.position[1] = MP_CENTER_Y;
                 mp_transform.position[2] = MP_CENTER_Z;
                 mp_transform.eulerRotation[0] = 0;
-                mp_transform.eulerRotation[1] = fmodf(mp_time * MP_ROT_SPEED, 360.0f);  /* degrees for SM64 */
+                mp_transform.eulerRotation[1] = fmodf(mp_time * MP_ROT_SPEED, 360.0f);
                 mp_transform.eulerRotation[2] = 0;
 
-                /* Queue move on worker thread */
+                /* Queue SM64 move on worker thread */
                 {
                     std::lock_guard<std::mutex> lock(sm64_worker.mtx);
                     sm64_worker.pending_mp_move = &mp_transform;
                 }
+            }
+
+            /* Move Jak's moving platform with the same transform */
+            if (jak_mp_created) {
+                JakObjectTransform jak_mp_t = {};
+                jak_mp_t.position[0] = mp_transform.position[0];
+                jak_mp_t.position[1] = mp_transform.position[1];
+                jak_mp_t.position[2] = mp_transform.position[2];
+                jak_mp_t.rotation[0] = mp_transform.eulerRotation[0];
+                jak_mp_t.rotation[1] = mp_transform.eulerRotation[1];
+                jak_mp_t.rotation[2] = mp_transform.eulerRotation[2];
+                jak_surface_object_move(jak_mp_id, &jak_mp_t);
             }
 
             if (sm64_enabled && marioId >= 0) {
@@ -1430,6 +1444,31 @@ int main(int argc, char** argv) {
                     jak_texture_created = true;
                     printf("[INIT] Created GL texture for Jak atlas (%ux%u)\n",
                            tex_info.width, tex_info.height);
+                }
+
+                /* Create the Jak moving platform as a dynamic surface object */
+                {
+                    JakSurface jak_mp_surfs[MP_SURFACE_COUNT];
+                    for (int i = 0; i < MP_SURFACE_COUNT; i++) {
+                        jak_mp_surfs[i].type = JAK_SURFACE_STONE;
+                        jak_mp_surfs[i].flags = 0;
+                        for (int v = 0; v < 3; v++)
+                            for (int c = 0; c < 3; c++)
+                                jak_mp_surfs[i].vertices[v][c] = (float)mp_sm64_surfaces[i].vertices[v][c];
+                        memset(jak_mp_surfs[i].normal, 0, sizeof(float)*3);
+                    }
+                    JakSurfaceObject jak_mp_obj = {};
+                    jak_mp_obj.transform.position[0] = mp_transform.position[0];
+                    jak_mp_obj.transform.position[1] = mp_transform.position[1];
+                    jak_mp_obj.transform.position[2] = mp_transform.position[2];
+                    jak_mp_obj.transform.rotation[0] = mp_transform.eulerRotation[0];
+                    jak_mp_obj.transform.rotation[1] = mp_transform.eulerRotation[1];
+                    jak_mp_obj.transform.rotation[2] = mp_transform.eulerRotation[2];
+                    jak_mp_obj.surface_count = MP_SURFACE_COUNT;
+                    jak_mp_obj.surfaces = jak_mp_surfs;
+                    jak_mp_id = jak_surface_object_create(&jak_mp_obj);
+                    jak_mp_created = true;
+                    printf("[INIT] Jak moving platform created (id=%u)\n", jak_mp_id);
                 }
             }
 
@@ -1627,6 +1666,13 @@ int main(int argc, char** argv) {
                            mp_render_pos[0], mp_render_pos[1], mp_render_pos[2],
                            mp_render_pos[3], mp_render_pos[4], mp_render_pos[5],
                            mp_render_pos[6], mp_render_pos[7], mp_render_pos[8]);
+                }
+                if (jak_mp_created && jak_ready) {
+                    float jak_dx = jak_state.position[0] - mp_transform.position[0];
+                    float jak_dy = jak_state.position[1] - (mp_transform.position[1] + MP_H);
+                    float jak_dz = jak_state.position[2] - mp_transform.position[2];
+                    printf("[JAK MP] Jak dist from mp=(%.1f, %.1f, %.1f) jak_mp_id=%u\n",
+                           jak_dx, jak_dy, jak_dz, jak_mp_id);
                 }
                 fflush(stdout);
             }

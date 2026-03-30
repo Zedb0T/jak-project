@@ -34,6 +34,12 @@ struct ExternalSurface {
 struct DynamicSurfaceObject {
   uint32_t id;
   JakObjectTransform transform;
+  JakObjectTransform prev_transform;  // previous frame's transform (for velocity)
+  float velocity[3] = {0, 0, 0};     // computed delta position per move call
+  bool velocity_applied = false;      // reset each move, set after displacement
+  float half_width = 0;              // XZ bounding half-size (computed from surfaces)
+  float half_depth = 0;
+  float half_height = 0;             // Y half-height
   std::vector<ExternalSurface> surfaces;
   bool dirty;  // transform changed, needs update
 };

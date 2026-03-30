@@ -121,7 +121,7 @@ struct JakSurface {
  */
 struct JakObjectTransform {
   float position[3];          /* World position (x, y, z) */
-  float rotation[3];          /* Euler angles in radians (pitch, yaw, roll) */
+  float rotation[3];          /* Euler angles in degrees (pitch, yaw, roll) — matches SM64 convention */
 };
 
 /**

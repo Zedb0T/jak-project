@@ -204,9 +204,11 @@ JAK_LIB_FN uint32_t jak_surface_object_create(const struct JakSurfaceObject* obj
   jak_bridge::DynamicSurfaceObject dyn;
   dyn.id = coll.next_dynamic_id++;
   dyn.transform = obj->transform;
+  dyn.prev_transform = obj->transform;
   dyn.dirty = true;
 
   dyn.surfaces.reserve(obj->surface_count);
+  float max_x = 0, max_y = 0, max_z = 0;
   for (uint32_t i = 0; i < obj->surface_count; i++) {
     jak_bridge::ExternalSurface ext;
     ext.type = obj->surfaces[i].type;
@@ -214,7 +216,19 @@ JAK_LIB_FN uint32_t jak_surface_object_create(const struct JakSurfaceObject* obj
     memcpy(ext.vertices, obj->surfaces[i].vertices, sizeof(float) * 9);
     memcpy(ext.normal, obj->surfaces[i].normal, sizeof(float) * 3);
     dyn.surfaces.push_back(ext);
+    // Compute bounding extents from local-space vertices
+    for (int v = 0; v < 3; v++) {
+      float ax = fabsf(ext.vertices[v][0]);
+      float ay = fabsf(ext.vertices[v][1]);
+      float az = fabsf(ext.vertices[v][2]);
+      if (ax > max_x) max_x = ax;
+      if (ay > max_y) max_y = ay;
+      if (az > max_z) max_z = az;
+    }
   }
+  dyn.half_width = max_x;
+  dyn.half_height = max_y;
+  dyn.half_depth = max_z;
 
   coll.dynamic_objects.push_back(std::move(dyn));
   return coll.dynamic_objects.back().id;
@@ -226,6 +240,11 @@ JAK_LIB_FN void jak_surface_object_move(uint32_t obj_id, const struct JakObjectT
 
   for (auto& obj : coll.dynamic_objects) {
     if (obj.id == obj_id) {
+      obj.prev_transform = obj.transform;
+      obj.velocity[0] = t->position[0] - obj.transform.position[0];
+      obj.velocity[1] = t->position[1] - obj.transform.position[1];
+      obj.velocity[2] = t->position[2] - obj.transform.position[2];
+      obj.velocity_applied = false;  // allow displacement in next bridge_tick
       obj.transform = *t;
       obj.dirty = true;
       return;
