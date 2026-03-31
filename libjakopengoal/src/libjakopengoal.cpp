@@ -494,6 +494,35 @@ JAK_LIB_FN float jak_find_floor_height(float x, float y, float z) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Public API: Skeleton / Bones                                              */
+/* -------------------------------------------------------------------------- */
+
+JAK_LIB_FN bool jak_get_bone_data(struct JakBoneData* out) {
+  if (!out) return false;
+
+  auto& bones = jak_bridge::get_bone_debug_data();
+  std::lock_guard<std::mutex> lock(bones.mutex);
+
+  if (!bones.valid || bones.num_bones <= 0) {
+    out->num_bones = 0;
+    return false;
+  }
+
+  int n = bones.num_bones;
+  if (n > JAK_MAX_BONES) n = JAK_MAX_BONES;
+  out->num_bones = n;
+
+  for (int i = 0; i < n; i++) {
+    out->positions[i][0] = bones.positions[i][0];
+    out->positions[i][1] = bones.positions[i][1];
+    out->positions[i][2] = bones.positions[i][2];
+    out->parent_indices[i] = bones.parent_indices[i];
+  }
+
+  return true;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Public API: Utility                                                       */
 /* -------------------------------------------------------------------------- */
 

@@ -313,6 +313,29 @@ JAK_LIB_FN void jak_give_eco(int32_t jak_id, int32_t eco_type);
 JAK_LIB_FN float jak_find_floor_height(float x, float y, float z);
 
 /* -------------------------------------------------------------------------- */
+/*  Skeleton / Bone queries                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Maximum bones returned by jak_get_bone_data. */
+#define JAK_MAX_BONES 256
+
+/**
+ * Bone data for skeleton debug rendering.
+ * Positions are in render/SM64 units (same coordinate space as JakState.position).
+ */
+struct JakBoneData {
+  float positions[JAK_MAX_BONES][3];    /**< World-space bone positions [x,y,z] */
+  int   parent_indices[JAK_MAX_BONES];  /**< Parent bone index (-1 = root/no parent) */
+  int   num_bones;                      /**< Number of valid bones */
+};
+
+/**
+ * Get the current skeleton bone data.
+ * Returns true if bone data is valid (Jak is spawned and animated).
+ */
+JAK_LIB_FN bool jak_get_bone_data(struct JakBoneData* out);
+
+/* -------------------------------------------------------------------------- */
 /*  Utility                                                                   */
 /* -------------------------------------------------------------------------- */
 

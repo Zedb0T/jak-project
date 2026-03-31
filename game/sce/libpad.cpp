@@ -81,7 +81,7 @@ int scePadRead(int port, int /*slot*/, u8* rdata) {
 
       // Convert normalized stick [-1,1] to uint8 [0,255] with 127 = neutral
       cpad->leftx = (u8)(127 + (int)(inputs.stick_x * 127.0f));
-      cpad->lefty = (u8)(127 - (int)(inputs.stick_y * 127.0f));  // inverted Y
+      cpad->lefty = (u8)(127 - (int)(inputs.stick_y * 127.0f));
       cpad->rightx = (u8)(127 + (int)(inputs.r_stick_x * 127.0f));
       cpad->righty = (u8)(127 - (int)(inputs.r_stick_y * 127.0f));
 

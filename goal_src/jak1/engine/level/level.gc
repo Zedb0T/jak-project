@@ -989,7 +989,7 @@
     (set! (-> *level* vis?) use-vis)
     (set! (-> *level* want-level) #f)
     (set! (-> *level* border?) #t)
-    (set! (-> *setting-control* default border-mode) #t)
+    (set! (-> *setting-control* default border-mode) #f) ;;zed changed this to stop unloading mario collide
     (set! (-> *level* play?) #t)
     (alloc-levels! *level* #f) ;;#t)
     (set! *display-profile* #f)

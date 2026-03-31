@@ -1082,46 +1082,73 @@ void process_commands() {
     return;
   }
 
-  // Find the command buffer symbol that our GOAL bridge reads
-  auto cmd_sym = jak1::intern_from_c("*lib-jak-command*");
-  auto cmd_type_sym = jak1::intern_from_c("*lib-jak-command-type*");
-  auto cmd_args_sym = jak1::intern_from_c("*lib-jak-command-args-data*");
+  // Direct memory approach: write to *target* root trans directly from C++.
+  // The GOAL command pipeline (lib-jak-process-commands) is never called from the
+  // game loop, so we bypass it entirely and poke GOAL memory the same way
+  // extract_jak_state() reads it, but in reverse.
+  //
+  // *target* (process-drawable) -> root (offset 108, GOAL pointer to trsqv)
+  //   -> trans (offset 12 within trsqv, vector of 4 floats: x y z w)
+  //   -> transv (offset 28 within trsqv, velocity vector)
 
-  if (!cmd_sym.offset || !cmd_type_sym.offset || !cmd_args_sym.offset) {
+  auto target_sym = jak1::intern_from_c("*target*");
+  if (!target_sym.offset || target_sym->value == 0 || target_sym->value == s7.offset) {
+    lg::warn("[libjakopengoal] process_commands: *target* not available (val={})", target_sym->value);
     return;
   }
 
-  // Render/SM64 units -> GOAL internal meters conversion
-  // GOAL extracts positions via METERS_TO_UNITS = 50/4096, so inverse is 4096/50
-  constexpr float UNITS_TO_METERS = 4096.0f / 50.0f;
+  u32 target_ptr = target_sym->value;
+  u32 root_ptr = *(u32*)(g_ee_main_mem + target_ptr + 108);
+  if (root_ptr == 0 || root_ptr == s7.offset) {
+    lg::warn("[libjakopengoal] process_commands: root pointer invalid (root={})", root_ptr);
+    return;
+  }
 
-  // Process one command per tick (GOAL will read and clear it)
-  // If multiple commands queued, we process the first and re-queue the rest
+  // trans is at root + 12, transv (velocity) is at root + 28
+  float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
+  float* transv = (float*)(g_ee_main_mem + root_ptr + 28);
+
+  // Render/SM64 units -> GOAL internal units conversion
+  // GOAL uses 4096 units = 1 meter.  The host passes positions in "render units"
+  // which are 50 units = 1 meter.  Scale factor = 4096 / 50.
+  constexpr float UNITS_TO_GOAL = 4096.0f / 50.0f;
+
   for (auto& cmd : cmds) {
-    // Write command type
-    cmd_type_sym->value = static_cast<u32>(cmd.type);
+    lg::info("[libjakopengoal] Processing command type={} f=({:.1f},{:.1f},{:.1f})",
+             static_cast<int>(cmd.type), cmd.f[0], cmd.f[1], cmd.f[2]);
 
-    // Write float args to the command args buffer
-    float* args = (float*)(g_ee_main_mem + cmd_args_sym->value);
-    if (cmd_args_sym->value != 0 &&
-        cmd_args_sym->value != s7.offset) {
-      // Position/velocity commands need unit conversion from render units to GOAL meters
-      bool is_position_cmd = (cmd.type == CommandType::SPAWN ||
-                              cmd.type == CommandType::SET_POSITION ||
-                              cmd.type == CommandType::SET_VELOCITY);
-      float scale = is_position_cmd ? UNITS_TO_METERS : 1.0f;
+    switch (cmd.type) {
+      case CommandType::SPAWN:
+      case CommandType::SET_POSITION: {
+        float gx = cmd.f[0] * UNITS_TO_GOAL;
+        float gy = cmd.f[1] * UNITS_TO_GOAL;
+        float gz = cmd.f[2] * UNITS_TO_GOAL;
+        trans[0] = gx;
+        trans[1] = gy;
+        trans[2] = gz;
+        // Zero velocity on teleport so Jak doesn't slide
+        transv[0] = 0.0f;
+        transv[1] = 0.0f;
+        transv[2] = 0.0f;
+        lg::info("[libjakopengoal]   SET_POSITION: wrote trans=({:.1f},{:.1f},{:.1f}) GOAL units",
+                 gx, gy, gz);
+        break;
+      }
 
-      args[0] = cmd.f[0] * scale;
-      args[1] = cmd.f[1] * scale;
-      args[2] = cmd.f[2] * scale;
-      args[3] = cmd.f[3];
-      // Int args stored as floats for simplicity
-      memcpy(&args[4], &cmd.i[0], sizeof(int32_t));
-      memcpy(&args[5], &cmd.i[1], sizeof(int32_t));
+      case CommandType::SET_VELOCITY: {
+        transv[0] = cmd.f[0] * UNITS_TO_GOAL;
+        transv[1] = cmd.f[1] * UNITS_TO_GOAL;
+        transv[2] = cmd.f[2] * UNITS_TO_GOAL;
+        lg::info("[libjakopengoal]   SET_VELOCITY: wrote transv=({:.1f},{:.1f},{:.1f})",
+                 transv[0], transv[1], transv[2]);
+        break;
+      }
+
+      default:
+        lg::info("[libjakopengoal]   command type {} not handled by direct-write path",
+                 static_cast<int>(cmd.type));
+        break;
     }
-
-    // Signal that a command is pending
-    cmd_sym->value = 1;
   }
 }
 
@@ -1185,8 +1212,53 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
   int tris_added = 0;
   auto& surfaces = s_collision_state.static_surfaces;
 
+  // Read the collide-box bounding box (offset 28) to spatially filter surfaces.
+  // bounding-box is min (vector 16 bytes) then max (vector 16 bytes) = 32 bytes total
+  // These are in GOAL meters (already converted coordinate system).
+  float* bbox_min = (float*)(cache + 28);
+  float* bbox_max = (float*)(cache + 44);
+
+  static int fill_log_counter = 0;
+  bool should_log_fill = (++fill_log_counter % 120 == 1);
+  if (should_log_fill) {
+    lg::info("[collide-fill] goal_fill_external_collide called: {} static surfs, existing_tris={}, bbox=({:.0f},{:.0f},{:.0f})-({:.0f},{:.0f},{:.0f})",
+             surfaces.size(), existing_tris,
+             bbox_min[0], bbox_min[1], bbox_min[2],
+             bbox_max[0], bbox_max[1], bbox_max[2]);
+  }
+
+  int skipped = 0;
   for (size_t s = 0; s < surfaces.size() && (existing_tris + tris_added) < MAX_TRIS; s++) {
     auto& surf = surfaces[s];
+
+    // Spatial filter: check if any vertex of this triangle (in GOAL meters)
+    // falls within or near the collide-box query region.
+    // Convert vertices to GOAL meters for comparison with the bbox.
+    float v0x = surf.vertices[0][0] * UNITS_TO_METERS;
+    float v0y = surf.vertices[0][1] * UNITS_TO_METERS;
+    float v0z = surf.vertices[0][2] * UNITS_TO_METERS;
+    float v1x = surf.vertices[1][0] * UNITS_TO_METERS;
+    float v1y = surf.vertices[1][1] * UNITS_TO_METERS;
+    float v1z = surf.vertices[1][2] * UNITS_TO_METERS;
+    float v2x = surf.vertices[2][0] * UNITS_TO_METERS;
+    float v2y = surf.vertices[2][1] * UNITS_TO_METERS;
+    float v2z = surf.vertices[2][2] * UNITS_TO_METERS;
+
+    // Triangle AABB
+    float tri_min_x = std::min({v0x, v1x, v2x});
+    float tri_min_y = std::min({v0y, v1y, v2y});
+    float tri_min_z = std::min({v0z, v1z, v2z});
+    float tri_max_x = std::max({v0x, v1x, v2x});
+    float tri_max_y = std::max({v0y, v1y, v2y});
+    float tri_max_z = std::max({v0z, v1z, v2z});
+
+    // AABB overlap test with the collide-box
+    if (tri_max_x < bbox_min[0] || tri_min_x > bbox_max[0] ||
+        tri_max_y < bbox_min[1] || tri_min_y > bbox_max[1] ||
+        tri_max_z < bbox_min[2] || tri_min_z > bbox_max[2]) {
+      skipped++;
+      continue;  // Triangle is outside the query region
+    }
     int tri_idx = existing_tris + tris_added;
     uint8_t* tri_base = cache + TRI_OFFSET + tri_idx * 64;
 
@@ -1224,7 +1296,21 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
     uint16_t* prim_idx = (uint16_t*)(tri_base + 52);
     *prim_idx = 0;
 
+    if (should_log_fill && s < 4) {
+      lg::info("[collide-fill] static tri[{}] v0=({:.1f},{:.1f},{:.1f}) v1=({:.1f},{:.1f},{:.1f}) v2=({:.1f},{:.1f},{:.1f}) pat=0x{:x}",
+               tri_idx,
+               v0[0], v0[1], v0[2],
+               v1[0], v1[1], v1[2],
+               v2[0], v2[1], v2[2],
+               *pat);
+    }
+
     tris_added++;
+  }
+
+  if (should_log_fill) {
+    lg::info("[collide-fill] added {} tris (skipped {} outside bbox), total now {}",
+             tris_added, skipped, existing_tris + tris_added);
   }
 
   // Also add dynamic object surfaces
@@ -1292,7 +1378,9 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
   //  between what the GOAL compiler uses and what all-types.gc declares)
   *num_tris_ptr = existing_tris + tris_added;
 
-
+  if (should_log_fill) {
+    lg::info("[collide-fill] returning tris_added={} total_tris={}", tris_added, existing_tris + tris_added);
+  }
 
   return tris_added;
 }
@@ -1381,8 +1469,10 @@ static void inject_camera_rotation() {
     return;
   float fwd_x = cam_x / len;
   float fwd_z = cam_z / len;
-  float right_x = fwd_z;     //  cam_z / len
-  float right_z = -fwd_x;    // -cam_x / len
+  // GOAL's atan negates stick X (stick0-dir = atan(-(leftx-128), ...)),
+  // so the right vector must be flipped to compensate.
+  float right_x = -fwd_z;    // -cam_z / len
+  float right_z = fwd_x;     //  cam_x / len
 
   auto mc_sym = jak1::intern_from_c("*math-camera*");
   if (!mc_sym.offset || mc_sym->value == 0 || mc_sym->value == s7.offset)
@@ -1597,11 +1687,118 @@ static void apply_rider_displacement() {
   }
 }
 
+/**
+ * Snap Jak's Y position to the floor height from external collision surfaces.
+ *
+ * The GOAL collision pipeline's collide-cache fill correctly adds our external
+ * tris, but the mips2c collision resolve methods don't detect them for ground.
+ * As a workaround, we do a C++ floor probe each frame against the stored
+ * surfaces and directly write the floor Y into Jak's root trans.
+ */
+void snap_to_floor() {
+  if (!g_ee_main_mem) return;
+
+  auto target_sym = jak1::intern_from_c("*target*");
+  if (!target_sym.offset || target_sym->value == 0 || target_sym->value == s7.offset)
+    return;
+
+  u32 target_ptr = target_sym->value;
+  u32 root_ptr = *(u32*)(g_ee_main_mem + target_ptr + 108);
+  if (root_ptr == 0 || root_ptr == s7.offset)
+    return;
+
+  float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
+
+  // Convert Jak's GOAL position to render units for the floor query
+  constexpr float GOAL_TO_RENDER = 50.0f / 4096.0f;
+  constexpr float RENDER_TO_GOAL = 4096.0f / 50.0f;
+  float rx = trans[0] * GOAL_TO_RENDER;
+  float ry = trans[1] * GOAL_TO_RENDER;
+  float rz = trans[2] * GOAL_TO_RENDER;
+
+  // Find floor height (in render units) using the C++ surface test
+  auto& coll = s_collision_state;
+  std::lock_guard<std::mutex> lock(coll.mutex);
+
+  float best_y = -1000000.0f;
+  for (const auto& surf : coll.static_surfaces) {
+    const float* v0 = surf.vertices[0];
+    const float* v1 = surf.vertices[1];
+    const float* v2 = surf.vertices[2];
+
+    // Barycentric test in XZ plane
+    float d00 = (v1[0]-v0[0])*(v1[0]-v0[0]) + (v1[2]-v0[2])*(v1[2]-v0[2]);
+    float d01 = (v1[0]-v0[0])*(v2[0]-v0[0]) + (v1[2]-v0[2])*(v2[2]-v0[2]);
+    float d11 = (v2[0]-v0[0])*(v2[0]-v0[0]) + (v2[2]-v0[2])*(v2[2]-v0[2]);
+    float d20 = (rx-v0[0])*(v1[0]-v0[0]) + (rz-v0[2])*(v1[2]-v0[2]);
+    float d21 = (rx-v0[0])*(v2[0]-v0[0]) + (rz-v0[2])*(v2[2]-v0[2]);
+
+    float denom = d00*d11 - d01*d01;
+    if (std::abs(denom) < 0.0001f) continue;
+
+    float u = (d11*d20 - d01*d21) / denom;
+    float v = (d00*d21 - d01*d20) / denom;
+
+    if (u >= 0.0f && v >= 0.0f && (u+v) <= 1.0f) {
+      float tri_y = v0[1]*(1.0f-u-v) + v1[1]*u + v2[1]*v;
+      // Find the CLOSEST floor in Y regardless of whether Jak is above or below it.
+      // This handles the case where GOAL gravity has already pulled Jak below the floor.
+      if (tri_y > best_y) {
+        best_y = tri_y;
+      }
+    }
+  }
+
+  static int snap_log = 0;
+  bool should_log = (++snap_log % 60 == 1);
+
+  if (best_y > -999999.0f) {
+    float floor_goal_y = best_y * RENDER_TO_GOAL;
+    float dist_above = ry - best_y;   // positive = above floor, negative = below
+
+    // Simulate a floor:
+    // - If Jak is at or below the floor (dist_above <= small threshold), snap to floor
+    //   and zero downward velocity.  This acts as ground detection.
+    // - If Jak is above the floor (e.g. jumping), leave him alone.
+    // The threshold is generous (30 render units ≈ 0.37 GOAL meters) to catch
+    // GOAL gravity pulling Jak past the floor between ticks.
+    // Jak's default standing height is ~52 render units above the floor due to
+    // GOAL's collision capsule.  Set threshold above that to catch idle Jak,
+    // but below typical jump height (~150 render units) so jumping still works.
+    constexpr float FLOOR_THRESHOLD = 60.0f;  // render units above floor to still snap
+
+    if (dist_above <= FLOOR_THRESHOLD) {
+      trans[1] = floor_goal_y;
+
+      // Only zero downward velocity; preserve upward velocity (jumping)
+      float* transv = (float*)(g_ee_main_mem + root_ptr + 28);
+      if (transv[1] < 0.0f) {
+        transv[1] = 0.0f;
+      }
+
+      if (should_log) {
+        lg::info("[snap] jak=({:.1f},{:.1f},{:.1f}) floor={:.1f} dist={:.1f} -> snapped",
+                 rx, ry, rz, best_y, dist_above);
+      }
+    } else {
+      if (should_log) {
+        lg::info("[snap] jak=({:.1f},{:.1f},{:.1f}) floor={:.1f} dist={:.1f} -> AIRBORNE (no snap)",
+                 rx, ry, rz, best_y, dist_above);
+      }
+    }
+  } else {
+    if (should_log) {
+      lg::info("[snap] jak=({:.1f},{:.1f},{:.1f}) NO FLOOR", rx, ry, rz);
+    }
+  }
+}
+
 void bridge_tick() {
   process_commands();
   force_settings();
   inject_camera_rotation();
   apply_rider_displacement();
+  // snap_to_floor();  // DISABLED — was stomping Jak's Y position each frame
   extract_jak_state();
   read_bones_from_goal();
   extract_jak_mesh();
