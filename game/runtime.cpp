@@ -17,6 +17,7 @@
 #include <Windows.h>
 #endif
 
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <thread>
@@ -30,8 +31,10 @@
 #include "common/util/FileUtil.h"
 #include "common/versions/versions.h"
 
+#ifndef RUNTIME_HEADLESS
 #include "game/external/discord.h"
 #include "game/graphics/gfx.h"
+#endif
 #include "game/kernel/common/fileio.h"
 #include "game/kernel/common/kdgo.h"
 #include "game/kernel/common/kdsnetm.h"
@@ -275,7 +278,22 @@ void iop_runner(SystemThreadInterface& iface, GameVersion version) {
   iop.reset_allocator();
   ee::LIBRARY_sceSif_register(&iop);
   iop::LIBRARY_register(&iop);
+#ifndef RUNTIME_HEADLESS
   Gfx::register_vsync_callback([&iop]() { iop.kernel.signal_vblank(); });
+#else
+  // In headless mode there's no graphics loop to drive vblank, so we spin up
+  // a lightweight timer thread that fires signal_vblank() at ~60 Hz.
+  std::atomic<bool> headless_vblank_exit{false};
+  std::thread headless_vblank_thread([&iop, &headless_vblank_exit]() {
+    using clock = std::chrono::steady_clock;
+    auto next = clock::now();
+    while (!headless_vblank_exit.load(std::memory_order_relaxed)) {
+      next += std::chrono::microseconds(16667);  // ~60 Hz
+      iop.kernel.signal_vblank();
+      std::this_thread::sleep_until(next);
+    }
+  });
+#endif
 
   if (version != GameVersion::Jak3 && version != GameVersion::JakX) {
     jak1::dma_init_globals();
@@ -366,7 +384,12 @@ void iop_runner(SystemThreadInterface& iface, GameVersion version) {
     }
   }
 
+#ifndef RUNTIME_HEADLESS
   Gfx::clear_vsync_callback();
+#else
+  headless_vblank_exit.store(true, std::memory_order_relaxed);
+  headless_vblank_thread.join();
+#endif
 }
 }  // namespace
 
@@ -391,8 +414,11 @@ RuntimeExitStatus exec_runtime(GameLaunchOptions game_options, int argc, const c
   g_game_version = game_options.game_version;
   g_server_port = game_options.server_port;
 
+#ifndef RUNTIME_HEADLESS
   gStartTime = time(nullptr);
+#endif
   prof().instant_event("ROOT");
+#ifndef RUNTIME_HEADLESS
   {
     auto p = scoped_prof("startup::exec_runtime::init_discord_rpc");
     init_discord_rpc();
@@ -406,6 +432,7 @@ RuntimeExitStatus exec_runtime(GameLaunchOptions game_options, int argc, const c
       Gfx::Init(g_game_version);
     }
   }
+#endif
 
   // step 1: sce library prep
   {
@@ -445,6 +472,7 @@ RuntimeExitStatus exec_runtime(GameLaunchOptions game_options, int argc, const c
     ee_thread.start(ee_runner);
   }
 
+#ifndef RUNTIME_HEADLESS
   // step 4: wait for EE to signal a shutdown. meanwhile, run video loop on main thread.
   // TODO relegate this to its own function
   if (enable_display) {
@@ -456,6 +484,7 @@ RuntimeExitStatus exec_runtime(GameLaunchOptions game_options, int argc, const c
       throw;
     }
   }
+#endif
 
   // hack to make the IOP die quicker if it's loading/unloading music
   gMusicFade = 0;
@@ -474,11 +503,15 @@ RuntimeExitStatus exec_runtime(GameLaunchOptions game_options, int argc, const c
 
   // kill renderer after all threads are stopped.
   // this makes sure the std::shared_ptr<Display> is destroyed in the main thread.
+#ifndef RUNTIME_HEADLESS
   if (enable_display) {
     Gfx::Exit();
   }
+#endif
   lg::info("GOAL Runtime Shutdown (code {})", fmt::underlying(MasterExit));
   munmap(g_ee_main_mem, EE_MAIN_MEM_SIZE);
+#ifndef RUNTIME_HEADLESS
   Discord_Shutdown();
+#endif
   return MasterExit;
 }

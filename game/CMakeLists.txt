@@ -362,6 +362,7 @@ if(BUILD_LIBJAKOPENGOAL)
     target_compile_definitions(runtime PRIVATE BUILD_LIBJAKOPENGOAL)
     target_sources(runtime PRIVATE
         ${PROJECT_SOURCE_DIR}/libjakopengoal/src/jak_bridge.cpp
+        ${PROJECT_SOURCE_DIR}/libjakopengoal/src/jak_bridge_state.cpp
     )
 endif()
 
@@ -370,6 +371,25 @@ if(WIN32)
     target_link_libraries(runtime mman)
 else()
     target_link_libraries(runtime pthread dl)
+endif()
+
+# Headless runtime for libjakopengoal (no graphics/display/discord - loads in Blender)
+if(BUILD_LIBJAKOPENGOAL)
+    add_library(runtime_headless STATIC ${RUNTIME_SOURCE} "../third-party/glad/src/glad.c")
+    target_include_directories(runtime_headless PRIVATE ${PROJECT_SOURCE_DIR})
+    target_compile_definitions(runtime_headless PRIVATE BUILD_LIBJAKOPENGOAL RUNTIME_HEADLESS)
+    target_sources(runtime_headless PRIVATE
+        ${PROJECT_SOURCE_DIR}/libjakopengoal/src/jak_bridge.cpp
+        ${PROJECT_SOURCE_DIR}/libjakopengoal/src/jak_bridge_state.cpp
+        ${PROJECT_SOURCE_DIR}/libjakopengoal/src/runtime_launcher.cpp
+    )
+    # Link only the non-graphics dependencies
+    target_link_libraries(runtime_headless common fmt SDL3::SDL3 imgui discord-rpc sound stb_image libco libcurl)
+    if(WIN32)
+        target_link_libraries(runtime_headless mman)
+    else()
+        target_link_libraries(runtime_headless pthread dl)
+    endif()
 endif()
 
 add_executable(gk main.cpp)

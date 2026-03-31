@@ -31,15 +31,17 @@ namespace jak_bridge {
 /*  Singleton state accessors                                                 */
 /* -------------------------------------------------------------------------- */
 
-static CollisionState s_collision_state;
-static PadState s_pad_state;
-static JakInternalState s_jak_state;
-static MeshState s_mesh_state;
-static CommandQueue s_command_queue;
-static std::atomic<bool> s_runtime_ready{false};
-static BoneDebugData s_bone_debug;
-static TextureAtlasInfo s_texture_atlas_info;
-static uint8_t* s_texture_output = nullptr;
+// State singletons are defined in jak_bridge_state.cpp (separate TU to keep
+// this heavy .obj from being pulled in just for state accessors).
+extern CollisionState s_collision_state;
+extern PadState s_pad_state;
+extern JakInternalState s_jak_state;
+extern MeshState s_mesh_state;
+extern CommandQueue s_command_queue;
+extern std::atomic<bool> s_runtime_ready;
+extern BoneDebugData s_bone_debug;
+extern TextureAtlasInfo s_texture_atlas_info;
+extern uint8_t* s_texture_output;
 
 // Bone matrix storage for CPU skinning
 struct BoneMatrix {
@@ -280,41 +282,7 @@ static bool load_jak_model_from_fr3(const std::string& fr3_name) {
   return true;
 }
 
-CollisionState& get_collision_state() {
-  return s_collision_state;
-}
-PadState& get_pad_state() {
-  return s_pad_state;
-}
-JakInternalState& get_jak_state() {
-  return s_jak_state;
-}
-MeshState& get_mesh_state() {
-  return s_mesh_state;
-}
-CommandQueue& get_command_queue() {
-  return s_command_queue;
-}
-BoneDebugData& get_bone_debug_data() {
-  return s_bone_debug;
-}
-TextureAtlasInfo& get_texture_atlas_info() {
-  return s_texture_atlas_info;
-}
-void set_texture_output(uint8_t* ptr) {
-  s_texture_output = ptr;
-}
-uint8_t* get_texture_output() {
-  return s_texture_output;
-}
-
-bool is_runtime_ready() {
-  return s_runtime_ready.load();
-}
-
-void set_runtime_ready(bool ready) {
-  s_runtime_ready.store(ready);
-}
+// State accessors are defined in jak_bridge_state.cpp
 
 /* -------------------------------------------------------------------------- */
 /*  Pad input injection                                                       */

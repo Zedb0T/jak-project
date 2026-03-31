@@ -198,6 +198,14 @@ void process_commands();
 void initialize_bridge();
 
 /**
+ * Launch the GOAL runtime headlessly. Resolves exec_runtime() via
+ * a function pointer to avoid pulling in runtime.obj at link time
+ * (which brings in graphics static constructors that fail in Blender).
+ * Returns the exit status, or -1 if exec_runtime couldn't be resolved.
+ */
+int launch_runtime_headless(const std::string& game_data_path);
+
+/**
  * Called once per GOAL frame (from the EE thread) to:
  *   1. Process pending commands
  *   2. Inject pad inputs

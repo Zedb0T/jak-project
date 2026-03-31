@@ -272,6 +272,9 @@ include_directories(third-party/glad/include)
 include_directories(third-party/SDL/include)
 build_third_party_lib(imgui imgui)
 
+# build libjakopengoal option (must be before game so runtime can include jak_bridge)
+option(BUILD_LIBJAKOPENGOAL "Build the libjakopengoal embeddable library" ON)
+
 # build the game code in C++
 add_subdirectory(game)
 
@@ -282,7 +285,6 @@ add_subdirectory(goalc)
 add_subdirectory(tools)
 
 # build libjakopengoal (embeddable Jak library, inspired by libsm64)
-option(BUILD_LIBJAKOPENGOAL "Build the libjakopengoal embeddable library" ON)
 if(BUILD_LIBJAKOPENGOAL)
     add_subdirectory(libjakopengoal)
 endif()

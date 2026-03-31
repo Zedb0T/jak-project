@@ -5,6 +5,23 @@
  * Jak's state, collision, and rendering data through the C API.
  */
 
+#ifdef _WIN32
+#include <windows.h>
+#include <cstdio>
+
+// Custom DllMain for debugging DLL load failures in host processes like Blender.
+// CRT static constructors run BEFORE this is called (DLL_PROCESS_ATTACH).
+// If we get here, static constructors succeeded.
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
+  if (fdwReason == DLL_PROCESS_ATTACH) {
+    OutputDebugStringA("[jakopengoal] DllMain: DLL_PROCESS_ATTACH\n");
+  } else if (fdwReason == DLL_PROCESS_DETACH) {
+    OutputDebugStringA("[jakopengoal] DllMain: DLL_PROCESS_DETACH\n");
+  }
+  return TRUE;
+}
+#endif
+
 #include "libjakopengoal/include/libjakopengoal.h"
 #include "jak_bridge.h"
 
@@ -22,7 +39,14 @@
 
 #include "game/common/game_common_types.h"
 #include "game/kernel/common/kboot.h"
-#include "game/runtime.h"
+
+// NOTE: We intentionally do NOT #include "game/runtime.h" here.
+// Including it and calling exec_runtime() would force the linker to pull in
+// runtime.obj, which includes graphics/display static constructors that fail
+// when loaded as a DLL inside Blender's process. Instead, we call
+// jak_bridge::launch_runtime_headless() which handles the exec_runtime call
+// from a separate translation unit.
+
 
 /* -------------------------------------------------------------------------- */
 /*  Internal state                                                            */
@@ -45,29 +69,9 @@ static float s_jak_spawn_pos[3] = {0, 0, 0};
 /* -------------------------------------------------------------------------- */
 
 static void runtime_thread_func() {
-  // Set up the game data path so the runtime can find iso_data/ and out/
-  if (!s_game_data_path.empty()) {
-    // The jak-project uses file_util to locate game data.
-    // We set the project path to point to our data directory.
-    fs::path proj_path(s_game_data_path);
-    file_util::setup_project_path(proj_path);
-  }
-
-  // Configure the game launch options for headless jak1
-  GameLaunchOptions options;
-  options.game_version = GameVersion::Jak1;
-  options.disable_display = true;  // No window - we extract mesh data via CPU
-
-  // Build argv for the GOAL runtime
-  // -boot -debug: boots game in debug mode (skips title, spawns Jak in village1)
-  // -fakeiso: use extracted game data instead of ISO
-  // -lib-jak: our custom flag to enable the bridge
-  const char* argv[] = {"libjakopengoal", "-boot", "-fakeiso", "-debug", "-lib-jak"};
-  int argc = 5;
-
-  lg::info("[libjakopengoal] Starting GOAL runtime...");
-  RuntimeExitStatus status = exec_runtime(options, argc, argv);
-  lg::info("[libjakopengoal] GOAL runtime exited with status {}", (int)status);
+  lg::info("[libjakopengoal] Starting GOAL runtime (headless)...");
+  int status = jak_bridge::launch_runtime_headless(s_game_data_path);
+  lg::info("[libjakopengoal] GOAL runtime exited with status {}", status);
 }
 
 /* -------------------------------------------------------------------------- */

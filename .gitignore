@@ -88,3 +88,4 @@ unifont-15.0.03.ttf
 *.diff
 goalc-report.html
 /third-party/libsm64
+/build_static
