@@ -946,7 +946,7 @@ void extract_jak_mesh() {
   std::lock_guard<std::mutex> lock(s_mesh_state.mutex);
   s_mesh_state.positions.resize(total_verts * 3);
   s_mesh_state.normals.resize(total_verts * 3);
-  s_mesh_state.colors.resize(total_verts * 3);  // RGB only (matches rendering VBO layout)
+  s_mesh_state.colors.resize(total_verts * 4);  // RGBA (matches JakGeometryBuffers layout)
   s_mesh_state.uvs.resize(total_verts * 2);
 
   uint32_t out_idx = 0;
@@ -955,7 +955,7 @@ void extract_jak_mesh() {
     if (vi >= s_fr3_model.vertices.size()) {
       memset(&s_mesh_state.positions[out_idx * 3], 0, 3 * sizeof(float));
       memset(&s_mesh_state.normals[out_idx * 3], 0, 3 * sizeof(float));
-      memset(&s_mesh_state.colors[out_idx * 3], 0, 3 * sizeof(float));
+      memset(&s_mesh_state.colors[out_idx * 4], 0, 4 * sizeof(float));
       memset(&s_mesh_state.uvs[out_idx * 2], 0, 2 * sizeof(float));
       out_idx++;
       continue;
@@ -980,9 +980,10 @@ void extract_jak_mesh() {
     s_mesh_state.normals[out_idx * 3 + 1] = skinned_nrm[1];
     s_mesh_state.normals[out_idx * 3 + 2] = skinned_nrm[2];
 
-    s_mesh_state.colors[out_idx * 3 + 0] = v.rgba[0] / 255.0f;
-    s_mesh_state.colors[out_idx * 3 + 1] = v.rgba[1] / 255.0f;
-    s_mesh_state.colors[out_idx * 3 + 2] = v.rgba[2] / 255.0f;
+    s_mesh_state.colors[out_idx * 4 + 0] = v.rgba[0] / 255.0f;
+    s_mesh_state.colors[out_idx * 4 + 1] = v.rgba[1] / 255.0f;
+    s_mesh_state.colors[out_idx * 4 + 2] = v.rgba[2] / 255.0f;
+    s_mesh_state.colors[out_idx * 4 + 3] = v.rgba[3] / 255.0f;
 
     // Remap UVs from per-texture space to atlas space
     {

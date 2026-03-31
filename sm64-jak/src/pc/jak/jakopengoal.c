@@ -792,10 +792,12 @@ void jak_sm64_render(void) {
     if (num_tris > 0 && s_geo_position) {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_BLEND);
         glDisable(GL_CULL_FACE);
         glDisable(GL_LIGHTING);
+        /* Use alpha test to discard fully transparent texels but keep everything else opaque */
+        glEnable(GL_ALPHA_TEST);
+        glAlphaFunc(GL_GREATER, 0.1f);
 
         /* Bind texture atlas if available */
         if (s_texture_uploaded && s_jak_texture_id) {
@@ -815,9 +817,8 @@ void jak_sm64_render(void) {
                 float r = s_geo_color[i * 4 + 0];
                 float g = s_geo_color[i * 4 + 1];
                 float b = s_geo_color[i * 4 + 2];
-                float a = s_geo_color[i * 4 + 3];
-                /* Force alpha to 1.0 to avoid transparency */
-                glColor4f(r, g, b, a > 0.01f ? a : 1.0f);
+                /* Ignore vertex alpha — always fully opaque */
+                glColor4f(r, g, b, 1.0f);
             } else {
                 glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
             }
@@ -844,6 +845,7 @@ void jak_sm64_render(void) {
 
         glDisable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
+        glDisable(GL_ALPHA_TEST);
     }
 
     /* ================================================================== */
