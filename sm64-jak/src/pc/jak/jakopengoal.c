@@ -792,19 +792,26 @@ void jak_sm64_render(void) {
     if (num_tris > 0 && s_geo_position) {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
+        glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
         glDisable(GL_CULL_FACE);
         glDisable(GL_LIGHTING);
-        /* Use alpha test to discard fully transparent texels but keep everything else opaque */
-        glEnable(GL_ALPHA_TEST);
-        glAlphaFunc(GL_GREATER, 0.1f);
+        glDisable(GL_ALPHA_TEST);
 
         /* Bind texture atlas if available */
         if (s_texture_uploaded && s_jak_texture_id) {
             glEnable(GL_TEXTURE_2D);
             glBindTexture(GL_TEXTURE_2D, s_jak_texture_id);
-            /* Modulate: texture color * vertex color */
-            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+            /* Use GL_COMBINE: RGB = texture * vertex color, Alpha = vertex color (always 1.0)
+               This ignores texture alpha entirely so hair/edges aren't transparent */
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+            /* RGB: modulate texture with vertex color */
+            glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+            glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_TEXTURE);
+            glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_PRIMARY_COLOR);
+            /* Alpha: use vertex color alpha only (ignore texture alpha) */
+            glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_REPLACE);
+            glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PRIMARY_COLOR);
         } else {
             glDisable(GL_TEXTURE_2D);
         }
@@ -845,7 +852,6 @@ void jak_sm64_render(void) {
 
         glDisable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
-        glDisable(GL_ALPHA_TEST);
     }
 
     /* ================================================================== */
