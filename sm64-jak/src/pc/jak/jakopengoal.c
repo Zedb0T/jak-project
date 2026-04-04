@@ -20,6 +20,7 @@
 #endif
 #include <GL/glew.h>
 #include <GL/glu.h>
+#include <SDL2/SDL.h>
 
 #include "jakopengoal.h"
 
@@ -339,6 +340,24 @@ static void convert_sm64_surfaces(void) {
 }
 
 /**
+ * SDL gamepad — read circle/triangle directly since SM64's N64-style
+ * button system doesn't map them.
+ */
+static SDL_GameController *s_sdl_pad = NULL;
+
+static SDL_GameController *get_sdl_gamepad(void) {
+    if (s_sdl_pad && SDL_GameControllerGetAttached(s_sdl_pad)) return s_sdl_pad;
+    s_sdl_pad = NULL;
+    for (int i = 0; i < SDL_NumJoysticks(); i++) {
+        if (SDL_IsGameController(i)) {
+            s_sdl_pad = SDL_GameControllerOpen(i);
+            if (s_sdl_pad) break;
+        }
+    }
+    return s_sdl_pad;
+}
+
+/**
  * Build JakInputs from SM64's controller state.
  */
 static void build_jak_inputs(struct JakInputs *inputs) {
@@ -364,9 +383,18 @@ static void build_jak_inputs(struct JakInputs *inputs) {
     uint16_t jak_buttons = 0;
     if (ctrl->buttonDown & SM64_A_BUTTON) jak_buttons |= JAK_BUTTON_X;
     if (ctrl->buttonDown & SM64_B_BUTTON) jak_buttons |= JAK_BUTTON_SQUARE;
-    if (ctrl->buttonDown & SM64_Z_TRIG)   jak_buttons |= JAK_BUTTON_CIRCLE;
     if (ctrl->buttonDown & SM64_L_TRIG)   jak_buttons |= JAK_BUTTON_L1;
     if (ctrl->buttonDown & SM64_R_TRIG)   jak_buttons |= JAK_BUTTON_R1;
+
+    /* Read circle and triangle directly from SDL — they have no N64 mapping */
+    SDL_GameController *pad = get_sdl_gamepad();
+    if (pad) {
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_B))
+            jak_buttons |= JAK_BUTTON_CIRCLE;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_Y))
+            jak_buttons |= JAK_BUTTON_TRIANGLE;
+    }
+
     inputs->buttons = jak_buttons;
 }
 
