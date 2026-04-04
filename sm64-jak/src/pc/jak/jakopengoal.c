@@ -37,6 +37,8 @@
 #include "game/object_list_processor.h"
 #include "engine/graph_node.h"
 #include "game/save_file.h"
+#include "game/interaction.h"
+#include "object_fields.h"
 #include "level_table.h"
 
 /* Platform-specific dynamic loading */
@@ -55,6 +57,12 @@
 #  define JAK_DLERROR()         dlerror()
 #  define JAK_DLL_NAME          "libjakopengoal.so"
 #endif
+
+/* Global held-object pointer — checked by cur_obj_disable_rendering() */
+struct Object *g_jak_held_obj = NULL;
+
+/* Punch frame counter for grab window */
+static int s_punch_frame_count = 0;
 
 /* Debug logging to file (Windows GUI apps don't have stdout) */
 static FILE *s_log_file = NULL;
@@ -609,9 +617,98 @@ void jak_sm64_update(void) {
         m->pos[1] = s_jak_state.position[1];
         m->pos[2] = s_jak_state.position[2];
 
-        /* Hide Mario's model — Jak is the player character */
+        /* Hide Mario's model — Jak is the player character.
+         * Also sync marioObj position so enemies/interactions detect us. */
         if (gMarioObject) {
             gMarioObject->header.gfx.node.flags |= GRAPH_RENDER_INVISIBLE;
+            gMarioObject->oPosX = s_jak_state.position[0];
+            gMarioObject->oPosY = s_jak_state.position[1];
+            gMarioObject->oPosZ = s_jak_state.position[2];
+            gMarioObject->header.gfx.pos[0] = s_jak_state.position[0];
+            gMarioObject->header.gfx.pos[1] = s_jak_state.position[1];
+            gMarioObject->header.gfx.pos[2] = s_jak_state.position[2];
+        }
+    }
+
+    /* --- Punch-to-grab: let Jak grab SM64 objects during first 0.25s of punch --- */
+    {
+        static uint32_t prev_jak_action = 0;
+        struct MarioState *m = &gMarioStates[0];
+
+        /* Detect punch start */
+        if (s_jak_state.action == 6 /* JAK_ACTION_PUNCH */ && prev_jak_action != 6) {
+            s_punch_frame_count = 0;
+            JAK_LOG("PUNCH: Jak started punching");
+        }
+
+        if (s_jak_state.action == 6 /* JAK_ACTION_PUNCH */) {
+            s_punch_frame_count++;
+
+            /* First 15 frames (~0.25s at 60fps) — enable grab window */
+            if (s_punch_frame_count <= 15) {
+                /* Don't override if Mario is already grabbing/holding */
+                if (m->action != ACT_PICKING_UP && m->heldObj == NULL) {
+                    m->action = ACT_PUNCHING;
+                    m->actionArg = 0;
+                    m->actionTimer = 0;
+                    m->flags |= MARIO_PUNCHING;
+                    /* Sync face angle from Jak (radians -> SM64 s16 angle) */
+                    m->faceAngle[1] = (s16)(s_jak_state.face_angle * 32768.0f / 3.14159265f);
+
+                    if (s_punch_frame_count == 1) {
+                        JAK_LOG("PUNCH: Set Mario to ACT_PUNCHING faceAngle=%d", (int)m->faceAngle[1]);
+                    }
+                }
+            }
+        } else {
+            if (prev_jak_action == 6 && s_punch_frame_count > 0) {
+                JAK_LOG("PUNCH: Jak stopped punching after %d frames", s_punch_frame_count);
+            }
+            s_punch_frame_count = 0;
+        }
+
+        prev_jak_action = s_jak_state.action;
+    }
+
+    /* --- Carry held objects above Jak, throw on next punch --- */
+    {
+        struct MarioState *m = &gMarioStates[0];
+
+        if (m->heldObj != NULL) {
+            g_jak_held_obj = m->heldObj;
+
+            /* Position held object above Jak. These values are consumed by
+             * the NEXT frame's behavior/display-list build (1-frame lag, invisible at 60fps). */
+            m->heldObj->oPosX = m->pos[0];
+            m->heldObj->oPosY = m->pos[1] + 200.0f;
+            m->heldObj->oPosZ = m->pos[2];
+            m->heldObj->header.gfx.pos[0] = m->pos[0];
+            m->heldObj->header.gfx.pos[1] = m->pos[1] + 200.0f;
+            m->heldObj->header.gfx.pos[2] = m->pos[2];
+
+            /* Keep HOLP updated for throw positioning */
+            m->marioBodyState->heldObjLastPosition[0] = m->pos[0];
+            m->marioBodyState->heldObjLastPosition[1] = m->pos[1] + 200.0f;
+            m->marioBodyState->heldObjLastPosition[2] = m->pos[2];
+
+            /* Re-enable rendering — behavior tries to hide it every frame */
+            m->heldObj->header.gfx.node.flags |= GRAPH_RENDER_ACTIVE;
+
+            /* Throw on next punch while holding */
+            if (s_jak_state.action == 6 /* JAK_ACTION_PUNCH */ && s_punch_frame_count == 1) {
+                JAK_LOG("GRAB: Throwing held object %p!", (void*)m->heldObj);
+                mario_throw_held_object(m);
+                g_jak_held_obj = NULL;
+                m->action = ACT_IDLE;
+            }
+
+            static int hold_log = 0;
+            if (hold_log++ % 60 == 0) {
+                JAK_LOG("GRAB: Carrying %p at (%.0f,%.0f,%.0f)",
+                        (void*)m->heldObj, m->pos[0], m->pos[1] + 200.0f, m->pos[2]);
+            }
+        } else {
+            g_jak_held_obj = NULL;
         }
     }
 

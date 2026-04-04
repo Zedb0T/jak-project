@@ -762,6 +762,12 @@ void cur_obj_disable_rendering_and_become_intangible(struct Object *obj) {
 }
 
 void cur_obj_disable_rendering(void) {
+#ifdef JAKOPENGOAL
+    extern struct Object *g_jak_held_obj;
+    if (g_jak_held_obj != NULL && o == g_jak_held_obj) {
+        return; /* Don't hide the object Jak is holding */
+    }
+#endif
     o->header.gfx.node.flags &= ~GRAPH_RENDER_ACTIVE;
 }
 

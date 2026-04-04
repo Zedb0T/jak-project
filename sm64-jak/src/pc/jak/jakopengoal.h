@@ -30,4 +30,8 @@ void jak_render_hud(void);      /* Draw debug text on HUD (positions, dist) */
 /* ---- Toggle ---- */
 void jak_sm64_toggle(void);     /* Spawn or despawn Jak */
 
+/* ---- Held object hack ---- */
+#include "types.h"
+extern struct Object *g_jak_held_obj;
+
 #endif /* JAKOPENGOAL_H */
