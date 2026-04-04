@@ -1353,13 +1353,17 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
     v2[3] = 1.0f;
 
     // Write pat-surface (material type encoded as GOAL pat-surface bitfield)
-    // pat-surface is a uint32 with fields:
-    //   bits 0-2: material (stone, ice, etc)
-    //   bits 3-5: event (none, deadly, endlessfall, etc)
-    //   bits 6-13: noentity, nocamera, etc flags
-    // For external surfaces, we just set the material bits and mark as solid
+    // pat-surface layout (from pat-h.gc):
+    //   bit 0: noentity, bit 1: nocamera, bit 2: noedge
+    //   bits 3-5: mode (ground=0, wall=1, obstacle=2)
+    //   bits 6-11: material (stone=0, ice=1, quicksand=2, ...)
+    //   bits 12-13: camera
+    //   bits 14-19: event (none=0, deadly=1, ...)
+    // For external surfaces: material from type, mode from flags, other bits clear
     uint32_t* pat = (uint32_t*)(tri_base + 48);
-    *pat = (uint32_t)(surf.type & 0x7);  // material in bottom 3 bits
+    uint32_t material = (uint32_t)(surf.type & 0x3F);
+    uint32_t mode = (uint32_t)(surf.flags & 0x7);  // 0=ground, 1=wall, 2=obstacle
+    *pat = (material << 6) | (mode << 3);
 
     // prim-index - point to prim 0 (background prim)
     uint16_t* prim_idx = (uint16_t*)(tri_base + 52);

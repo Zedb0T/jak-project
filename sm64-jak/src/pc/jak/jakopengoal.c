@@ -41,6 +41,7 @@
 #include "game/interaction.h"
 #include "object_fields.h"
 #include "object_constants.h"
+#include "surface_terrains.h"
 #include "level_table.h"
 
 /* Platform-specific dynamic loading */
@@ -79,11 +80,15 @@ static void jak_log_init(void) {
 /* ---- libjakopengoal API structures (matching libjakopengoal.h) ---- */
 
 struct JakSurface {
-    int16_t type;
+    int16_t type;   /* 0=default/stone, 1=ice, 2=quicksand, ... (maps to GOAL pat-material) */
     int16_t flags;
     float vertices[3][3];
     float normal[3];
 };
+
+/* GOAL pat-material values (must match libjakopengoal.h / pat-h.gc) */
+#define JAK_PAT_STONE     0
+#define JAK_PAT_ICE       1
 
 struct JakInputs {
     float cam_x;
@@ -317,8 +322,44 @@ static void convert_sm64_surfaces(void) {
         struct Surface *s = &sSurfacePool[i];
         struct JakSurface *js = &s_jak_surfaces[s_jak_surface_count];
 
-        js->type = 0;
-        js->flags = 0;
+        js->type = JAK_PAT_STONE;
+
+        /* Determine SM64 steep threshold for this surface type.
+         * Uses mario_floor_is_steep() thresholds — the point where
+         * Mario loses control and slides uncontrollably. */
+        float slope_thresh;
+        switch (s->type) {
+            case SURFACE_VERY_SLIPPERY:
+            case SURFACE_ICE:
+            case SURFACE_HARD_VERY_SLIPPERY:
+            case SURFACE_NOISE_VERY_SLIPPERY_73:
+            case SURFACE_NOISE_VERY_SLIPPERY_74:
+            case SURFACE_NOISE_VERY_SLIPPERY:
+            case SURFACE_NO_CAM_COL_VERY_SLIPPERY:
+                slope_thresh = 0.9659258f;  /* cos(15°) */
+                break;
+            case SURFACE_SLIPPERY:
+            case SURFACE_NOISE_SLIPPERY:
+            case SURFACE_HARD_SLIPPERY:
+            case SURFACE_NO_CAM_COL_SLIPPERY:
+                slope_thresh = 0.9396926f;  /* cos(20°) */
+                break;
+            default:
+                slope_thresh = 0.8660254f;  /* cos(30°) */
+                break;
+        }
+
+        /* Slide terrain override (e.g. slide courses) */
+        if (gCurrentArea && (gCurrentArea->terrainType & TERRAIN_MASK) == TERRAIN_SLIDE) {
+            slope_thresh = 0.9998477f;  /* cos(1°) — almost any tilt slides */
+        }
+
+        /* flags field: 0 = ground mode, 1 = wall mode (in GOAL pat-surface) */
+        if (s->normal.y <= slope_thresh && s->normal.y > 0.05f) {
+            js->flags = 1;  /* wall mode — Jak slides off */
+        } else {
+            js->flags = 0;  /* ground mode — Jak can walk */
+        }
 
         js->vertices[0][0] = (float)s->vertex1[0];
         js->vertices[0][1] = (float)s->vertex1[1];
