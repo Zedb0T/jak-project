@@ -352,10 +352,8 @@ void extract_jak_state() {
     return;
   }
 
-  // Fallback: read position directly from *target* process memory.
-  // process-drawable.root is a GOAL pointer at offset 108.
-  // root (trsqv).trans is a vector at offset 12 within root.
-  // Each component is a float in GOAL internal units (4096 = 1 meter).
+  // Fallback: read state directly from *target* process memory using known offsets.
+  // All offset-assert values from all-types.gc; C++ access = offset_assert - 4.
   constexpr float METERS_TO_UNITS = 50.0f / 4096.0f;
   u32 root_ptr = *(u32*)(g_ee_main_mem + target_ptr + 108);
 
@@ -363,12 +361,82 @@ void extract_jak_state() {
     return;
   }
 
-  float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
+  float* trans = (float*)(g_ee_main_mem + root_ptr + 12);   // trsqv.trans  offset 16
+  float* transv = (float*)(g_ee_main_mem + root_ptr + 60);  // trsqv.transv offset 64
+  float* quat = (float*)(g_ee_main_mem + root_ptr + 28);    // trsqv.quat   offset 32
 
   std::lock_guard<std::mutex> lock(s_jak_state.mutex);
+
   s_jak_state.state.position[0] = trans[0] * METERS_TO_UNITS;
   s_jak_state.state.position[1] = trans[1] * METERS_TO_UNITS;
   s_jak_state.state.position[2] = trans[2] * METERS_TO_UNITS;
+  s_jak_state.state.velocity[0] = transv[0] * METERS_TO_UNITS;
+  s_jak_state.state.velocity[1] = transv[1] * METERS_TO_UNITS;
+  s_jak_state.state.velocity[2] = transv[2] * METERS_TO_UNITS;
+  s_jak_state.state.forward_velocity =
+      sqrtf(transv[0] * transv[0] + transv[2] * transv[2]) * METERS_TO_UNITS;
+  {
+    float qx = quat[0], qy = quat[1], qz = quat[2], qw = quat[3];
+    s_jak_state.state.face_angle = atan2f(2.0f * (qw * qy + qx * qz),
+                                          1.0f - 2.0f * (qy * qy + qz * qz));
+  }
+  {
+    u64 status = *(u64*)(g_ee_main_mem + root_ptr + 268); // collide-shape-moving.status offset 272
+    s_jak_state.state.on_ground = (status & 1) != 0;
+    s_jak_state.state.in_water = (status & 4) != 0;
+  }
+
+  // Action ID from process.state->name (symbol comparison)
+  u32 state_ptr = *(u32*)(g_ee_main_mem + target_ptr + 52); // process.state offset 56
+  if (state_ptr != 0 && state_ptr != s7.offset) {
+    u32 state_name = *(u32*)(g_ee_main_mem + state_ptr + 0); // state.name offset 4
+
+    static u32 sym_stance = 0, sym_walk = 0, sym_run = 0, sym_jump = 0;
+    static u32 sym_double_jump = 0, sym_attack = 0, sym_attack_air = 0;
+    static u32 sym_running_attack = 0, sym_flop = 0, sym_duck = 0;
+    static u32 sym_falling = 0, sym_hit = 0, sym_death = 0;
+    static u32 sym_swim = 0, sym_swim_up = 0, sym_punch = 0;
+    static bool syms_cached = false;
+    if (!syms_cached) {
+      sym_stance         = jak1::intern_from_c("target-stance").offset;
+      sym_walk           = jak1::intern_from_c("target-walk").offset;
+      sym_run            = jak1::intern_from_c("target-run").offset;
+      sym_jump           = jak1::intern_from_c("target-jump").offset;
+      sym_double_jump    = jak1::intern_from_c("target-double-jump").offset;
+      sym_attack         = jak1::intern_from_c("target-attack").offset;
+      sym_attack_air     = jak1::intern_from_c("target-attack-air").offset;
+      sym_running_attack = jak1::intern_from_c("target-running-attack").offset;
+      sym_punch          = jak1::intern_from_c("target-punch").offset;
+      sym_flop           = jak1::intern_from_c("target-flop").offset;
+      sym_duck           = jak1::intern_from_c("target-duck-stance").offset;
+      sym_falling        = jak1::intern_from_c("target-falling").offset;
+      sym_hit            = jak1::intern_from_c("target-hit").offset;
+      sym_death          = jak1::intern_from_c("target-death").offset;
+      sym_swim           = jak1::intern_from_c("target-swim").offset;
+      sym_swim_up        = jak1::intern_from_c("target-swim-up").offset;
+      syms_cached = true;
+    }
+
+    uint32_t action = 0;
+    if      (state_name == sym_stance)         action = 0;
+    else if (state_name == sym_walk)           action = 1;
+    else if (state_name == sym_run)            action = 2;
+    else if (state_name == sym_jump)           action = 3;
+    else if (state_name == sym_double_jump)    action = 4;
+    else if (state_name == sym_attack)         action = 5;
+    else if (state_name == sym_attack_air)     action = 5;
+    else if (state_name == sym_running_attack) action = 5;
+    else if (state_name == sym_punch)          action = 6;
+    else if (state_name == sym_flop)           action = 7;
+    else if (state_name == sym_duck)           action = 9;
+    else if (state_name == sym_falling)        action = 10;
+    else if (state_name == sym_hit)            action = 11;
+    else if (state_name == sym_death)          action = 12;
+    else if (state_name == sym_swim)           action = 13;
+    else if (state_name == sym_swim_up)        action = 13;
+    s_jak_state.state.action = action;
+  }
+
   s_jak_state.valid = true;
 }
 

@@ -40,6 +40,7 @@
 #include "game/save_file.h"
 #include "game/interaction.h"
 #include "object_fields.h"
+#include "object_constants.h"
 #include "level_table.h"
 
 /* Platform-specific dynamic loading */
@@ -696,6 +697,76 @@ void jak_sm64_update(void) {
         }
 
         prev_jak_action = s_jak_state.action;
+    }
+
+    /* --- Spin attack: damage nearby SM64 objects when Jak is spinning --- */
+    {
+        static int s_spin_frame_count = 0;
+        static uint32_t prev_spin_action = 0;
+
+        if (s_jak_state.action == 5 /* JAK_ACTION_SPIN */ && prev_spin_action != 5) {
+            s_spin_frame_count = 0;
+            JAK_LOG("SPIN: Jak started spin attack");
+        }
+
+        if (s_jak_state.action == 5 /* JAK_ACTION_SPIN */) {
+            s_spin_frame_count++;
+
+            /* 18-frame attack window (0.3s at 60fps, matches GOAL spin duration) */
+            if (s_spin_frame_count <= 18 && gObjectLists != NULL) {
+                struct MarioState *m = &gMarioStates[0];
+                float jak_x = m->pos[0];
+                float jak_y = m->pos[1];
+                float jak_z = m->pos[2];
+
+                /* Scan object lists that contain attackable things:
+                 *   DESTRUCTIVE(2), GENACTOR(4), PUSHABLE(5), SURFACE(9) */
+                int lists_to_scan[] = { OBJ_LIST_DESTRUCTIVE, OBJ_LIST_GENACTOR,
+                                        OBJ_LIST_PUSHABLE, OBJ_LIST_SURFACE };
+                int hit_count = 0;
+
+                for (int li = 0; li < 4; li++) {
+                    struct ObjectNode *list = &gObjectLists[lists_to_scan[li]];
+                    struct ObjectNode *node = list->next;
+
+                    while (node != list) {
+                        struct Object *obj = (struct Object *)node;
+                        node = node->next;
+
+                        if (obj->activeFlags == ACTIVE_FLAG_DEACTIVATED) continue;
+                        if (obj->oInteractType == 0) continue;
+
+                        /* Distance check: Jak spin radius = 2.2 GOAL meters = 110 SM64 units */
+                        float dx = obj->oPosX - jak_x;
+                        float dy = obj->oPosY - (jak_y + 80.0f); /* 1.6m Y offset for spin center */
+                        float dz = obj->oPosZ - jak_z;
+                        float dist_sq = dx*dx + dy*dy + dz*dz;
+
+                        if (dist_sq < 110.0f * 110.0f) {
+                            obj->oInteractStatus = INT_STATUS_INTERACTED | INT_STATUS_WAS_ATTACKED
+                                                 | ATTACK_KICK_OR_TRIP;
+                            hit_count++;
+                            if (s_spin_frame_count == 1) {
+                                JAK_LOG("SPIN: Hit object at (%.0f,%.0f,%.0f) type=0x%x dist=%.0f",
+                                        obj->oPosX, obj->oPosY, obj->oPosZ,
+                                        obj->oInteractType, sqrtf(dist_sq));
+                            }
+                        }
+                    }
+                }
+
+                if (hit_count > 0 && s_spin_frame_count == 1) {
+                    JAK_LOG("SPIN: Hit %d objects on first frame", hit_count);
+                }
+            }
+        } else {
+            if (prev_spin_action == 5 && s_spin_frame_count > 0) {
+                JAK_LOG("SPIN: Spin ended after %d frames", s_spin_frame_count);
+            }
+            s_spin_frame_count = 0;
+        }
+
+        prev_spin_action = s_jak_state.action;
     }
 
     /* --- Carry held objects above Jak, throw on next punch --- */
