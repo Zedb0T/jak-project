@@ -97,3 +97,4 @@ goalc-report.html
 *.dylib
 sm64-jak/build/
 *.so
+launch_sm64jak.bat
