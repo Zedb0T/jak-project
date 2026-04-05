@@ -782,6 +782,10 @@ void create_next_audio_buffer(s16 *samples, u32 num_samples) {
 #endif
 
 void play_sound(s32 soundBits, f32 *pos) {
+#ifdef JAKOPENGOAL
+    /* Mute Mario's voice sounds (bank 2) — Jak has his own audio */
+    if (((soundBits >> SOUNDARGS_SHIFT_BANK) & 0xF) == 2) return;
+#endif
     sSoundRequests[sSoundRequestCount].soundBits = soundBits;
     sSoundRequests[sSoundRequestCount].position = pos;
     sSoundRequestCount++;
