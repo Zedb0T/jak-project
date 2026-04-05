@@ -2520,7 +2520,7 @@
        :bsp-mask #xffffffffffffffff
        :bsphere
        (new 'static 'sphere :w 167772160000.0)
-       :bottom-height (meters -20)
+       :bottom-height (meters -10000000)
        :run-packages
        '()
        :wait-for-load #t))
