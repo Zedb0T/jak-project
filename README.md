@@ -72,9 +72,81 @@ To assist with decompiling, we've built a decompiler that can process GOAL code 
 
 Our decompiler is designed specifically for processing the output of the original GOAL compiler. As a result, when given correct casts, it often produces code that can be directly fed into a compiler and works perfectly. This is continually tested as part of our unit tests.
 
-## Setting up a Development Environment
+## SM64-Jak Integration (Jak in Super Mario 64)
 
-The remainder of this README is aimed at people interested in building the project from source, typically with the intention of contributing as a developer.
+This fork embeds Jak as a playable character inside SM64EX (the Super Mario 64 PC port). Jak replaces Mario using a shared library (`libjakopengoal`) that runs the GOAL VM headlessly and exposes Jak's state, collision, and rendering through a C API.
+
+### Prerequisites
+
+- **Windows 10/11** (x86_64)
+- **MSVC** (Visual Studio 2019+ with C++ workload) for building the DLL
+- **MSYS2/MinGW64** for building SM64EX
+- **CMake** 3.16+
+- A legally obtained **SM64 US ROM** (`baserom.us.z64`) placed in `sm64-jak/`
+- A legally obtained **Jak and Daxter PS2 ISO** extracted into `iso_data/jak1/`
+
+### Quick Build (Recommended)
+
+Run the automated build script from the repo root:
+
+```
+build_sm64jak.bat
+```
+
+It will check prerequisites, build the DLL, copy dependencies, build SM64EX, and create a `launch_sm64jak.bat` for running the game. Each step has a Y/N prompt so you can skip what you've already built.
+
+### Manual Build Steps
+
+**1. Extract Jak assets and build OpenGOAL:**
+
+```bash
+task set-game-jak1
+task set-decomp-ntscv1
+task extract
+task repl
+# In the REPL, run: (mi)
+```
+
+**2. Build the libjakopengoal DLL (MSVC):**
+
+```bash
+cmake --build build --target jakopengoal --config Release
+```
+
+**3. Copy all DLLs to the SM64 build output directory:**
+
+```bash
+cp build/bin/Release/*.dll sm64-jak/build/us_pc/
+```
+
+**4. Build SM64EX with Jak integration (MSYS2/MinGW64 terminal):**
+
+```bash
+export PATH="/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH"
+cd sm64-jak
+/c/msys64/usr/bin/env.exe TMPDIR=/tmp TMP=/tmp TEMP=/tmp OS=Windows_NT \
+  /c/msys64/usr/bin/make.exe -j$(nproc) JAKOPENGOAL=1 WINDOWS_BUILD=1
+```
+
+### Running
+
+```bash
+cd sm64-jak/build/us_pc
+export JAK_DATA_PATH="<path-to-jak-project>"
+./sm64.us.f3dex2e.exe --skip-intro
+```
+
+Replace `<path-to-jak-project>` with the absolute path to this repository (use backslashes on Windows, e.g. `C:\Users\you\jak-project`).
+
+### Blender Addons
+
+The `libjakopengoal/blender/` and `libsm64-blender/` directories contain Blender addons for previewing Jak and SM64 characters. After building the DLLs above, copy them into the addon `lib/` directories before enabling the addons in Blender.
+
+---
+
+## Setting up a Development Environment (OpenGOAL)
+
+The remainder of this README is aimed at people interested in building the OpenGOAL project from source, typically with the intention of contributing as a developer.
 
 If this does not sound like you and you just want to play the game, refer to the above section [Quick Start](#quick-start)
 

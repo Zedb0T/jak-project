@@ -89,3 +89,11 @@ unifont-15.0.03.ttf
 goalc-report.html
 /third-party/libsm64
 /build_static
+
+# build artifacts — binaries must be built from source
+*.dll
+*.exe
+*.so
+*.dylib
+sm64-jak/build/
+*.so
