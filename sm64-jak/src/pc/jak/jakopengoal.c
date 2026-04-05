@@ -61,6 +61,9 @@
 #  define JAK_DLL_NAME          "libjakopengoal.so"
 #endif
 
+/* Level warp (defined in level_update.c, not exported via header) */
+extern void initiate_warp(s16 destLevel, s16 destArea, s16 destWarpNode, s32 arg3);
+
 /* Global held-object pointer — checked by cur_obj_disable_rendering() */
 struct Object *g_jak_held_obj = NULL;
 
@@ -173,6 +176,7 @@ typedef void    (*pfn_jak_tick)(int32_t, const struct JakInputs*, struct JakStat
 typedef void    (*pfn_jak_set_position)(int32_t, float, float, float);
 typedef bool    (*pfn_jak_get_bone_data)(struct JakBoneData*);
 typedef struct JakTextureInfo (*pfn_jak_get_texture_info)(void);
+typedef void    (*pfn_jak_set_water_level)(float);
 
 /* ---- Module state ---- */
 
@@ -198,6 +202,7 @@ static pfn_jak_tick                fn_jak_tick = NULL;
 static pfn_jak_set_position        fn_jak_set_position = NULL;
 static pfn_jak_get_bone_data       fn_jak_get_bone_data = NULL;
 static pfn_jak_get_texture_info    fn_jak_get_texture_info = NULL;
+static pfn_jak_set_water_level     fn_jak_set_water_level = NULL;
 
 /* Geometry buffers (heap-allocated) */
 static float *s_geo_position = NULL;
@@ -275,6 +280,8 @@ static bool resolve_functions(void) {
     if (!fn_jak_get_bone_data) JAK_LOG("jak_get_bone_data not available (optional)");
     fn_jak_get_texture_info = (pfn_jak_get_texture_info)JAK_DLSYM(s_dll_handle, "jak_get_texture_info");
     if (!fn_jak_get_texture_info) JAK_LOG("jak_get_texture_info not available (optional)");
+    fn_jak_set_water_level = (pfn_jak_set_water_level)JAK_DLSYM(s_dll_handle, "jak_set_water_level");
+    if (!fn_jak_set_water_level) JAK_LOG("jak_set_water_level not available (optional)");
     JAK_LOG("All function pointers resolved OK");
     return true;
 }
@@ -725,6 +732,52 @@ void jak_sm64_update(void) {
             gMarioObject->header.gfx.pos[0] = s_jak_state.position[0];
             gMarioObject->header.gfx.pos[1] = s_jak_state.position[1];
             gMarioObject->header.gfx.pos[2] = s_jak_state.position[2];
+        }
+    }
+
+    /* --- Water level: query SM64's water system and forward to GOAL --- */
+    if (fn_jak_set_water_level) {
+        extern s16 *gEnvironmentRegions;
+        f32 water_y = find_water_level(s_jak_state.position[0], s_jak_state.position[2]);
+        fn_jak_set_water_level(water_y);
+
+        static int water_dbg_count = 0;
+        static bool env_logged_once = false;
+        if (++water_dbg_count % 60 == 1) {
+            JAK_LOG("WATER: y=%.1f pos=(%.1f,%.1f,%.1f) in_water=%d envR=%s lvl=%d",
+                    water_y, s_jak_state.position[0], s_jak_state.position[1],
+                    s_jak_state.position[2], s_jak_state.in_water,
+                    gEnvironmentRegions ? "SET" : "NULL", (int)gCurrLevelNum);
+        }
+        if (gEnvironmentRegions && !env_logged_once) {
+            env_logged_once = true;
+            s16 *p = gEnvironmentRegions;
+            s32 numRegions = *p++;
+            JAK_LOG("WATER: *** gEnvironmentRegions activated! %d regions ***", numRegions);
+            for (s32 i = 0; i < numRegions && i < 4; i++) {
+                s16 val = *p++;
+                s16 loX = *p++;
+                s16 loZ = *p++;
+                s16 hiX = *p++;
+                s16 hiZ = *p++;
+                s16 h = *p++;
+                JAK_LOG("WATER:   [%d] val=%d (%d,%d)-(%d,%d) h=%d",
+                        i, val, loX, loZ, hiX, hiZ, h);
+            }
+        }
+        /* Log when water is first found (water_y > -10000 means SM64 found a water region) */
+        if (water_y > -10000.0f) {
+            static int water_found_count = 0;
+            if (++water_found_count <= 5 || water_found_count % 60 == 0) {
+                JAK_LOG("WATER: *** SM64 found water! y=%.1f jak_y=%.1f ***",
+                        water_y, s_jak_state.position[1]);
+            }
+        }
+        if (s_jak_state.in_water) {
+            static int water_detect_count = 0;
+            if (++water_detect_count % 120 == 1) {
+                JAK_LOG("WATER: jak in_water=true action=%d", s_jak_state.action);
+            }
         }
     }
 

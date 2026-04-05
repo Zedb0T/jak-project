@@ -303,6 +303,14 @@ JAK_LIB_FN void jak_heal(int32_t jak_id, float amount);
 JAK_LIB_FN void jak_kill(int32_t jak_id);
 JAK_LIB_FN void jak_give_eco(int32_t jak_id, int32_t eco_type);
 
+/**
+ * Set the water surface height at Jak's position.
+ * When height > -10000, a waterbottom collision plane is injected
+ * into GOAL's collide-cache so Jak can swim.
+ * Set to -11000 (or lower) to indicate no water.
+ */
+JAK_LIB_FN void jak_set_water_level(float height);
+
 /* -------------------------------------------------------------------------- */
 /*  Collision queries (for host engine use)                                   */
 /* -------------------------------------------------------------------------- */
