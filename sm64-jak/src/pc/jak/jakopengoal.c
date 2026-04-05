@@ -320,6 +320,10 @@ static void convert_sm64_surfaces(void) {
 
     for (uint32_t i = 0; i < count; i++) {
         struct Surface *s = &sSurfacePool[i];
+
+        /* Skip degenerate surfaces (zero normal = uninitialized or degenerate tri) */
+        if (s->normal.x == 0.0f && s->normal.y == 0.0f && s->normal.z == 0.0f) continue;
+
         struct JakSurface *js = &s_jak_surfaces[s_jak_surface_count];
 
         js->type = JAK_PAT_STONE;
@@ -615,13 +619,19 @@ void jak_sm64_update(void) {
     }
 
     /* Re-sync collision surfaces every frame from SM64's live surface pool */
-    if (gCurrentArea != NULL && gSurfacesAllocated > 0) {
-        if (fn_jak_static_surfaces_clear) fn_jak_static_surfaces_clear();
-        convert_sm64_surfaces();
-        if (s_jak_surface_count > 0) {
-            fn_jak_static_surfaces_load(s_jak_surfaces, s_jak_surface_count);
-            s_surfaces_loaded = true;
-        } else {
+    {
+        extern struct Surface *sSurfacePool;
+        if (gCurrentArea != NULL && sSurfacePool != NULL && gSurfacesAllocated > 0) {
+            if (fn_jak_static_surfaces_clear) fn_jak_static_surfaces_clear();
+            convert_sm64_surfaces();
+            if (s_jak_surface_count > 0) {
+                fn_jak_static_surfaces_load(s_jak_surfaces, s_jak_surface_count);
+                s_surfaces_loaded = true;
+            } else {
+                s_surfaces_loaded = false;
+            }
+        } else if (s_surfaces_loaded) {
+            if (fn_jak_static_surfaces_clear) fn_jak_static_surfaces_clear();
             s_surfaces_loaded = false;
         }
     }
@@ -668,6 +678,23 @@ void jak_sm64_update(void) {
     if (!s_surfaces_loaded) return;
     if (!s_active || s_jak_id < 0) return;
 
+    /* Freeze Jak entirely during warp transitions (ACT_DISAPPEARED).
+     * Jak must not tick or move while SM64 is unloading/loading areas —
+     * otherwise he runs through the painting into void geometry and GOAL crashes.
+     * Pin his position in GOAL each frame so the VM thread doesn't let him fall. */
+    {
+        struct MarioState *m = &gMarioStates[0];
+        if (m->action == ACT_DISAPPEARED) {
+            if (fn_jak_set_position) {
+                fn_jak_set_position(s_jak_id,
+                    s_jak_state.position[0],
+                    s_jak_state.position[1],
+                    s_jak_state.position[2]);
+            }
+            return;
+        }
+    }
+
     /* Build inputs from SM64 controller */
     struct JakInputs inputs;
     build_jak_inputs(&inputs);
@@ -701,6 +728,8 @@ void jak_sm64_update(void) {
     }
 
     /* --- Punch-to-grab: let Jak grab SM64 objects during first 0.25s of punch --- */
+    if (gCurrentArea == NULL) return;  /* level not loaded — skip all interaction code */
+
     {
         static uint32_t prev_jak_action = 0;
         struct MarioState *m = &gMarioStates[0];
