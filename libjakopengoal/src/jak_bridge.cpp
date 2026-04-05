@@ -393,7 +393,7 @@ void extract_jak_state() {
 
     static u32 sym_stance = 0, sym_walk = 0, sym_run = 0, sym_jump = 0;
     static u32 sym_double_jump = 0, sym_attack = 0, sym_attack_air = 0;
-    static u32 sym_running_attack = 0, sym_flop = 0, sym_duck = 0;
+    static u32 sym_running_attack = 0, sym_flop = 0, sym_flop_hit_ground = 0, sym_duck = 0;
     static u32 sym_falling = 0, sym_hit = 0, sym_death = 0;
     static u32 sym_swim = 0, sym_swim_up = 0, sym_punch = 0;
     static bool syms_cached = false;
@@ -408,6 +408,7 @@ void extract_jak_state() {
       sym_running_attack = jak1::intern_from_c("target-running-attack").offset;
       sym_punch          = jak1::intern_from_c("target-punch").offset;
       sym_flop           = jak1::intern_from_c("target-flop").offset;
+      sym_flop_hit_ground = jak1::intern_from_c("target-flop-hit-ground").offset;
       sym_duck           = jak1::intern_from_c("target-duck-stance").offset;
       sym_falling        = jak1::intern_from_c("target-falling").offset;
       sym_hit            = jak1::intern_from_c("target-hit").offset;
@@ -428,6 +429,7 @@ void extract_jak_state() {
     else if (state_name == sym_running_attack) action = 5;
     else if (state_name == sym_punch)          action = 6;
     else if (state_name == sym_flop)           action = 7;
+    else if (state_name == sym_flop_hit_ground) action = 14; // JAK_ACTION_GROUND_POUND
     else if (state_name == sym_duck)           action = 9;
     else if (state_name == sym_falling)        action = 10;
     else if (state_name == sym_hit)            action = 11;

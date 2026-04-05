@@ -75,6 +75,7 @@ extern "C" {
 #define JAK_ACTION_HIT 11
 #define JAK_ACTION_DEATH 12
 #define JAK_ACTION_SWIM 13
+#define JAK_ACTION_GROUND_POUND 14
 
 /* Jak button flags (mirrors pad-buttons from GOAL) */
 #define JAK_BUTTON_SELECT (1 << 0)

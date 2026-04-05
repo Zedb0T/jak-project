@@ -210,6 +210,7 @@ static uint8_t *s_texture_atlas = NULL;
 static GLuint s_jak_texture_id = 0;
 static bool s_texture_uploaded = false;
 static bool s_draw_wireframe_overlay = false; /* toggle bone overlay on top of mesh */
+static bool s_draw_debug_hud = false;        /* toggle on-screen position/debug text */
 
 static struct JakState s_jak_state;
 static struct JakGeometryBuffers s_jak_geo;
@@ -839,6 +840,19 @@ void jak_sm64_update(void) {
         prev_spin_action = s_jak_state.action;
     }
 
+    /* --- Ground pound: set Mario to ACT_GROUND_POUND_LAND so bosses detect it --- */
+    {
+        struct MarioState *m = &gMarioStates[0];
+
+        if (s_jak_state.action == 14 /* JAK_ACTION_GROUND_POUND */) {
+            m->action = ACT_GROUND_POUND_LAND;
+            m->actionState = 0;
+            m->actionTimer = 0;
+            m->vel[1] = -50.0f;  /* downward velocity for impact feel */
+            m->faceAngle[1] = (s16)(s_jak_state.face_angle * 32768.0f / 3.14159265f);
+        }
+    }
+
     /* --- Carry held objects above Jak, throw on next punch --- */
     {
         struct MarioState *m = &gMarioStates[0];
@@ -881,9 +895,15 @@ void jak_sm64_update(void) {
         }
     }
 
-    /* Log state and inputs periodically */
+    /* Autosave every 5 minutes (18000 ticks at 60fps) */
     static int tick_count = 0;
     tick_count++;
+    if (tick_count % 18000 == 0) {
+        save_file_do_save(gCurrSaveFileNum - 1);
+        JAK_LOG("Autosave triggered at tick %d", tick_count);
+    }
+
+    /* Log state and inputs periodically */
     if (tick_count <= 5 || tick_count % 300 == 0) {
         struct MarioState *m = &gMarioStates[0];
         JAK_LOG("Tick #%d: jak_pos=(%.0f,%.0f,%.0f) mario_pos=(%.0f,%.0f,%.0f)",
@@ -1214,18 +1234,20 @@ void jak_render_hud(void) {
     float dz = m->pos[2] - jak_z;
     s32 dist = (s32)sqrtf(dx * dx + dy * dy + dz * dz);
 
-    /* Bottom-left of screen, 3 lines */
-    print_text(20, 50, "MARIO");
-    print_text_fmt_int(90, 50, "%d", (s32)m->pos[0]);
-    print_text_fmt_int(160, 50, "%d", (s32)m->pos[1]);
-    print_text_fmt_int(230, 50, "%d", (s32)m->pos[2]);
+    /* Bottom-left of screen, 3 lines (toggle with s_draw_debug_hud) */
+    if (s_draw_debug_hud) {
+        print_text(20, 50, "MARIO");
+        print_text_fmt_int(90, 50, "%d", (s32)m->pos[0]);
+        print_text_fmt_int(160, 50, "%d", (s32)m->pos[1]);
+        print_text_fmt_int(230, 50, "%d", (s32)m->pos[2]);
 
-    print_text(20, 34, "JAK");
-    print_text_fmt_int(90, 34, "%d", (s32)jak_x);
-    print_text_fmt_int(160, 34, "%d", (s32)jak_y);
-    print_text_fmt_int(230, 34, "%d", (s32)jak_z);
+        print_text(20, 34, "JAK");
+        print_text_fmt_int(90, 34, "%d", (s32)jak_x);
+        print_text_fmt_int(160, 34, "%d", (s32)jak_y);
+        print_text_fmt_int(230, 34, "%d", (s32)jak_z);
 
-    print_text_fmt_int(20, 18, "DIST %d", dist);
-    print_text_fmt_int(120, 18, "TRI %d", (s32)s_jak_geo.num_triangles_used);
-    print_text_fmt_int(200, 18, "BONES %d", s_bones_available ? s_bone_data.num_bones : 0);
+        print_text_fmt_int(20, 18, "DIST %d", dist);
+        print_text_fmt_int(120, 18, "TRI %d", (s32)s_jak_geo.num_triangles_used);
+        print_text_fmt_int(200, 18, "BONES %d", s_bones_available ? s_bone_data.num_bones : 0);
+    }
 }

@@ -19,3 +19,7 @@ target_link_libraries(type_searcher common decomp)
 add_executable(formatter
         formatter/main.cpp)
 target_link_libraries(formatter common tree-sitter)
+
+add_executable(jak_model_exporter
+        jak_model_exporter/main.cpp)
+target_link_libraries(jak_model_exporter common)
