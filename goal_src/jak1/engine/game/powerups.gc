@@ -445,6 +445,7 @@
   (none))
 
 (defbehavior target-powerup-process target ()
+  (water-control-method-10 (-> self water))
   (when (not *weather-off*)
     (case (-> self current-level name)
       (('swamp) (update-rain self))

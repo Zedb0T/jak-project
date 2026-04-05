@@ -42,7 +42,6 @@ extern std::atomic<bool> s_runtime_ready;
 extern BoneDebugData s_bone_debug;
 extern TextureAtlasInfo s_texture_atlas_info;
 extern uint8_t* s_texture_output;
-extern WaterState s_water_state;
 
 // Bone matrix storage for CPU skinning
 struct BoneMatrix {
@@ -1449,12 +1448,6 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
     }
   }
 
-  // NOTE: Waterbottom triangle injection DISABLED.
-  // The solid waterbottom triangles (pat mode=0) acted as physical ground, preventing
-  // swim movement. Water detection is now handled entirely by inject_water_state()
-  // which sets water-control fields/flags directly. water-control-method-10 drives
-  // swimming from those fields without needing physical waterbottom collision.
-
   // Update the tri count — GOAL will handle prim setup after this function returns
   // (we cannot reliably set up the prim from C++ due to potential offset differences
   //  between what the GOAL compiler uses and what all-types.gc declares)
@@ -1875,142 +1868,6 @@ void snap_to_floor() {
   }
 }
 
-/**
- * Inject water state into the target's water-control when SM64 reports water.
- *
- * GOAL's swim system requires the water-control on the target process to have
- * its flags (wt03=swim-eligible, wt11=swimming) and heights set.  Without a
- * GOAL water volume, these are never written, so Jak falls through water.
- *
- * water-control layout (C++ offset = GOAL offset_assert - 4):
- *   +0:  flags (uint32)           offset_assert 4
- *   +60: base-height (float)      offset_assert 64
- *   +64: wade-height (float)      offset_assert 68
- *   +68: swim-height (float)      offset_assert 72
- *   +72: surface-height (float)   offset_assert 76
- *   +76: bottom-height (float)    offset_assert 80
- *   +80: height (float)           offset_assert 84
- *   +84: real-ocean-offset (float) offset_assert 88
- *   +88: ocean-offset (float)      offset_assert 92
- *   +92: bob-offset (float)        offset_assert 96
- *   +96: align-offset (float)      offset_assert 100
- *   +156: bottom[0] (vector 16B)  offset_assert 160
- *
- * target (process-drawable):
- *   +152: water (water-control ptr) offset_assert 156
- */
-static void inject_water_state() {
-  float water_sm64 = s_water_state.height.load();
-  if (water_sm64 <= -10000.0f || !g_ee_main_mem)
-    return;
-
-  auto target_sym = jak1::intern_from_c("*target*");
-  if (!target_sym.offset || target_sym->value == 0 || target_sym->value == s7.offset)
-    return;
-
-  u32 target_ptr = target_sym->value;
-
-  // Get water-control pointer: process-drawable.water at offset_assert 156 → C++ +152
-  u32 water_ctrl_ptr = *(u32*)(g_ee_main_mem + target_ptr + 152);
-  if (water_ctrl_ptr == 0 || water_ctrl_ptr == s7.offset)
-    return;
-
-  uint8_t* wc = g_ee_main_mem + water_ctrl_ptr;
-
-  // Convert SM64 water height to GOAL meters
-  constexpr float UNITS_TO_METERS = 4096.0f / 50.0f;
-  float water_goal = water_sm64 * UNITS_TO_METERS;
-
-  // Get Jak's current Y position in GOAL meters from the root transform
-  u32 root_ptr = *(u32*)(g_ee_main_mem + target_ptr + 108);  // process-drawable.root offset 112 → +108
-  float jak_y_goal = 0.0f;
-  if (root_ptr != 0 && root_ptr != s7.offset) {
-    float* trans = (float*)(g_ee_main_mem + root_ptr + 12);  // trsqv.trans offset 16 → +12
-    jak_y_goal = trans[1];
-  }
-
-  // water-flags bitfield: wt00=bit0, wt01=bit1, ..., wt11=bit11
-  // Required flags for swim:
-  //   wt01(1), wt02(2), wt03(3), wt04(4), wt05(5), wt06(6), wt07(7) = prerequisite flags
-  //   wt09(9) = "in water" flag
-  //   wt11(11) = swim flag
-  //   wt10(10) = wade flag
-  constexpr u32 WF_PREREQ = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) |
-                             (1 << 5) | (1 << 6) | (1 << 7) | (1 << 9);
-  constexpr u32 WF_SWIM = (1 << 11);
-  constexpr u32 WF_WADE = (1 << 10);
-
-  float swim_threshold = 8192.0f;  // default swim-height
-  float wade_threshold = 2048.0f;  // default wade-height
-
-  bool below_swim = jak_y_goal <= (water_goal - swim_threshold);
-  bool below_wade = jak_y_goal <= (water_goal - wade_threshold);
-
-  // Set water-control fields
-  u32* flags_ptr = (u32*)(wc + 0);            // flags
-  float* base_h = (float*)(wc + 60);          // base-height
-  float* wade_h = (float*)(wc + 64);          // wade-height
-  float* swim_h = (float*)(wc + 68);          // swim-height
-  float* surf_h = (float*)(wc + 72);          // surface-height
-  float* bot_h = (float*)(wc + 76);           // bottom-height
-  float* height = (float*)(wc + 80);          // height
-  float* real_ocean = (float*)(wc + 84);      // real-ocean-offset
-  float* ocean_off = (float*)(wc + 88);       // ocean-offset
-  float* bob_off = (float*)(wc + 92);         // bob-offset
-  float* align_off = (float*)(wc + 96);       // align-offset
-  float* bottom0_y = (float*)(wc + 156 + 4);  // bottom[0].y (vector: x=+0, y=+4, z=+8, w=+12)
-
-  *base_h = water_goal;
-  *wade_h = wade_threshold;
-  *swim_h = swim_threshold;
-  *surf_h = water_goal;
-  *bot_h = 32768.0f;
-  *height = water_goal;
-  *real_ocean = 0.0f;
-  *ocean_off = 0.0f;
-  *bob_off = 0.0f;
-  *align_off = 0.0f;
-  *bottom0_y = jak_y_goal;
-
-  // Also set bottom[0].x and .z to Jak's position for splash effects
-  if (root_ptr != 0 && root_ptr != s7.offset) {
-    float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
-    float* bottom0 = (float*)(wc + 156);
-    bottom0[0] = trans[0];  // x
-    bottom0[1] = trans[1];  // y (already set above)
-    bottom0[2] = trans[2];  // z
-    bottom0[3] = 1.0f;      // w
-  }
-
-  // Read flags BEFORE overwrite to see what method-10 left
-  u32 flags_before = *flags_ptr;
-  float height_before = *height;
-  float base_h_before = *base_h;
-
-  // Set flags: prerequisite flags + swim or wade based on depth
-  u32 new_flags = WF_PREREQ;
-  if (below_swim) {
-    new_flags |= WF_SWIM;
-  } else if (below_wade) {
-    new_flags |= WF_WADE;
-  }
-  *flags_ptr = new_flags;
-
-  static int inject_log = 0;
-  if (++inject_log % 30 == 1) {
-    FILE* f = fopen("C:\\Users\\ZedBo\\jak_water_debug.log", "a");
-    if (f) {
-      fprintf(f, "[water] frame=%d water=%.0f jak_y=%.0f flags_before=0x%x new=0x%x base_h_b=%.0f h_b=%.0f swim_depth=%.0f bottom0_y=%.0f\n",
-              inject_log, water_goal, jak_y_goal, flags_before, new_flags,
-              base_h_before, height_before,
-              *(float*)(wc + 100),  // swim-depth at offset-assert 104 → +100
-              *(float*)(wc + 156 + 4));  // bottom[0].y
-      fflush(f);
-      fclose(f);
-    }
-  }
-}
-
 void bridge_tick() {
   process_commands();
   force_settings();
@@ -2018,26 +1875,6 @@ void bridge_tick() {
   apply_rider_displacement();
   // snap_to_floor();  // DISABLED — was stomping Jak's Y position each frame
   extract_jak_state();
-  inject_water_state();
-
-  // Water detection debug logging
-  {
-    static int water_log_counter = 0;
-    float wh = s_water_state.height.load();
-    bool in_water = false;
-    {
-      std::lock_guard<std::mutex> lock(s_jak_state.mutex);
-      in_water = s_jak_state.state.in_water;
-    }
-    if (++water_log_counter % 120 == 1) {
-      lg::info("[water] sm64_water_h={:.1f} jak_in_water={} jak_action={}",
-               wh, in_water ? "YES" : "no", s_jak_state.state.action);
-    }
-    if (in_water && water_log_counter % 30 == 1) {
-      lg::info("[water] *** JAK DETECTED WATER! in_water=true ***");
-    }
-  }
-
   read_bones_from_goal();
   extract_jak_mesh();
 

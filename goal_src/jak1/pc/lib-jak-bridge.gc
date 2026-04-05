@@ -313,33 +313,6 @@
     ;; Process commands from host engine
     (lib-jak-process-commands)
 
-    ;; Check water-control flags and send swim/wade events if C++ set them.
-    ;; The C++ bridge sets wt11 (swim) or wt10 (wade) on the water-control
-    ;; when SM64 reports water at Jak's position, but it can't send GOAL events.
-    (when (and *target* (-> *target* water))
-      (let ((wc (-> *target* water)))
-        (when (logtest? (-> wc flags) (water-flags wt11))
-          ;; Send 'swim event if not already swimming
-          (if (not (or (= (-> *target* next-state name) 'target-swim-stance)
-                       (= (-> *target* next-state name) 'target-swim-down)
-                       (= (-> *target* next-state name) 'target-swim-walk)
-                       (= (-> *target* next-state name) 'target-swim-up)))
-            (send-event *target* 'swim)
-            )
-          )
-        (when (and (logtest? (-> wc flags) (water-flags wt10))
-                   (not (logtest? (-> wc flags) (water-flags wt11))))
-          ;; Send 'wade event if not already wading or swimming
-          (if (not (or (= (-> *target* next-state name) 'target-wade-stance)
-                       (= (-> *target* next-state name) 'target-wade-walk)
-                       (= (-> *target* next-state name) 'target-swim-stance)
-                       (= (-> *target* next-state name) 'target-swim-down)))
-            (send-event *target* 'wade)
-            )
-          )
-        )
-      )
-
     ;; Export Jak's state
     (lib-jak-export-state)
 
