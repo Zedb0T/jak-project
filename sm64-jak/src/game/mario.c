@@ -1,6 +1,9 @@
 #include <PR/ultratypes.h>
 
 #include "sm64.h"
+#ifdef JAKOPENGOAL
+#include "pc/jak/jakopengoal.h"
+#endif
 #include "area.h"
 #include "audio/data.h"
 #include "audio/external.h"
@@ -1755,7 +1758,12 @@ s32 execute_mario_action(UNUSED struct Object *o) {
     * End of cheat stuff
     */
     if (gMarioState->action) {
-#ifndef JAKOPENGOAL
+#ifdef JAKOPENGOAL
+        /* Show Mario when Jak can't handle the current action (swimming, poles, etc.) */
+        if (jak_mario_should_fallback()) {
+            gMarioState->marioObj->header.gfx.node.flags &= ~GRAPH_RENDER_INVISIBLE;
+        }
+#else
         gMarioState->marioObj->header.gfx.node.flags &= ~GRAPH_RENDER_INVISIBLE;
 #endif
         mario_reset_bodystate(gMarioState);

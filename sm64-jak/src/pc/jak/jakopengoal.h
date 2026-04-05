@@ -30,6 +30,9 @@ void jak_render_hud(void);      /* Draw debug text on HUD (positions, dist) */
 /* ---- Toggle ---- */
 void jak_sm64_toggle(void);     /* Spawn or despawn Jak */
 
+/* ---- Mario fallback ---- */
+bool jak_mario_should_fallback(void);  /* True when Mario handles the current action */
+
 /* ---- Held object hack ---- */
 #include "types.h"
 extern struct Object *g_jak_held_obj;

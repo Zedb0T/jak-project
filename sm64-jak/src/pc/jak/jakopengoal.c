@@ -215,6 +215,65 @@ static bool s_draw_debug_hud = false;        /* toggle on-screen position/debug 
 static struct JakState s_jak_state;
 static struct JakGeometryBuffers s_jak_geo;
 
+/* Mario-fallback flags: when true, use Mario's model/movement for that mechanic.
+ * Defaulted to true — Jak doesn't support these yet. */
+static bool s_mario_fallback_swimming  = true;
+static bool s_mario_fallback_cannon    = true;
+static bool s_mario_fallback_shot_from_cannon = true;
+static bool s_mario_fallback_wing_cap  = true;
+static bool s_mario_fallback_shell     = true;
+static bool s_mario_fallback_pole      = true;
+static bool s_mario_fallback_teleport  = true;
+
+/* Returns true when Mario is in an action that should use Mario instead of Jak */
+static bool mario_should_fallback(void) {
+    struct MarioState *m = &gMarioStates[0];
+    u32 act = m->action;
+
+    /* Swimming */
+    if (s_mario_fallback_swimming) {
+        u32 group = (act >> 6) & 0x7;  /* action group: 3 = water */
+        if (group == 3) return true;
+        if (act == ACT_WATER_JUMP) return true;
+    }
+
+    /* Cannon */
+    if (s_mario_fallback_cannon) {
+        if (act == ACT_IN_CANNON) return true;
+    }
+
+    /* Shot from cannon */
+    if (s_mario_fallback_shot_from_cannon) {
+        if (act == ACT_SHOT_FROM_CANNON) return true;
+    }
+
+    /* Wing cap / flying */
+    if (s_mario_fallback_wing_cap) {
+        if (act == ACT_FLYING || act == ACT_FLYING_TRIPLE_JUMP) return true;
+    }
+
+    /* Shell riding */
+    if (s_mario_fallback_shell) {
+        if (act == ACT_RIDING_SHELL_GROUND ||
+            act == ACT_RIDING_SHELL_JUMP ||
+            act == ACT_RIDING_SHELL_FALL) return true;
+    }
+
+    /* Poles / trees (uses ACT_FLAG_ON_POLE for all pole states) */
+    if (s_mario_fallback_pole) {
+        if (act & ACT_FLAG_ON_POLE) return true;
+        if (act == ACT_TOP_OF_POLE_JUMP) return true;
+    }
+
+    /* Teleports */
+    if (s_mario_fallback_teleport) {
+        if (act == ACT_TELEPORT_FADE_OUT ||
+            act == ACT_TELEPORT_FADE_IN) return true;
+    }
+
+    return false;
+}
+
 /* SM64 collision conversion */
 #define MAX_JAK_SURFACES 8192
 static struct JakSurface *s_jak_surfaces = NULL;
@@ -247,6 +306,12 @@ static bool load_dll(void) {
 
     JAK_ERR("Failed to load %s: %s", JAK_DLL_NAME, JAK_DLERROR());
     return false;
+}
+
+/* Public wrapper for mario.c to check fallback state */
+bool jak_mario_should_fallback(void) {
+    if (!s_active || s_jak_id < 0) return false;
+    return mario_should_fallback();
 }
 
 static bool resolve_functions(void) {
@@ -696,6 +761,29 @@ void jak_sm64_update(void) {
         }
     }
 
+    /* --- Mario fallback: use Mario's model/movement for unsupported actions ---
+     * Cooldown: after a fallback action ends, keep Mario active for 1 second
+     * so he can finish exit animations (climbing out of water, etc.) */
+    {
+        static int s_fallback_cooldown = 0;
+        bool in_fallback = mario_should_fallback();
+
+        if (in_fallback) {
+            s_fallback_cooldown = 30;  /* ~1 second at 30fps */
+        } else if (s_fallback_cooldown > 0) {
+            s_fallback_cooldown--;
+            in_fallback = true;  /* still in cooldown */
+        }
+
+        if (in_fallback) {
+            struct MarioState *m = &gMarioStates[0];
+            if (fn_jak_set_position) {
+                fn_jak_set_position(s_jak_id, m->pos[0], m->pos[1], m->pos[2]);
+            }
+            return;
+        }
+    }
+
     /* Build inputs from SM64 controller */
     struct JakInputs inputs;
     build_jak_inputs(&inputs);
@@ -996,6 +1084,7 @@ static void upload_texture_atlas(void) {
 
 void jak_sm64_render(void) {
     if (!s_active || s_jak_id < 0) return;
+    if (mario_should_fallback()) return;  /* Mario is rendering, skip Jak */
 
     /* Fetch bone data from DLL */
     s_bones_available = false;
