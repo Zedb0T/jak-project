@@ -64,6 +64,10 @@
 /* Global held-object pointer — checked by cur_obj_disable_rendering() */
 struct Object *g_jak_held_obj = NULL;
 
+/* Cached frustum near/far — set by rendering_graph_node.c each frame */
+float gJakFrustumNear = 100.0f;
+float gJakFrustumFar  = 12800.0f;
+
 /* Punch frame counter for grab window */
 static int s_punch_frame_count = 0;
 
@@ -1137,7 +1141,7 @@ void jak_sm64_render(void) {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    gluPerspective((double)fov, (double)aspect, 100.0, 50000.0);
+    gluPerspective((double)fov, (double)aspect, (double)gJakFrustumNear, (double)gJakFrustumFar);
 
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();

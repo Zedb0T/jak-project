@@ -255,6 +255,12 @@ static void geo_process_perspective(struct GraphNodePerspective *node) {
         gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(mtx), G_MTX_PROJECTION | G_MTX_LOAD | G_MTX_NOPUSH);
 
         gCurGraphNodeCamFrustum = node;
+#ifdef JAKOPENGOAL
+        /* Cache frustum values for Jak's renderer (gCurGraphNodeCamFrustum is NULLed after this) */
+        extern f32 gJakFrustumNear, gJakFrustumFar;
+        gJakFrustumNear = (f32)node->near;
+        gJakFrustumFar  = (f32)node->far;
+#endif
         geo_process_node_and_siblings(node->fnNode.node.children);
         gCurGraphNodeCamFrustum = NULL;
     }
