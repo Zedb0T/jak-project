@@ -839,8 +839,8 @@ void jak_sm64_update(void) {
                     f32 rel_z = jak_z - plat->oPosZ;
                     f32 a = (f32)dyaw * (3.14159265f / 32768.0f);
                     f32 c = cosf(a), s = sinf(a);
-                    dx += (c * rel_x - s * rel_z) - rel_x;
-                    dz += (s * rel_x + c * rel_z) - rel_z;
+                    dx += (c * rel_x + s * rel_z) - rel_x;
+                    dz += (-s * rel_x + c * rel_z) - rel_z;
                 }
                 s_prev_yaw = cur_yaw;
 
