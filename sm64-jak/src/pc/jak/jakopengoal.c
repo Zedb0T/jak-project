@@ -684,6 +684,12 @@ void jak_sm64_update(void) {
                 JAK_LOG("  Cleared old collision surfaces");
             }
 
+            /* Reset water level so Jak doesn't swim in the new area */
+            if (fn_jak_set_water_level) {
+                fn_jak_set_water_level(-11000.0f);
+                JAK_LOG("  Reset water level for area transition");
+            }
+
             s_last_level_area = cur_la;
         }
     }
@@ -1317,9 +1323,289 @@ void jak_sm64_render(void) {
     glUseProgram(prev_program);
 }
 
+/* ---- Jak Menu (hold X + D-pad Right to open) ---- */
+
+extern void initiate_warp(s16 destLevel, s16 destArea, s16 destWarpNode, s32 arg3);
+
+static bool s_jak_menu_open = false;
+static int  s_jak_menu_cursor = 0;
+static bool s_dpad_up_prev = false;
+static bool s_dpad_down_prev = false;
+static bool s_dpad_left_prev = false;
+static bool s_dpad_right_prev = false;
+static bool s_a_prev = false;
+
+/* Menu items: fallback toggles first, then level warps */
+enum {
+    MENU_FALLBACK_SWIMMING = 0,
+    MENU_FALLBACK_CANNON,
+    MENU_FALLBACK_SHOT_CANNON,
+    MENU_FALLBACK_WING_CAP,
+    MENU_FALLBACK_SHELL,
+    MENU_FALLBACK_POLE,
+    MENU_FALLBACK_TELEPORT,
+    MENU_SEP,  /* separator */
+    MENU_WARP_CASTLE_GROUNDS,
+    MENU_WARP_CASTLE_INSIDE,
+    MENU_WARP_CASTLE_COURTYARD,
+    MENU_WARP_BOB,
+    MENU_WARP_WF,
+    MENU_WARP_JRB,
+    MENU_WARP_CCM,
+    MENU_WARP_BBH,
+    MENU_WARP_HMC,
+    MENU_WARP_LLL,
+    MENU_WARP_SSL,
+    MENU_WARP_DDD,
+    MENU_WARP_SL,
+    MENU_WARP_WDW,
+    MENU_WARP_TTM,
+    MENU_WARP_THI,
+    MENU_WARP_TTC,
+    MENU_WARP_RR,
+    MENU_WARP_BOWSER_1,
+    MENU_WARP_BOWSER_2,
+    MENU_WARP_BOWSER_3,
+    MENU_WARP_BITDW,
+    MENU_WARP_BITFS,
+    MENU_WARP_BITS,
+    MENU_WARP_PSS,
+    MENU_WARP_SA,
+    MENU_WARP_COTMC,
+    MENU_WARP_TOTWC,
+    MENU_WARP_VCUTM,
+    MENU_WARP_WMOTR,
+    MENU_COUNT
+};
+
+static const char *jak_menu_label(int idx) {
+    switch (idx) {
+        case MENU_FALLBACK_SWIMMING:    return "SWIMMING";
+        case MENU_FALLBACK_CANNON:      return "CANNON";
+        case MENU_FALLBACK_SHOT_CANNON: return "SHOT CANNON";
+        case MENU_FALLBACK_WING_CAP:    return "WING CAP";
+        case MENU_FALLBACK_SHELL:       return "SHELL";
+        case MENU_FALLBACK_POLE:        return "POLES";
+        case MENU_FALLBACK_TELEPORT:    return "TELEPORT";
+        case MENU_SEP:                  return "--- WARP ---";
+        case MENU_WARP_CASTLE_GROUNDS:  return "CASTLE GROUNDS";
+        case MENU_WARP_CASTLE_INSIDE:   return "CASTLE INSIDE";
+        case MENU_WARP_CASTLE_COURTYARD:return "COURTYARD";
+        case MENU_WARP_BOB:             return "BOB OMB";
+        case MENU_WARP_WF:              return "WHOMPS";
+        case MENU_WARP_JRB:             return "JOLLY ROGER";
+        case MENU_WARP_CCM:             return "COOL COOL MTN";
+        case MENU_WARP_BBH:             return "BOOS HAUNT";
+        case MENU_WARP_HMC:             return "HAZY MAZE";
+        case MENU_WARP_LLL:             return "LAVA LAND";
+        case MENU_WARP_SSL:             return "SAND LAND";
+        case MENU_WARP_DDD:             return "DIRE DOCKS";
+        case MENU_WARP_SL:              return "SNOWMANS";
+        case MENU_WARP_WDW:             return "WET DRY";
+        case MENU_WARP_TTM:             return "TALL TALL MTN";
+        case MENU_WARP_THI:             return "TINY HUGE";
+        case MENU_WARP_TTC:             return "TICK TOCK";
+        case MENU_WARP_RR:              return "RAINBOW RIDE";
+        case MENU_WARP_BOWSER_1:        return "BOWSER 1";
+        case MENU_WARP_BOWSER_2:        return "BOWSER 2";
+        case MENU_WARP_BOWSER_3:        return "BOWSER 3";
+        case MENU_WARP_BITDW:           return "DARK WORLD";
+        case MENU_WARP_BITFS:           return "FIRE SEA";
+        case MENU_WARP_BITS:            return "IN THE SKY";
+        case MENU_WARP_PSS:             return "SLIDE";
+        case MENU_WARP_SA:              return "AQUARIUM";
+        case MENU_WARP_COTMC:           return "METAL CAP";
+        case MENU_WARP_TOTWC:           return "WING CAP LVL";
+        case MENU_WARP_VCUTM:           return "VANISH CAP";
+        case MENU_WARP_WMOTR:           return "RAINBOW CLOUD";
+        default:                        return "???";
+    }
+}
+
+static bool *jak_menu_toggle_ptr(int idx) {
+    switch (idx) {
+        case MENU_FALLBACK_SWIMMING:    return &s_mario_fallback_swimming;
+        case MENU_FALLBACK_CANNON:      return &s_mario_fallback_cannon;
+        case MENU_FALLBACK_SHOT_CANNON: return &s_mario_fallback_shot_from_cannon;
+        case MENU_FALLBACK_WING_CAP:    return &s_mario_fallback_wing_cap;
+        case MENU_FALLBACK_SHELL:       return &s_mario_fallback_shell;
+        case MENU_FALLBACK_POLE:        return &s_mario_fallback_pole;
+        case MENU_FALLBACK_TELEPORT:    return &s_mario_fallback_teleport;
+        default: return NULL;
+    }
+}
+
+static s16 jak_menu_warp_level(int idx) {
+    switch (idx) {
+        case MENU_WARP_CASTLE_GROUNDS:   return LEVEL_CASTLE_GROUNDS;
+        case MENU_WARP_CASTLE_INSIDE:    return LEVEL_CASTLE;
+        case MENU_WARP_CASTLE_COURTYARD: return LEVEL_CASTLE_COURTYARD;
+        case MENU_WARP_BOB:              return LEVEL_BOB;
+        case MENU_WARP_WF:               return LEVEL_WF;
+        case MENU_WARP_JRB:              return LEVEL_JRB;
+        case MENU_WARP_CCM:              return LEVEL_CCM;
+        case MENU_WARP_BBH:              return LEVEL_BBH;
+        case MENU_WARP_HMC:              return LEVEL_HMC;
+        case MENU_WARP_LLL:              return LEVEL_LLL;
+        case MENU_WARP_SSL:              return LEVEL_SSL;
+        case MENU_WARP_DDD:              return LEVEL_DDD;
+        case MENU_WARP_SL:               return LEVEL_SL;
+        case MENU_WARP_WDW:              return LEVEL_WDW;
+        case MENU_WARP_TTM:              return LEVEL_TTM;
+        case MENU_WARP_THI:              return LEVEL_THI;
+        case MENU_WARP_TTC:              return LEVEL_TTC;
+        case MENU_WARP_RR:               return LEVEL_RR;
+        case MENU_WARP_BOWSER_1:         return LEVEL_BOWSER_1;
+        case MENU_WARP_BOWSER_2:         return LEVEL_BOWSER_2;
+        case MENU_WARP_BOWSER_3:         return LEVEL_BOWSER_3;
+        case MENU_WARP_BITDW:            return LEVEL_BITDW;
+        case MENU_WARP_BITFS:            return LEVEL_BITFS;
+        case MENU_WARP_BITS:             return LEVEL_BITS;
+        case MENU_WARP_PSS:              return LEVEL_PSS;
+        case MENU_WARP_SA:               return LEVEL_SA;
+        case MENU_WARP_COTMC:            return LEVEL_COTMC;
+        case MENU_WARP_TOTWC:            return LEVEL_TOTWC;
+        case MENU_WARP_VCUTM:            return LEVEL_VCUTM;
+        case MENU_WARP_WMOTR:            return LEVEL_WMOTR;
+        default: return -1;
+    }
+}
+
+static void jak_menu_update(void) {
+    /* Read all inputs directly from SDL gamepad — SM64's button system
+     * doesn't pass D-pad through buttonDown reliably. */
+    SDL_GameController *pad = get_sdl_gamepad();
+    if (!pad) return;
+
+    bool dpad_up    = SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_UP);
+    bool dpad_down  = SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+    bool dpad_left  = SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+    bool dpad_right = SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+    bool a_btn      = SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_A);
+    bool l_held     = SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+
+    /* Open/close: L + D-pad Right (edge-triggered) */
+    if (l_held && dpad_right && !s_dpad_right_prev) {
+        s_jak_menu_open = !s_jak_menu_open;
+        if (s_jak_menu_open) s_jak_menu_cursor = 0;
+    }
+
+    s_dpad_right_prev = dpad_right;
+
+    if (!s_jak_menu_open) {
+        s_dpad_up_prev = dpad_up;
+        s_dpad_down_prev = dpad_down;
+        s_dpad_left_prev = dpad_left;
+        s_a_prev = a_btn;
+        return;
+    }
+
+    /* Navigate: D-pad up/down (edge-triggered) */
+    if (dpad_up && !s_dpad_up_prev) {
+        s_jak_menu_cursor--;
+        if (s_jak_menu_cursor < 0) s_jak_menu_cursor = MENU_COUNT - 1;
+        if (s_jak_menu_cursor == MENU_SEP) s_jak_menu_cursor--;  /* skip separator */
+    }
+    if (dpad_down && !s_dpad_down_prev) {
+        s_jak_menu_cursor++;
+        if (s_jak_menu_cursor >= MENU_COUNT) s_jak_menu_cursor = 0;
+        if (s_jak_menu_cursor == MENU_SEP) s_jak_menu_cursor++;  /* skip separator */
+    }
+
+    /* Action: A button (edge-triggered) to toggle / warp */
+    if (a_btn && !s_a_prev) {
+        bool *toggle = jak_menu_toggle_ptr(s_jak_menu_cursor);
+        if (toggle) {
+            *toggle = !(*toggle);
+        } else {
+            s16 level = jak_menu_warp_level(s_jak_menu_cursor);
+            if (level >= 0) {
+                initiate_warp(level, 1, 0x0A, 0);
+                fade_into_special_warp(0, 0);
+                s_jak_menu_open = false;
+            }
+        }
+    }
+
+    s_dpad_up_prev = dpad_up;
+    s_dpad_down_prev = dpad_down;
+    s_dpad_left_prev = dpad_left;
+    s_a_prev = a_btn;
+}
+
+static void jak_menu_render(void) {
+    if (!s_jak_menu_open) return;
+
+    /* Title */
+    print_text_centered(160, 220, "JAK MENU");
+
+    /* How many items to show (scrolling window) */
+    #define MENU_VISIBLE 12
+    int scroll_start = 0;
+    if (s_jak_menu_cursor >= MENU_VISIBLE) {
+        scroll_start = s_jak_menu_cursor - MENU_VISIBLE + 1;
+    }
+    if (scroll_start + MENU_VISIBLE > MENU_COUNT) {
+        scroll_start = MENU_COUNT - MENU_VISIBLE;
+    }
+    if (scroll_start < 0) scroll_start = 0;
+
+    int y = 205;
+    for (int i = scroll_start; i < scroll_start + MENU_VISIBLE && i < MENU_COUNT; i++) {
+        const char *label = jak_menu_label(i);
+        bool *toggle = jak_menu_toggle_ptr(i);
+        bool selected = (i == s_jak_menu_cursor);
+
+        if (selected) {
+            /* Draw big visible cursor */
+            print_text(20, y, "##");
+        }
+
+        if (toggle) {
+            /* Fallback toggle item: show ON/OFF */
+            if (selected) {
+                /* Selected: show with brackets */
+                char buf[50];
+                snprintf(buf, sizeof(buf), "[%s]", label);
+                print_text(45, y, buf);
+            } else {
+                print_text(45, y, label);
+            }
+            print_text(220, y, *toggle ? "MARIO" : "JAK");
+        } else if (i == MENU_SEP) {
+            print_text_centered(160, y, label);
+        } else {
+            /* Warp item */
+            if (selected) {
+                char buf[50];
+                snprintf(buf, sizeof(buf), "[%s]", label);
+                print_text(45, y, buf);
+            } else {
+                print_text(45, y, label);
+            }
+        }
+
+        y -= 14;
+    }
+
+    /* Scroll indicators */
+    if (scroll_start > 0) {
+        print_text_centered(160, 208, "...");
+    }
+    if (scroll_start + MENU_VISIBLE < MENU_COUNT) {
+        print_text_centered(160, y + 7, "...");
+    }
+
+    print_text(30, 30, "A SELECT  L+DRIGHT CLOSE");
+}
+
 /* ---- HUD debug text (called from render_hud in hud.c) ---- */
 
 void jak_render_hud(void) {
+    /* Always update & render menu regardless of Jak state */
+    jak_menu_update();
+    jak_menu_render();
+
     if (!s_active || s_jak_id < 0) return;
 
     struct MarioState *m = &gMarioStates[0];

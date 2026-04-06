@@ -6,7 +6,8 @@
 (require "engine/target/target-util.gc")
 
 ;; libjakopengoal bridge — swim/wade event injection
-(define-extern *lib-jak-enabled* symbol)
+;; Default to #f; the C++ bridge sets this to #t via intern_from_c when active.
+(define *lib-jak-enabled* #f)
 
 ;; DECOMP BEGINS
 

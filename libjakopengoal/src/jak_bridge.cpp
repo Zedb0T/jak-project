@@ -1909,7 +1909,7 @@ void snap_to_floor() {
  */
 static void inject_water_state() {
   float water_sm64 = s_water_state.height.load();
-  if (water_sm64 <= -10000.0f || !g_ee_main_mem)
+  if (!g_ee_main_mem)
     return;
 
   auto target_sym = jak1::intern_from_c("*target*");
@@ -1923,6 +1923,23 @@ static void inject_water_state() {
     return;
 
   uint8_t* wc = g_ee_main_mem + water_ctrl_ptr;
+
+  // No water nearby — clear all water flags so Jak stops swimming/wading
+  if (water_sm64 <= -10000.0f) {
+    u32* flags_ptr = (u32*)(wc + 0);
+    if (*flags_ptr != 0) {
+      *flags_ptr = 0;
+      *(float*)(wc + 80) = -100000.0f;  // height — far below
+      *(float*)(wc + 60) = -100000.0f;  // base-height
+      *(float*)(wc + 72) = -100000.0f;  // surface-height
+      *(float*)(wc + 100) = 0.0f;       // swim-depth
+      static int clear_log = 0;
+      if (++clear_log <= 3) {
+        lg::info("[water-inject] no water — cleared flags");
+      }
+    }
+    return;
+  }
 
   constexpr float UNITS_TO_METERS = 4096.0f / 50.0f;
   float water_goal = water_sm64 * UNITS_TO_METERS;

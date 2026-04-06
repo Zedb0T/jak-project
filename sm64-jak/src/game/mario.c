@@ -1398,7 +1398,16 @@ void update_mario_geometry_inputs(struct MarioState *m) {
         }
 
     } else {
+#ifdef JAKOPENGOAL
+        /* When Jak is active, his position is synced to Mario — this can place
+         * Mario over void geometry (swimming deep, bonking, groundpounding).
+         * Skip the death warp so Jak's own collision handles survival. */
+        if (!jak_is_active()) {
+            level_trigger_warp(m, WARP_OP_DEATH);
+        }
+#else
         level_trigger_warp(m, WARP_OP_DEATH);
+#endif
     }
 }
 
