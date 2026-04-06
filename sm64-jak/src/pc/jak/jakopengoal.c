@@ -173,6 +173,7 @@ typedef void    (*pfn_jak_tick)(int32_t, const struct JakInputs*, struct JakStat
 typedef void    (*pfn_jak_set_position)(int32_t, float, float, float);
 typedef bool    (*pfn_jak_get_bone_data)(struct JakBoneData*);
 typedef struct JakTextureInfo (*pfn_jak_get_texture_info)(void);
+typedef void    (*pfn_jak_set_water_level)(float);
 
 /* ---- Module state ---- */
 
@@ -198,6 +199,7 @@ static pfn_jak_tick                fn_jak_tick = NULL;
 static pfn_jak_set_position        fn_jak_set_position = NULL;
 static pfn_jak_get_bone_data       fn_jak_get_bone_data = NULL;
 static pfn_jak_get_texture_info    fn_jak_get_texture_info = NULL;
+static pfn_jak_set_water_level     fn_jak_set_water_level = NULL;
 
 /* Geometry buffers (heap-allocated) */
 static float *s_geo_position = NULL;
@@ -217,7 +219,7 @@ static struct JakGeometryBuffers s_jak_geo;
 
 /* Mario-fallback flags: when true, use Mario's model/movement for that mechanic.
  * Defaulted to true — Jak doesn't support these yet. */
-static bool s_mario_fallback_swimming  = true;
+static bool s_mario_fallback_swimming  = false;
 static bool s_mario_fallback_cannon    = true;
 static bool s_mario_fallback_shot_from_cannon = true;
 static bool s_mario_fallback_wing_cap  = true;
@@ -340,6 +342,8 @@ static bool resolve_functions(void) {
     if (!fn_jak_get_bone_data) JAK_LOG("jak_get_bone_data not available (optional)");
     fn_jak_get_texture_info = (pfn_jak_get_texture_info)JAK_DLSYM(s_dll_handle, "jak_get_texture_info");
     if (!fn_jak_get_texture_info) JAK_LOG("jak_get_texture_info not available (optional)");
+    fn_jak_set_water_level = (pfn_jak_set_water_level)JAK_DLSYM(s_dll_handle, "jak_set_water_level");
+    if (!fn_jak_set_water_level) JAK_LOG("jak_set_water_level not available (optional)");
     JAK_LOG("All function pointers resolved OK");
     return true;
 }
@@ -814,6 +818,12 @@ void jak_sm64_update(void) {
             gMarioObject->header.gfx.pos[1] = s_jak_state.position[1];
             gMarioObject->header.gfx.pos[2] = s_jak_state.position[2];
         }
+    }
+
+    /* --- Water level: query SM64's water system and forward to GOAL --- */
+    if (fn_jak_set_water_level) {
+        f32 water_y = find_water_level(s_jak_state.position[0], s_jak_state.position[2]);
+        fn_jak_set_water_level(water_y);
     }
 
     /* --- Punch-to-grab: let Jak grab SM64 objects during first 0.25s of punch --- */

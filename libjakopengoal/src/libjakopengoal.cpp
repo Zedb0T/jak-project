@@ -449,6 +449,10 @@ JAK_LIB_FN void jak_give_eco(int32_t jak_id, int32_t eco_type) {
   queue_command(jak_bridge::CommandType::GIVE_ECO, jak_id, 0, 0, 0, 0, eco_type);
 }
 
+JAK_LIB_FN void jak_set_water_level(float height) {
+  jak_bridge::set_water_level(height);
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Public API: Collision queries                                             */
 /* -------------------------------------------------------------------------- */

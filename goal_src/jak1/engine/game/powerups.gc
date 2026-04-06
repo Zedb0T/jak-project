@@ -5,6 +5,9 @@
 (require "engine/common-obs/water.gc")
 (require "engine/target/target-util.gc")
 
+;; libjakopengoal bridge — swim/wade event injection
+(define-extern *lib-jak-enabled* symbol)
+
 ;; DECOMP BEGINS
 
 (defbehavior cloud-track process ((arg0 process-tree)
@@ -570,6 +573,29 @@
                              (vector<-cspace! (new 'stack-no-clear 'vector) (-> self node-list data v1-188)))))))
     (update-trans! (-> self sound) (-> self control trans))
     (update! (-> self sound)))
+  ;; libjakopengoal: check water-control flags set by C++ inject_water_state()
+  ;; and send swim/wade events to trigger GOAL's swimming states.
+  (when (and *lib-jak-enabled* *target* (-> *target* water))
+    (let ((wc (-> *target* water)))
+      (when (logtest? (-> wc flags) (water-flags wt11))
+        (if (not (or (= (-> *target* next-state name) 'target-swim-stance)
+                     (= (-> *target* next-state name) 'target-swim-down)
+                     (= (-> *target* next-state name) 'target-swim-walk)
+                     (= (-> *target* next-state name) 'target-swim-up)))
+          (send-event *target* 'swim)
+          )
+        )
+      (when (and (logtest? (-> wc flags) (water-flags wt10))
+                 (not (logtest? (-> wc flags) (water-flags wt11))))
+        (if (not (or (= (-> *target* next-state name) 'target-wade-stance)
+                     (= (-> *target* next-state name) 'target-wade-walk)
+                     (= (-> *target* next-state name) 'target-swim-stance)
+                     (= (-> *target* next-state name) 'target-swim-down)))
+          (send-event *target* 'wade)
+          )
+        )
+      )
+    )
   0
   (none))
 

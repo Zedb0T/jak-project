@@ -303,6 +303,12 @@ JAK_LIB_FN void jak_heal(int32_t jak_id, float amount);
 JAK_LIB_FN void jak_kill(int32_t jak_id);
 JAK_LIB_FN void jak_give_eco(int32_t jak_id, int32_t eco_type);
 
+/**
+ * Set the water surface height at Jak's position (SM64/render units).
+ * Set to -11000 (or lower) to indicate no water.
+ */
+JAK_LIB_FN void jak_set_water_level(float height);
+
 /* -------------------------------------------------------------------------- */
 /*  Collision queries (for host engine use)                                   */
 /* -------------------------------------------------------------------------- */

@@ -42,6 +42,7 @@ extern std::atomic<bool> s_runtime_ready;
 extern BoneDebugData s_bone_debug;
 extern TextureAtlasInfo s_texture_atlas_info;
 extern uint8_t* s_texture_output;
+extern WaterState s_water_state;
 
 // Bone matrix storage for CPU skinning
 struct BoneMatrix {
@@ -1330,6 +1331,20 @@ uint64_t goal_fill_external_collide(uint64_t cache_addr) {
       skipped++;
       continue;  // Triangle is outside the query region
     }
+
+    // Filter out collision at or below water — Jak swims via flags, not floor collision.
+    // Use tri_min_y (lowest vertex) + margin to catch surfaces near the water line.
+    {
+      float water_y = s_water_state.height.load();
+      if (water_y > -10000.0f) {
+        float water_goal_y = water_y * UNITS_TO_METERS;
+        if (tri_min_y <= water_goal_y + 1000.0f) {
+          skipped++;
+          continue;
+        }
+      }
+    }
+
     int tri_idx = existing_tris + tris_added;
     uint8_t* tri_base = cache + TRI_OFFSET + tri_idx * 64;
 
@@ -1795,11 +1810,20 @@ void snap_to_floor() {
   auto& coll = s_collision_state;
   std::lock_guard<std::mutex> lock(coll.mutex);
 
+  // Water filter for snap_to_floor — skip surfaces at/below water
+  float water_y_snap = s_water_state.height.load();
+  float water_margin_render = water_y_snap + (1000.0f * GOAL_TO_RENDER);
+
   float best_y = -1000000.0f;
   for (const auto& surf : coll.static_surfaces) {
     const float* v0 = surf.vertices[0];
     const float* v1 = surf.vertices[1];
     const float* v2 = surf.vertices[2];
+
+    if (water_y_snap > -10000.0f) {
+      float min_surf_y = std::min({v0[1], v1[1], v2[1]});
+      if (min_surf_y <= water_margin_render) continue;
+    }
 
     // Barycentric test in XZ plane
     float d00 = (v1[0]-v0[0])*(v1[0]-v0[0]) + (v1[2]-v0[2])*(v1[2]-v0[2]);
@@ -1868,6 +1892,131 @@ void snap_to_floor() {
   }
 }
 
+/**
+ * Inject water state into the target's water-control when SM64 reports water.
+ * Sets water-control fields/flags so GOAL's swim system activates.
+ *
+ * water-control layout (C++ offset = GOAL offset_assert - 4):
+ *   +0:  flags (uint32)           offset_assert 4
+ *   +60: base-height (float)      offset_assert 64
+ *   +64: wade-height (float)      offset_assert 68
+ *   +68: swim-height (float)      offset_assert 72
+ *   +72: surface-height (float)   offset_assert 76
+ *   +76: bottom-height (float)    offset_assert 80
+ *   +80: height (float)           offset_assert 84
+ *   +100: swim-depth (float)      offset_assert 104
+ *   +156: bottom[0] (vector 16B)  offset_assert 160
+ */
+static void inject_water_state() {
+  float water_sm64 = s_water_state.height.load();
+  if (water_sm64 <= -10000.0f || !g_ee_main_mem)
+    return;
+
+  auto target_sym = jak1::intern_from_c("*target*");
+  if (!target_sym.offset || target_sym->value == 0 || target_sym->value == s7.offset)
+    return;
+
+  u32 target_ptr = target_sym->value;
+
+  u32 water_ctrl_ptr = *(u32*)(g_ee_main_mem + target_ptr + 152);
+  if (water_ctrl_ptr == 0 || water_ctrl_ptr == s7.offset)
+    return;
+
+  uint8_t* wc = g_ee_main_mem + water_ctrl_ptr;
+
+  constexpr float UNITS_TO_METERS = 4096.0f / 50.0f;
+  float water_goal = water_sm64 * UNITS_TO_METERS;
+
+  u32 root_ptr = *(u32*)(g_ee_main_mem + target_ptr + 108);
+  float jak_y_goal = 0.0f;
+  if (root_ptr != 0 && root_ptr != s7.offset) {
+    float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
+    jak_y_goal = trans[1];
+  }
+
+  // Thresholds: swim_height controls buoyancy equilibrium (Jak floats at height - swim_height).
+  // Flag thresholds MUST be less than swim_height to avoid off-by-1 oscillation.
+  constexpr float swim_height = 2048.0f;
+  constexpr float swim_flag_threshold = 500.0f;
+  constexpr float wade_flag_threshold = 200.0f;
+
+  constexpr u32 WF_PREREQ = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) |
+                             (1 << 5) | (1 << 6) | (1 << 7) | (1 << 9);
+  constexpr u32 WF_SWIM = (1 << 11);
+  constexpr u32 WF_WADE = (1 << 10);
+
+  bool below_swim = jak_y_goal <= (water_goal - swim_flag_threshold);
+  bool below_wade = jak_y_goal <= (water_goal - wade_flag_threshold);
+
+  // Read flags BEFORE overwrite to preserve GOAL state
+  u32* flags_ptr = (u32*)(wc + 0);
+  u32 flags_before = *flags_ptr;
+
+  // Set water-control height fields
+  *(float*)(wc + 60) = water_goal;           // base-height
+  *(float*)(wc + 64) = wade_flag_threshold;  // wade-height
+  *(float*)(wc + 68) = swim_height;          // swim-height
+  *(float*)(wc + 72) = water_goal;           // surface-height
+  *(float*)(wc + 76) = 32768.0f;             // bottom-height (deep)
+  *(float*)(wc + 80) = water_goal;           // height
+  *(float*)(wc + 84) = 0.0f;                 // real-ocean-offset
+  *(float*)(wc + 88) = 0.0f;                 // ocean-offset
+  *(float*)(wc + 92) = 0.0f;                 // bob-offset
+  *(float*)(wc + 96) = 0.0f;                 // align-offset
+
+  // Override swim-depth when swimming to prevent dive-exit
+  if (below_swim) {
+    *(float*)(wc + 100) = 16384.0f;          // swim-depth
+  }
+
+  // Set bottom[0] to Jak's position
+  if (root_ptr != 0 && root_ptr != s7.offset) {
+    float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
+    float* bottom0 = (float*)(wc + 156);
+    bottom0[0] = trans[0];
+    bottom0[1] = trans[1];
+    bottom0[2] = trans[2];
+    bottom0[3] = 1.0f;
+  }
+
+  // Set flags: prerequisite flags + swim or wade based on depth
+  u32 new_flags = WF_PREREQ;
+  if (below_swim) {
+    new_flags |= WF_SWIM;
+  } else if (below_wade) {
+    new_flags |= WF_WADE;
+  }
+
+  // Preserve wt04 from GOAL (diving clears wt04 to disable buoyancy)
+  if (!(flags_before & (1 << 4))) {
+    new_flags &= ~(1u << 4);
+  }
+
+  // Preserve wt12-wt16 (submerged/head-under flags set by method-10)
+  new_flags |= (flags_before & ((1 << 12) | (1 << 13) | (1 << 14) | (1 << 15) | (1 << 16)));
+
+  *flags_ptr = new_flags;
+
+  // Patch *TARGET-bank* min-dive-depth to allow diving
+  static bool patched_dive_depth = false;
+  if (!patched_dive_depth) {
+    auto tb_sym = jak1::intern_from_c("*TARGET-bank*");
+    if (tb_sym.offset && tb_sym->value != 0 && tb_sym->value != s7.offset) {
+      float* min_dive = (float*)(g_ee_main_mem + tb_sym->value + 264);
+      *min_dive = 1024.0f;
+      patched_dive_depth = true;
+    }
+  }
+
+  // Debug logging
+  static int inj_log = 0;
+  if (++inj_log % 60 == 1) {
+    lg::info("[water-inject] water={:.0f} jak_y={:.0f} diff={:.0f} swim={} wade={} flags=0x{:x}->0x{:x}",
+             water_goal, jak_y_goal, jak_y_goal - water_goal,
+             below_swim, below_wade, flags_before, new_flags);
+  }
+}
+
 void bridge_tick() {
   process_commands();
   force_settings();
@@ -1875,6 +2024,7 @@ void bridge_tick() {
   apply_rider_displacement();
   // snap_to_floor();  // DISABLED — was stomping Jak's Y position each frame
   extract_jak_state();
+  inject_water_state();
   read_bones_from_goal();
   extract_jak_mesh();
 

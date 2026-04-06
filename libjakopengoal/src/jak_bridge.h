@@ -59,6 +59,17 @@ struct CollisionState {
 CollisionState& get_collision_state();
 
 /* -------------------------------------------------------------------------- */
+/*  Water level                                                               */
+/* -------------------------------------------------------------------------- */
+
+struct WaterState {
+  std::atomic<float> height{-11000.0f};  // SM64 units; -11000 = no water
+};
+
+WaterState& get_water_state();
+void set_water_level(float height);
+
+/* -------------------------------------------------------------------------- */
 /*  Pad input injection                                                       */
 /* -------------------------------------------------------------------------- */
 
