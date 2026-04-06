@@ -9,6 +9,23 @@
 #ifdef EXTERNAL_DATA
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
+#else
+/* Texture replacement system — always need stb_image for loading replacements */
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb/stb_image_write.h>
+#ifdef _WIN32
+#include <direct.h>   /* _mkdir */
+#include <io.h>        /* _access */
+#define TEX_MKDIR(p) _mkdir(p)
+#define TEX_EXISTS(p) (_access((p), 0) == 0)
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#define TEX_MKDIR(p) mkdir((p), 0755)
+#define TEX_EXISTS(p) (access((p), F_OK) == 0)
+#endif
 #endif
 
 #ifndef _LANGUAGE_C
@@ -193,7 +210,83 @@ static inline size_t string_hash(const uint8_t *str) {
         h = 31 * h + *p;
     return h;
 }
-#endif
+#else
+
+/* ---- Texture Replacement System ----
+ * Like jak-project's texture_replacements/ folder:
+ *   - On first texture load, dump to texture_replacements/<fmt>_<WxH>_<CRC32>.png
+ *   - On subsequent loads, if a PNG exists there, use it instead of ROM data
+ *   - Edit the dumped PNGs to retexture the game!
+ */
+#define TEX_REPLACE_DIR "texture_replacements"
+static bool s_tex_replace_dir_created = false;
+
+/* CRC32 for stable texture hashing across runs */
+static uint32_t tex_crc32(const uint8_t *data, uint32_t len) {
+    uint32_t crc = 0xFFFFFFFF;
+    for (uint32_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++)
+            crc = (crc >> 1) ^ (0xEDB88320 & (-(crc & 1)));
+    }
+    return ~crc;
+}
+
+static const char *tex_fmt_name(uint8_t fmt, uint8_t siz) {
+    if (fmt == G_IM_FMT_RGBA && siz == G_IM_SIZ_32b) return "rgba32";
+    if (fmt == G_IM_FMT_RGBA && siz == G_IM_SIZ_16b) return "rgba16";
+    if (fmt == G_IM_FMT_IA   && siz == G_IM_SIZ_4b)  return "ia4";
+    if (fmt == G_IM_FMT_IA   && siz == G_IM_SIZ_8b)  return "ia8";
+    if (fmt == G_IM_FMT_IA   && siz == G_IM_SIZ_16b) return "ia16";
+    if (fmt == G_IM_FMT_I    && siz == G_IM_SIZ_4b)  return "i4";
+    if (fmt == G_IM_FMT_I    && siz == G_IM_SIZ_8b)  return "i8";
+    if (fmt == G_IM_FMT_CI   && siz == G_IM_SIZ_4b)  return "ci4";
+    if (fmt == G_IM_FMT_CI   && siz == G_IM_SIZ_8b)  return "ci8";
+    return "unk";
+}
+
+/* Try to load a replacement PNG, or dump the original if none exists.
+ * Returns true if a replacement was loaded and uploaded (caller should NOT upload).
+ * Returns false if no replacement — caller should upload rgba32_buf as normal. */
+static bool tex_replace_or_dump(const uint8_t *rgba32_buf, uint32_t width, uint32_t height,
+                                 const uint8_t *raw_addr, uint32_t raw_size,
+                                 uint8_t fmt, uint8_t siz) {
+    if (!s_tex_replace_dir_created) {
+        TEX_MKDIR(TEX_REPLACE_DIR);
+        s_tex_replace_dir_created = true;
+    }
+
+    /* Build filename from format + dimensions + CRC32 of raw ROM data */
+    uint32_t crc = tex_crc32(raw_addr, raw_size);
+    const char *fmtname = tex_fmt_name(fmt, siz);
+    char path[512];
+    snprintf(path, sizeof(path), TEX_REPLACE_DIR "/%s_%ux%u_%08X.png",
+             fmtname, width, height, crc);
+
+    /* Check if replacement PNG exists */
+    if (TEX_EXISTS(path)) {
+        int w, h;
+        uint8_t *data = stbi_load(path, &w, &h, NULL, 4);
+        if (data) {
+            gfx_rapi->upload_texture(data, w, h);
+            stbi_image_free(data);
+            return true;
+        }
+        /* Failed to load — fall through and use original */
+    }
+
+    /* No replacement — dump the original RGBA32 data as PNG */
+    stbi_write_png(path, width, height, 4, rgba32_buf, width * 4);
+    return false;
+}
+
+/* Shorthand for import functions — uses current RDP state */
+#define TEX_REPLACE_OR_DUMP(buf, w, h, tile) \
+    if (tex_replace_or_dump((buf), (w), (h), \
+        rdp.loaded_texture[tile].addr, rdp.loaded_texture[tile].size_bytes, \
+        rdp.texture_tile.fmt, rdp.texture_tile.siz)) return
+
+#endif /* EXTERNAL_DATA */
 
 static unsigned long get_time(void) {
     return 0;
@@ -336,6 +429,7 @@ static bool gfx_texture_cache_lookup(int tile, struct TextureHashmapNode **n, co
 static void import_texture_rgba32(int tile) {
     uint32_t width = rdp.texture_tile.line_size_bytes / 2;
     uint32_t height = (rdp.loaded_texture[tile].size_bytes / 2) / rdp.texture_tile.line_size_bytes;
+    TEX_REPLACE_OR_DUMP(rdp.loaded_texture[tile].addr, width, height, tile);
     gfx_rapi->upload_texture(rdp.loaded_texture[tile].addr, width, height);
 }
 
@@ -356,7 +450,8 @@ static void import_texture_rgba16(int tile) {
     
     uint32_t width = rdp.texture_tile.line_size_bytes / 2;
     uint32_t height = rdp.loaded_texture[tile].size_bytes / rdp.texture_tile.line_size_bytes;
-    
+
+    TEX_REPLACE_OR_DUMP(rgba32_buf, width, height, tile);
     gfx_rapi->upload_texture(rgba32_buf, width, height);
 }
 
@@ -379,7 +474,8 @@ static void import_texture_ia4(int tile) {
     
     uint32_t width = rdp.texture_tile.line_size_bytes * 2;
     uint32_t height = rdp.loaded_texture[tile].size_bytes / rdp.texture_tile.line_size_bytes;
-    
+
+    TEX_REPLACE_OR_DUMP(rgba32_buf, width, height, tile);
     gfx_rapi->upload_texture(rgba32_buf, width, height);
 }
 
@@ -400,7 +496,8 @@ static void import_texture_ia8(int tile) {
     
     uint32_t width = rdp.texture_tile.line_size_bytes;
     uint32_t height = rdp.loaded_texture[tile].size_bytes / rdp.texture_tile.line_size_bytes;
-    
+
+    TEX_REPLACE_OR_DUMP(rgba32_buf, width, height, tile);
     gfx_rapi->upload_texture(rgba32_buf, width, height);
 }
 
@@ -421,7 +518,8 @@ static void import_texture_ia16(int tile) {
     
     uint32_t width = rdp.texture_tile.line_size_bytes / 2;
     uint32_t height = rdp.loaded_texture[tile].size_bytes / rdp.texture_tile.line_size_bytes;
-    
+
+    TEX_REPLACE_OR_DUMP(rgba32_buf, width, height, tile);
     gfx_rapi->upload_texture(rgba32_buf, width, height);
 }
 
@@ -439,7 +537,8 @@ static void import_texture_i4(int tile) {
     
     uint32_t width = rdp.texture_tile.line_size_bytes * 2;
     uint32_t height = rdp.loaded_texture[tile].size_bytes / rdp.texture_tile.line_size_bytes;
-    
+
+    TEX_REPLACE_OR_DUMP(rgba32_buf, width, height, tile);
     gfx_rapi->upload_texture(rgba32_buf, width, height);
 }
 
@@ -456,7 +555,8 @@ static void import_texture_i8(int tile) {
     
     uint32_t width = rdp.texture_tile.line_size_bytes;
     uint32_t height = rdp.loaded_texture[tile].size_bytes / rdp.texture_tile.line_size_bytes;
-    
+
+    TEX_REPLACE_OR_DUMP(rgba32_buf, width, height, tile);
     gfx_rapi->upload_texture(rgba32_buf, width, height);
 }
 
@@ -479,7 +579,8 @@ static void import_texture_ci4(int tile) {
     
     uint32_t width = rdp.texture_tile.line_size_bytes * 2;
     uint32_t height = rdp.loaded_texture[tile].size_bytes / rdp.texture_tile.line_size_bytes;
-    
+
+    TEX_REPLACE_OR_DUMP(rgba32_buf, width, height, tile);
     gfx_rapi->upload_texture(rgba32_buf, width, height);
 }
 
@@ -501,7 +602,8 @@ static void import_texture_ci8(int tile) {
     
     uint32_t width = rdp.texture_tile.line_size_bytes;
     uint32_t height = rdp.loaded_texture[tile].size_bytes / rdp.texture_tile.line_size_bytes;
-    
+
+    TEX_REPLACE_OR_DUMP(rgba32_buf, width, height, tile);
     gfx_rapi->upload_texture(rgba32_buf, width, height);
 }
 
