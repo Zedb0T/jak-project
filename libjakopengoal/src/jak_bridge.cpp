@@ -43,6 +43,7 @@ extern BoneDebugData s_bone_debug;
 extern TextureAtlasInfo s_texture_atlas_info;
 extern uint8_t* s_texture_output;
 extern WaterState s_water_state;
+extern PlatformRiderState s_platform_rider_state;
 
 // Bone matrix storage for CPU skinning
 struct BoneMatrix {
@@ -1774,6 +1775,29 @@ static void apply_rider_displacement() {
       }
     }
     break;  // only ride one platform at a time
+  }
+
+  // Host-driven platform displacement (SM64 moving platforms).
+  // SM64 computes per-frame displacement using the same algorithm as its own
+  // apply_platform_displacement() and sends it here via jak_set_platform_vel.
+  // We consume-and-clear the atomics to prevent double-application (bridge_tick
+  // runs at 60fps on the EE thread, but SM64 only sets values at 30fps).
+  if (s_platform_rider_state.on_platform.exchange(false)) {
+    float vx = s_platform_rider_state.vel_x.exchange(0.0f);
+    float vy = s_platform_rider_state.vel_y.exchange(0.0f);
+    float vz = s_platform_rider_state.vel_z.exchange(0.0f);
+
+    if (fabsf(vx) > 0.001f || fabsf(vy) > 0.001f || fabsf(vz) > 0.001f) {
+      trans[0] += vx * UNITS_TO_METERS;
+      trans[1] += vy * UNITS_TO_METERS;
+      trans[2] += vz * UNITS_TO_METERS;
+
+      static int host_rider_log = 0;
+      if (++host_rider_log % 60 == 1) {
+        lg::info("[rider-host] Displacing by ({:.2f},{:.2f},{:.2f}) render units",
+                 vx, vy, vz);
+      }
+    }
   }
 }
 

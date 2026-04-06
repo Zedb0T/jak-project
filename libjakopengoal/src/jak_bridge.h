@@ -69,6 +69,15 @@ struct WaterState {
 WaterState& get_water_state();
 void set_water_level(float height);
 
+struct PlatformRiderState {
+  std::atomic<bool> on_platform{false};
+  std::atomic<float> vel_x{0.0f};
+  std::atomic<float> vel_y{0.0f};
+  std::atomic<float> vel_z{0.0f};
+};
+
+PlatformRiderState& get_platform_rider_state();
+
 /* -------------------------------------------------------------------------- */
 /*  Pad input injection                                                       */
 /* -------------------------------------------------------------------------- */

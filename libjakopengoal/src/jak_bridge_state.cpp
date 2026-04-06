@@ -22,6 +22,7 @@ BoneDebugData s_bone_debug;
 TextureAtlasInfo s_texture_atlas_info;
 uint8_t* s_texture_output = nullptr;
 WaterState s_water_state;
+PlatformRiderState s_platform_rider_state;
 
 /* Accessors */
 CollisionState& get_collision_state() { return s_collision_state; }
@@ -34,6 +35,8 @@ TextureAtlasInfo& get_texture_atlas_info() { return s_texture_atlas_info; }
 
 WaterState& get_water_state() { return s_water_state; }
 void set_water_level(float height) { s_water_state.height.store(height); }
+
+PlatformRiderState& get_platform_rider_state() { return s_platform_rider_state; }
 
 bool is_runtime_ready() { return s_runtime_ready.load(); }
 void set_runtime_ready(bool ready) { s_runtime_ready.store(ready); }

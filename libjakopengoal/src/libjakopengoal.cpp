@@ -453,6 +453,14 @@ JAK_LIB_FN void jak_set_water_level(float height) {
   jak_bridge::set_water_level(height);
 }
 
+JAK_LIB_FN void jak_set_platform_vel(bool on_platform, float vx, float vy, float vz) {
+  auto& ps = jak_bridge::get_platform_rider_state();
+  ps.on_platform.store(on_platform);
+  ps.vel_x.store(vx);
+  ps.vel_y.store(vy);
+  ps.vel_z.store(vz);
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Public API: Collision queries                                             */
 /* -------------------------------------------------------------------------- */

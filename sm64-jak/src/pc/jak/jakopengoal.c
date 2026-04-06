@@ -34,6 +34,7 @@
 #include "game/print.h"
 #include "engine/math_util.h"
 #include "engine/surface_collision.h"
+#include "game/object_helpers.h"
 #include "engine/surface_load.h"
 #include "game/object_list_processor.h"
 #include "engine/graph_node.h"
@@ -178,6 +179,7 @@ typedef void    (*pfn_jak_set_position)(int32_t, float, float, float);
 typedef bool    (*pfn_jak_get_bone_data)(struct JakBoneData*);
 typedef struct JakTextureInfo (*pfn_jak_get_texture_info)(void);
 typedef void    (*pfn_jak_set_water_level)(float);
+typedef void    (*pfn_jak_set_platform_vel)(bool, float, float, float);
 
 /* ---- Module state ---- */
 
@@ -204,6 +206,7 @@ static pfn_jak_set_position        fn_jak_set_position = NULL;
 static pfn_jak_get_bone_data       fn_jak_get_bone_data = NULL;
 static pfn_jak_get_texture_info    fn_jak_get_texture_info = NULL;
 static pfn_jak_set_water_level     fn_jak_set_water_level = NULL;
+static pfn_jak_set_platform_vel   fn_jak_set_platform_vel = NULL;
 
 /* Geometry buffers (heap-allocated) */
 static float *s_geo_position = NULL;
@@ -348,6 +351,8 @@ static bool resolve_functions(void) {
     if (!fn_jak_get_texture_info) JAK_LOG("jak_get_texture_info not available (optional)");
     fn_jak_set_water_level = (pfn_jak_set_water_level)JAK_DLSYM(s_dll_handle, "jak_set_water_level");
     if (!fn_jak_set_water_level) JAK_LOG("jak_set_water_level not available (optional)");
+    fn_jak_set_platform_vel = (pfn_jak_set_platform_vel)JAK_DLSYM(s_dll_handle, "jak_set_platform_vel");
+    if (!fn_jak_set_platform_vel) JAK_LOG("jak_set_platform_vel not available (optional)");
     JAK_LOG("All function pointers resolved OK");
     return true;
 }
@@ -801,6 +806,60 @@ void jak_sm64_update(void) {
     /* Build inputs from SM64 controller */
     struct JakInputs inputs;
     build_jak_inputs(&inputs);
+
+    /* --- Platform displacement ---
+     * Detect moving platform under Jak, compute per-frame position delta,
+     * send to DLL. DLL applies once (consume-and-clear) before GOAL physics.
+     * Uses position-delta tracking since many SM64 platforms don't set oVelX/oVelZ. */
+    if (fn_jak_set_platform_vel) {
+        static struct Object *s_prev_plat = NULL;
+        static f32 s_prev_x = 0, s_prev_y = 0, s_prev_z = 0;
+        static s16 s_prev_yaw = 0;
+
+        struct Surface *floor = NULL;
+        f32 jak_x = s_jak_state.position[0];
+        f32 jak_y = s_jak_state.position[1];
+        f32 jak_z = s_jak_state.position[2];
+        f32 floor_y = find_floor(jak_x, jak_y + 80.0f, jak_z, &floor);
+
+        if (floor != NULL && floor->object != NULL && fabsf(jak_y - floor_y) < 50.0f) {
+            struct Object *plat = floor->object;
+
+            if (plat == s_prev_plat) {
+                /* Same platform — compute position delta */
+                f32 dx = plat->oPosX - s_prev_x;
+                f32 dy = plat->oPosY - s_prev_y;
+                f32 dz = plat->oPosZ - s_prev_z;
+
+                /* Yaw rotation displacement */
+                s16 cur_yaw = (s16)plat->oFaceAngleYaw;
+                s16 dyaw = cur_yaw - s_prev_yaw;
+                if (dyaw != 0) {
+                    f32 rel_x = jak_x - plat->oPosX;
+                    f32 rel_z = jak_z - plat->oPosZ;
+                    f32 a = (f32)dyaw * (3.14159265f / 32768.0f);
+                    f32 c = cosf(a), s = sinf(a);
+                    dx += (c * rel_x - s * rel_z) - rel_x;
+                    dz += (s * rel_x + c * rel_z) - rel_z;
+                }
+                s_prev_yaw = cur_yaw;
+
+                fn_jak_set_platform_vel(true, dx, dy, dz);
+            } else {
+                /* New platform — store initial state, no displacement */
+                s_prev_yaw = (s16)plat->oFaceAngleYaw;
+                fn_jak_set_platform_vel(true, 0, 0, 0);
+            }
+
+            s_prev_plat = plat;
+            s_prev_x = plat->oPosX;
+            s_prev_y = plat->oPosY;
+            s_prev_z = plat->oPosZ;
+        } else {
+            s_prev_plat = NULL;
+            fn_jak_set_platform_vel(false, 0, 0, 0);
+        }
+    }
 
     /* Tick Jak */
     s_jak_geo.num_triangles_used = 0;
