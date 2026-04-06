@@ -815,6 +815,9 @@ void jak_sm64_update(void) {
         static struct Object *s_prev_plat = NULL;
         static f32 s_prev_x = 0, s_prev_y = 0, s_prev_z = 0;
         static s16 s_prev_yaw = 0;
+        /* Momentum carry: last platform velocity, decayed after leaving */
+        static f32 s_carry_dx = 0, s_carry_dy = 0, s_carry_dz = 0;
+        static int s_carry_frames = 0;
 
         struct Surface *floor = NULL;
         f32 jak_x = s_jak_state.position[0];
@@ -844,6 +847,12 @@ void jak_sm64_update(void) {
                 }
                 s_prev_yaw = cur_yaw;
 
+                /* Store for momentum carry */
+                s_carry_dx = dx;
+                s_carry_dy = dy;
+                s_carry_dz = dz;
+                s_carry_frames = 0;
+
                 fn_jak_set_platform_vel(true, dx, dy, dz);
             } else {
                 /* New platform — store initial state, no displacement */
@@ -857,7 +866,19 @@ void jak_sm64_update(void) {
             s_prev_z = plat->oPosZ;
         } else {
             s_prev_plat = NULL;
-            fn_jak_set_platform_vel(false, 0, 0, 0);
+
+            /* Momentum carry: keep applying decaying platform velocity after leaving */
+            if (s_carry_frames < 300 &&
+                (fabsf(s_carry_dx) > 0.1f || fabsf(s_carry_dz) > 0.1f)) {
+                f32 decay = 1.0f - (s_carry_frames / 300.0f);  /* linear decay over ~10s */
+                fn_jak_set_platform_vel(true,
+                    s_carry_dx * decay, 0, s_carry_dz * decay);
+                s_carry_frames++;
+            } else {
+                s_carry_dx = s_carry_dy = s_carry_dz = 0;
+                s_carry_frames = 0;
+                fn_jak_set_platform_vel(false, 0, 0, 0);
+            }
         }
     }
 
