@@ -897,6 +897,18 @@ void jak_sm64_update(void) {
                 }
                 s_prev_yaw = cur_yaw;
 
+                /* Wall-check: don't push Jak through walls.
+                 * Test the target position against SM64 wall collision;
+                 * use the resolved position to clamp the delta. */
+                {
+                    f32 test_x = jak_x + dx;
+                    f32 test_y = jak_y;
+                    f32 test_z = jak_z + dz;
+                    f32_find_wall_collision(&test_x, &test_y, &test_z, 50.0f, 30.0f);
+                    dx = test_x - jak_x;
+                    dz = test_z - jak_z;
+                }
+
                 /* Store for momentum carry */
                 s_carry_dx = dx;
                 s_carry_dy = dy;
@@ -921,8 +933,18 @@ void jak_sm64_update(void) {
             if (s_carry_frames < 300 &&
                 (fabsf(s_carry_dx) > 0.1f || fabsf(s_carry_dz) > 0.1f)) {
                 f32 decay = 1.0f - (s_carry_frames / 300.0f);  /* linear decay over ~10s */
-                fn_jak_set_platform_vel(true,
-                    s_carry_dx * decay, 0, s_carry_dz * decay);
+                f32 cdx = s_carry_dx * decay;
+                f32 cdz = s_carry_dz * decay;
+                /* Wall-check carry velocity too */
+                {
+                    f32 test_x = jak_x + cdx;
+                    f32 test_y = jak_y;
+                    f32 test_z = jak_z + cdz;
+                    f32_find_wall_collision(&test_x, &test_y, &test_z, 50.0f, 30.0f);
+                    cdx = test_x - jak_x;
+                    cdz = test_z - jak_z;
+                }
+                fn_jak_set_platform_vel(true, cdx, 0, cdz);
                 s_carry_frames++;
             } else {
                 s_carry_dx = s_carry_dy = s_carry_dz = 0;
