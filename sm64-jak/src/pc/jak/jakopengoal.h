@@ -23,6 +23,7 @@ void jak_sm64_init(void);       /* Load DLL, boot runtime, load collision */
 void jak_sm64_shutdown(void);   /* Kill Jak, unload DLL */
 
 /* ---- Per-frame ---- */
+void jak_sm64_pre_update(void); /* Sync Mario pos before object updates */
 void jak_sm64_update(void);     /* Tick Jak with SM64 inputs & collision */
 void jak_sm64_render(void);     /* Render debug sphere chain via OpenGL */
 void jak_render_hud(void);      /* Draw debug text on HUD (positions, dist) */

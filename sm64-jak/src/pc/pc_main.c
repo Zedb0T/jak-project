@@ -95,6 +95,10 @@ void produce_one_frame(void) {
     set_sequence_player_volume(SEQ_PLAYER_SFX, (f32)configSfxVolume / 127.0f * master_mod);
     set_sequence_player_volume(SEQ_PLAYER_ENV, (f32)configEnvVolume / 127.0f * master_mod);
 
+#ifdef JAKOPENGOAL
+    jak_sm64_pre_update();
+#endif
+
     game_loop_one_iteration();
 
 #ifdef JAKOPENGOAL

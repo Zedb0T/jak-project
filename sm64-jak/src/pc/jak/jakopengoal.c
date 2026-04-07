@@ -648,6 +648,42 @@ void jak_sm64_toggle(void) {
     }
 }
 
+/* Called BEFORE game_loop_one_iteration() so SM64 objects see Mario at
+ * Jak's position when computing oDistanceToMario / oAngleToMario.
+ * Skip during fallback (shell, swimming etc.) and death so Mario's
+ * own movement isn't overridden. */
+void jak_sm64_pre_update(void) {
+    if (!s_active || s_jak_id < 0) return;
+
+    struct MarioState *m = &gMarioStates[0];
+
+    /* Don't override Mario's position when he's in control */
+    if (mario_should_fallback()) return;
+
+    /* Don't override during death/warp — Mario needs his own position */
+    u32 act = m->action;
+    if (act == ACT_DISAPPEARED
+        || act == ACT_STANDING_DEATH || act == ACT_DEATH_ON_STOMACH
+        || act == ACT_DEATH_ON_BACK || act == ACT_QUICKSAND_DEATH
+        || act == ACT_SUFFOCATION || act == ACT_DEATH_EXIT
+        || act == ACT_DEATH_EXIT_LAND) {
+        return;
+    }
+
+    m->pos[0] = s_jak_state.position[0];
+    m->pos[1] = s_jak_state.position[1];
+    m->pos[2] = s_jak_state.position[2];
+
+    if (gMarioObject) {
+        gMarioObject->oPosX = s_jak_state.position[0];
+        gMarioObject->oPosY = s_jak_state.position[1];
+        gMarioObject->oPosZ = s_jak_state.position[2];
+        gMarioObject->header.gfx.pos[0] = s_jak_state.position[0];
+        gMarioObject->header.gfx.pos[1] = s_jak_state.position[1];
+        gMarioObject->header.gfx.pos[2] = s_jak_state.position[2];
+    }
+}
+
 void jak_sm64_update(void) {
     /* Deferred init: wait until a level is loaded */
     if (!s_init_attempted && !s_init_failed) {
@@ -766,13 +802,18 @@ void jak_sm64_update(void) {
     if (!s_surfaces_loaded) return;
     if (!s_active || s_jak_id < 0) return;
 
-    /* Freeze Jak entirely during warp transitions (ACT_DISAPPEARED).
+    /* Freeze Jak entirely during warp transitions and death sequences.
      * Jak must not tick or move while SM64 is unloading/loading areas —
      * otherwise he runs through the painting into void geometry and GOAL crashes.
      * Pin his position in GOAL each frame so the VM thread doesn't let him fall. */
     {
         struct MarioState *m = &gMarioStates[0];
-        if (m->action == ACT_DISAPPEARED) {
+        u32 act = m->action;
+        if (act == ACT_DISAPPEARED
+            || act == ACT_STANDING_DEATH || act == ACT_DEATH_ON_STOMACH
+            || act == ACT_DEATH_ON_BACK || act == ACT_QUICKSAND_DEATH
+            || act == ACT_SUFFOCATION || act == ACT_DEATH_EXIT
+            || act == ACT_DEATH_EXIT_LAND) {
             if (fn_jak_set_position) {
                 fn_jak_set_position(s_jak_id,
                     s_jak_state.position[0],
@@ -799,9 +840,15 @@ void jak_sm64_update(void) {
 
         if (in_fallback) {
             struct MarioState *m = &gMarioStates[0];
+            /* Keep Jak pinned to Mario's position AND update s_jak_state
+             * so there's no warp when fallback ends (shell dismount, pole
+             * release, etc.) — Jak continues from wherever Mario is. */
             if (fn_jak_set_position) {
                 fn_jak_set_position(s_jak_id, m->pos[0], m->pos[1], m->pos[2]);
             }
+            s_jak_state.position[0] = m->pos[0];
+            s_jak_state.position[1] = m->pos[1];
+            s_jak_state.position[2] = m->pos[2];
             return;
         }
     }
@@ -911,6 +958,7 @@ void jak_sm64_update(void) {
             gMarioObject->header.gfx.pos[1] = s_jak_state.position[1];
             gMarioObject->header.gfx.pos[2] = s_jak_state.position[2];
         }
+
     }
 
     /* --- Water level: query SM64's water system and forward to GOAL --- */

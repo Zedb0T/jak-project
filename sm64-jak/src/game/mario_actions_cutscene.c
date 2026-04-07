@@ -332,6 +332,14 @@ void cutscene_put_cap_on(struct MarioState *m) {
  * 3: Mario must not be in first person mode.
  */
 s32 mario_ready_to_speak(void) {
+#ifdef JAKOPENGOAL
+    /* Jak controls the player — Mario's action state is unreliable
+     * (he may be in freefall from position teleporting).  Force him
+     * into ACT_IDLE right here so NPC dialogs and cutscenes can start. */
+    if ((gMarioState->action & ACT_GROUP_MASK) == ACT_GROUP_AIRBORNE) {
+        gMarioState->action = ACT_IDLE;
+    }
+#endif
     u32 actionGroup = gMarioState->action & ACT_GROUP_MASK;
     s32 isReadyToSpeak = FALSE;
 
