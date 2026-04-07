@@ -437,11 +437,14 @@ static void convert_sm64_surfaces(void) {
             slope_thresh = 0.9998477f;  /* cos(1°) — almost any tilt slides */
         }
 
-        /* flags field: 0 = ground mode, 1 = wall mode (in GOAL pat-surface) */
-        if (s->normal.y <= slope_thresh && s->normal.y > 0.05f) {
-            js->flags = 1;  /* wall mode — Jak slides off */
-        } else {
+        /* flags field: 0 = ground mode, 1 = wall mode (in GOAL pat-surface)
+         * Walls/ceilings (normal.y <= 0.05) must be wall mode so Jak can't
+         * walk up vertical faces or jump infinitely at corners.
+         * Steep slopes also get wall mode so Jak slides off. */
+        if (s->normal.y > slope_thresh) {
             js->flags = 0;  /* ground mode — Jak can walk */
+        } else {
+            js->flags = 1;  /* wall mode — walls, ceilings, steep slopes */
         }
 
         js->vertices[0][0] = (float)s->vertex1[0];
