@@ -1,0 +1,14 @@
+# Smooth 120 FPS
+# Targets 120 FPS for high refresh rate monitors.
+
+@mod
+name = "Smooth 120 FPS"
+author = "OpenGOAL"
+version = "1.0"
+description = "Sets the frame limiter to 120 FPS for smooth gameplay on high refresh rate displays. VSync is disabled to avoid capping."
+game = any
+
+@on_enable
+render.target_fps = 120.0
+render.framelimiter = true
+render.vsync = false

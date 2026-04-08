@@ -8,6 +8,7 @@
 #include "game/graphics/display.h"
 #include "game/graphics/gfx.h"
 #include "game/graphics/screenshot.h"
+#include "game/mods/mod_manager.h"
 #include "game/overlord/jak3/dma.h"
 #include "game/system/hid/sdl_util.h"
 
@@ -127,6 +128,37 @@ void OpenGlDebugGui::draw(const DmaStats& dma_stats) {
       }
       ImGui::MenuItem("Subtitle Editor", nullptr, &m_subtitle_editor);
       ImGui::MenuItem("Debug Text Filter", nullptr, &m_filters_menu);
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Mods")) {
+      ImGui::MenuItem("Mod Manager", nullptr, &m_mod_imgui.m_open);
+      ImGui::Separator();
+      // quick-toggle list of loaded mods
+      auto& mod_mgr = mods::ModManager::get();
+      if (mod_mgr.is_initialized()) {
+        auto& mod_list = mod_mgr.get_mods_mut();
+        if (mod_list.empty()) {
+          ImGui::TextDisabled("No mods loaded");
+        }
+        for (size_t i = 0; i < mod_list.size(); i++) {
+          auto& mod = mod_list[i];
+          if (mod.failed) {
+            ImGui::TextDisabled("%s [error]", mod.definition.name.c_str());
+          } else {
+            bool enabled = mod.enabled;
+            if (ImGui::MenuItem(mod.definition.name.c_str(), nullptr, &enabled)) {
+              mod_mgr.toggle_mod(i);
+            }
+          }
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Rescan Mods")) {
+          mod_mgr.rescan();
+        }
+      } else {
+        ImGui::TextDisabled("Mod system not initialized");
+      }
       ImGui::EndMenu();
     }
 
@@ -252,6 +284,10 @@ void OpenGlDebugGui::draw(const DmaStats& dma_stats) {
 
   if (should_draw_overlord_debug()) {
     draw_overlord_debug_menu();
+  }
+
+  if (should_draw_mod_manager()) {
+    m_mod_imgui.draw();
   }
 }
 

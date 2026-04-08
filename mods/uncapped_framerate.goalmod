@@ -1,0 +1,13 @@
+# Uncapped Framerate
+# Disables the frame limiter and sets a high FPS target.
+
+@mod
+name = "Uncapped Framerate"
+author = "OpenGOAL"
+version = "1.0"
+description = "Removes the 60 FPS cap by disabling the frame limiter and setting a 240 FPS target."
+game = any
+
+@on_enable
+render.framelimiter = false
+render.target_fps = 240.0

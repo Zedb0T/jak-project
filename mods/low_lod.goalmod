@@ -1,0 +1,14 @@
+# Low LOD Mode
+# Forces the lowest level-of-detail for terrain and trees.
+# Can improve performance on slower hardware at the cost of visual quality.
+
+@mod
+name = "Low LOD Mode"
+author = "OpenGOAL"
+version = "1.0"
+description = "Forces lowest level-of-detail for TFragment and TIE renderers. Reduces visual quality but may improve performance."
+game = any
+
+@on_enable
+render.lod_tfrag = 2
+render.lod_tie = 2

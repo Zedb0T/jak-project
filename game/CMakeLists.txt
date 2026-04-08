@@ -346,6 +346,10 @@ set(RUNTIME_SOURCE
         tools/subtitle_editor/subtitle_editor_db.cpp
         tools/subtitle_editor/subtitle_editor_repl_client.cpp
         tools/subtitle_editor/subtitle_editor.cpp
+        mods/goalmod_parser.cpp
+        mods/mod_manager.cpp
+        mods/mod_params.cpp
+        mods/mod_imgui.cpp
         )
 
 add_subdirectory(sound)

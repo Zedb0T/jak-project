@@ -9,6 +9,8 @@
 #include "common/util/Timer.h"
 #include "common/versions/versions.h"
 
+#include "game/mods/mod_imgui.h"
+
 class FrameTimeRecorder {
  public:
   static constexpr int SIZE = 60 * 5;
@@ -51,6 +53,7 @@ class OpenGlDebugGui {
   bool should_draw_filters_menu() const { return master_enable && m_filters_menu; }
   bool should_draw_loader_menu() const { return master_enable && m_draw_loader; }
   bool should_draw_overlord_debug() const { return master_enable && m_draw_overlord; }
+  bool should_draw_mod_manager() const { return master_enable && m_mod_imgui.m_open; }
 
   bool should_advance_frame() { return m_frame_timer.should_advance_frame(); }
   bool should_gl_finish() const { return m_frame_timer.do_gl_finish; }
@@ -75,6 +78,7 @@ class OpenGlDebugGui {
  private:
   void draw_overlord_debug_menu();
   FrameTimeRecorder m_frame_timer;
+  mods::ModImGui m_mod_imgui;
   bool m_draw_frame_time = false;
   bool m_draw_profiler = false;
   bool m_draw_debug = false;

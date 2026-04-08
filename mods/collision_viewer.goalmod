@@ -1,0 +1,14 @@
+# Collision Viewer
+# Shows collision meshes overlaid on top of the normal game rendering.
+# Useful for speedrunning route planning.
+
+@mod
+name = "Collision Viewer"
+author = "OpenGOAL"
+version = "1.0"
+description = "Overlays collision mesh geometry on top of normal rendering. Does not remove textures."
+game = any
+
+@on_enable
+debug.collision_enable = true
+debug.collision_wireframe = false

@@ -1,0 +1,15 @@
+# Wireframe World
+# Strips textures and shows collision meshes as wireframe.
+# Great for debugging level geometry.
+
+@mod
+name = "Wireframe World"
+author = "OpenGOAL"
+version = "1.0"
+description = "Removes all textures and overlays the collision mesh wireframe for a debug-style view of the world."
+game = any
+
+@on_enable
+render.no_textures = true
+debug.collision_enable = true
+debug.collision_wireframe = true

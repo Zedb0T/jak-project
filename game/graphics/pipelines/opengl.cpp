@@ -23,6 +23,8 @@
 #include "game/graphics/gfx.h"
 #include "game/graphics/opengl_renderer/OpenGLRenderer.h"
 #include "game/graphics/opengl_renderer/debug_gui.h"
+#include "game/mods/mod_manager.h"
+#include "game/mods/mod_params.h"
 #include "game/graphics/screenshot.h"
 #include "game/graphics/texture/TexturePool.h"
 #include "game/runtime.h"
@@ -147,6 +149,7 @@ static int gl_init(GfxGlobalSettings& settings) {
 }
 
 static void gl_exit() {
+  mods::ModManager::get().shutdown();
   g_gfx_data.reset();
   gl_inited = false;
 }
@@ -304,6 +307,13 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
 #else
     init_imgui(window, gl_context, "#version 430");
 #endif
+  }
+
+  // initialize mod system
+  {
+    auto p = scoped_prof("startup::mods::init");
+    mods::register_default_params(game_version);
+    mods::ModManager::get().init(game_version);
   }
 
   return std::static_pointer_cast<GfxDisplay>(display);
@@ -561,6 +571,9 @@ void GLDisplay::render() {
       m_take_screenshot_next_frame = false;
     }
   }
+
+  // tick mod system (apply per-frame mod actions)
+  mods::ModManager::get().tick();
 
   // render debug
   if (is_imgui_visible()) {

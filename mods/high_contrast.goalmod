@@ -1,0 +1,13 @@
+# High Contrast Mode
+# Boosts brightness and contrast for better visibility in dark areas.
+
+@mod
+name = "High Contrast"
+author = "OpenGOAL"
+version = "1.0"
+description = "Increases brightness and contrast values for improved visibility, especially in dark areas."
+game = any
+
+@on_frame
+render.brightness = 40
+render.contrast = 200
