@@ -9,7 +9,8 @@ version = "1.0"
 description = "Removes all textures and overlays the collision mesh wireframe for a debug-style view of the world."
 game = any
 
-@on_enable
+# Must use on_frame because GOAL code overwrites collision flags every frame.
+@on_frame
 render.no_textures = true
 debug.collision_enable = true
 debug.collision_wireframe = true

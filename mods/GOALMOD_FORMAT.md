@@ -84,6 +84,7 @@ When the mod is disabled, `revert_value` will be used instead of the parameter's
 | `render.contrast`            | int   | 128     | Contrast adjustment value                     |
 | `debug.collision_enable`     | bool  | false   | Show collision mesh overlay                   |
 | `debug.collision_wireframe`  | bool  | true    | Render collision as wireframe vs solid         |
+| `physics.ice_surfaces`       | bool  | false   | Make all ground surfaces icy (low friction, reduced turning, sliding momentum) |
 
 New parameters can be registered by calling `ModManager::register_param()` from C++ code.
 

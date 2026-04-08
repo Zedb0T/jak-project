@@ -9,6 +9,7 @@ version = "1.0"
 description = "Overlays collision mesh geometry on top of normal rendering. Does not remove textures."
 game = any
 
-@on_enable
+# Must use on_frame because GOAL code overwrites collision flags every frame.
+@on_frame
 debug.collision_enable = true
 debug.collision_wireframe = false

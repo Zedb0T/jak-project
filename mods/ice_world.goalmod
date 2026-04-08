@@ -1,0 +1,16 @@
+# Ice World
+# Makes every surface in the game behave like ice.
+# Jak slides around with low friction, reduced turning, and momentum-based movement.
+# Applies ice physics to stone, grass, edge, wade, and tread surfaces.
+
+@mod
+name = "Ice World"
+author = "OpenGOAL"
+version = "1.0"
+description = "Turns all ground surfaces into ice. Low friction, reduced turning, and slippery momentum everywhere."
+game = any
+
+# Use on_frame to continuously enforce ice values, since the game
+# may reset surface properties during level loads or state changes.
+@on_frame
+physics.ice_surfaces = true
