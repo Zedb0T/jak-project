@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <math.h>
 
 #include <SDL2/SDL.h>
@@ -179,12 +180,25 @@ static void controller_sdl_read(OSContPad *pad) {
     }
 
     if (sdl_cntrl == NULL) {
-        for (int i = 0; i < SDL_NumJoysticks(); i++) {
-            if (SDL_IsGameController(i)) {
-                sdl_cntrl = SDL_GameControllerOpen(i);
-                if (sdl_cntrl != NULL) {
-                    sdl_haptic = controller_sdl_init_haptics(i);
-                    break;
+        /* JAK_CONTROLLER_INDEX env var override */
+        const char *env = getenv("JAK_CONTROLLER_INDEX");
+        int override_idx = (env && *env) ? atoi(env) : -1;
+        if (override_idx >= 0 && override_idx < SDL_NumJoysticks()
+            && SDL_IsGameController(override_idx)) {
+            sdl_cntrl = SDL_GameControllerOpen(override_idx);
+            if (sdl_cntrl != NULL) {
+                sdl_haptic = controller_sdl_init_haptics(override_idx);
+            }
+        }
+        /* Fallback: first valid controller */
+        if (sdl_cntrl == NULL) {
+            for (int i = 0; i < SDL_NumJoysticks(); i++) {
+                if (SDL_IsGameController(i)) {
+                    sdl_cntrl = SDL_GameControllerOpen(i);
+                    if (sdl_cntrl != NULL) {
+                        sdl_haptic = controller_sdl_init_haptics(i);
+                        break;
+                    }
                 }
             }
         }
