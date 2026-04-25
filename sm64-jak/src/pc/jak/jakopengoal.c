@@ -518,9 +518,15 @@ static void log_detected_controllers(void) {
                     const char *name = SDL_IsGameController(i)
                         ? SDL_GameControllerNameForIndex(i)
                         : SDL_JoystickNameForIndex(i);
+                    /* Report the joystick GUID so user can match it
+                     * against entries in gamecontrollerdb.txt. */
+                    char guid_str[64] = {0};
+                    SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
+                    SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
                     fprintf(f, "  index %d: %s%s\n", i,
                             name ? name : "(unknown)",
                             SDL_IsGameController(i) ? "" : "  [not a game controller]");
+                    fprintf(f, "             GUID: %s\n", guid_str);
                 }
                 fprintf(f, "\nCurrent JAK_CONTROLLER_INDEX = ");
                 if (override_idx >= 0) fprintf(f, "%d\n", override_idx);
