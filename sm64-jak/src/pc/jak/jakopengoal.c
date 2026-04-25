@@ -528,6 +528,34 @@ static void log_detected_controllers(void) {
                 fprintf(f, "\nEdit launch_sm64jak.bat and change the\n"
                            "  set \"JAK_CONTROLLER_INDEX=N\"\n"
                            "line to pick a different controller.\n");
+
+                /* Report the gamecontrollerdb.txt search paths so the user
+                 * can tell whether SDL is loading the mapping file. */
+                fprintf(f, "\n--- gamecontrollerdb.txt search ---\n");
+#if defined(_WIN32)
+                {
+                    char cwd[1024] = {0};
+                    if (GetCurrentDirectoryA(sizeof(cwd), cwd)) {
+                        char full[1280];
+                        snprintf(full, sizeof(full), "%s\\gamecontrollerdb.txt", cwd);
+                        FILE *t = fopen(full, "rb");
+                        fprintf(f, "  cwd:  %s  [%s]\n", full, t ? "FOUND" : "missing");
+                        if (t) fclose(t);
+                    }
+                    char exe[1024] = {0};
+                    if (GetModuleFileNameA(NULL, exe, sizeof(exe))) {
+                        char *slash = strrchr(exe, '\\');
+                        if (slash) {
+                            *slash = '\0';
+                            char full[1280];
+                            snprintf(full, sizeof(full), "%s\\gamecontrollerdb.txt", exe);
+                            FILE *t = fopen(full, "rb");
+                            fprintf(f, "  exe:  %s  [%s]\n", full, t ? "FOUND" : "missing");
+                            if (t) fclose(t);
+                        }
+                    }
+                }
+#endif
                 fclose(f);
             }
         }
