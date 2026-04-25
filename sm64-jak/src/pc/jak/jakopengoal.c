@@ -473,9 +473,126 @@ static void convert_sm64_surfaces(void) {
  */
 static SDL_GameController *s_sdl_pad = NULL;
 
+/* Read JAK_CONTROLLER_INDEX env var. Returns -1 if unset/invalid (= use default). */
+static int get_controller_index_override(void) {
+    const char *env = getenv("JAK_CONTROLLER_INDEX");
+    if (!env || !*env) return -1;
+    int idx = atoi(env);
+    return (idx >= 0) ? idx : -1;
+}
+
+/* Log all detected controllers so user knows what index to use. Called once. */
+static void log_detected_controllers(void) {
+    static bool s_logged = false;
+    if (s_logged) return;
+    s_logged = true;
+    int n = SDL_NumJoysticks();
+    int override_idx = get_controller_index_override();
+
+    JAK_LOG("Detected %d joystick(s):", n);
+    for (int i = 0; i < n; i++) {
+        const char *name = SDL_IsGameController(i)
+            ? SDL_GameControllerNameForIndex(i)
+            : SDL_JoystickNameForIndex(i);
+        JAK_LOG("  index %d: %s%s", i,
+                name ? name : "(unknown)",
+                SDL_IsGameController(i) ? "" : " [not a game controller]");
+    }
+    if (override_idx >= 0) {
+        JAK_LOG("JAK_CONTROLLER_INDEX override: using index %d", override_idx);
+    } else {
+        JAK_LOG("JAK_CONTROLLER_INDEX not set, using first valid controller");
+    }
+
+    /* Also write a human-readable list to controllers.txt next to launch_sm64jak.bat
+     * (project root, taken from JAK_DATA_PATH).  Overwritten each launch. */
+    {
+        const char *root = getenv("JAK_DATA_PATH");
+        if (root && *root) {
+            char path[1024];
+            snprintf(path, sizeof(path), "%s\\controllers.txt", root);
+            FILE *f = fopen(path, "w");
+            if (f) {
+                fprintf(f, "SDL detected %d joystick(s):\n\n", n);
+                for (int i = 0; i < n; i++) {
+                    const char *name = SDL_IsGameController(i)
+                        ? SDL_GameControllerNameForIndex(i)
+                        : SDL_JoystickNameForIndex(i);
+                    /* Report the joystick GUID so user can match it
+                     * against entries in gamecontrollerdb.txt. */
+                    char guid_str[64] = {0};
+                    SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
+                    SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
+                    fprintf(f, "  index %d: %s%s\n", i,
+                            name ? name : "(unknown)",
+                            SDL_IsGameController(i) ? "" : "  [not a game controller]");
+                    fprintf(f, "             GUID: %s\n", guid_str);
+                    /* Show whether SDL has a mapping registered for this GUID. */
+                    char *map = SDL_GameControllerMappingForGUID(guid);
+                    if (map) {
+                        fprintf(f, "             mapping: %s\n", map);
+                        SDL_free(map);
+                    } else {
+                        fprintf(f, "             mapping: (none registered for this GUID)\n");
+                    }
+                }
+                fprintf(f, "\nTotal SDL mappings loaded: %d\n",
+                        SDL_GameControllerNumMappings());
+                fprintf(f, "\nCurrent JAK_CONTROLLER_INDEX = ");
+                if (override_idx >= 0) fprintf(f, "%d\n", override_idx);
+                else                   fprintf(f, "(unset, using first valid)\n");
+                fprintf(f, "\nEdit launch_sm64jak.bat and change the\n"
+                           "  set \"JAK_CONTROLLER_INDEX=N\"\n"
+                           "line to pick a different controller.\n");
+
+                /* Report the gamecontrollerdb.txt search paths so the user
+                 * can tell whether SDL is loading the mapping file. */
+                fprintf(f, "\n--- gamecontrollerdb.txt search ---\n");
+#if defined(_WIN32)
+                {
+                    char cwd[1024] = {0};
+                    if (GetCurrentDirectoryA(sizeof(cwd), cwd)) {
+                        char full[1280];
+                        snprintf(full, sizeof(full), "%s\\gamecontrollerdb.txt", cwd);
+                        FILE *t = fopen(full, "rb");
+                        fprintf(f, "  cwd:  %s  [%s]\n", full, t ? "FOUND" : "missing");
+                        if (t) fclose(t);
+                    }
+                    char exe[1024] = {0};
+                    if (GetModuleFileNameA(NULL, exe, sizeof(exe))) {
+                        char *slash = strrchr(exe, '\\');
+                        if (slash) {
+                            *slash = '\0';
+                            char full[1280];
+                            snprintf(full, sizeof(full), "%s\\gamecontrollerdb.txt", exe);
+                            FILE *t = fopen(full, "rb");
+                            fprintf(f, "  exe:  %s  [%s]\n", full, t ? "FOUND" : "missing");
+                            if (t) fclose(t);
+                        }
+                    }
+                }
+#endif
+                fclose(f);
+            }
+        }
+    }
+}
+
 static SDL_GameController *get_sdl_gamepad(void) {
     if (s_sdl_pad && SDL_GameControllerGetAttached(s_sdl_pad)) return s_sdl_pad;
     s_sdl_pad = NULL;
+
+    log_detected_controllers();
+
+    /* If JAK_CONTROLLER_INDEX is set, try that index first */
+    int override_idx = get_controller_index_override();
+    if (override_idx >= 0 && override_idx < SDL_NumJoysticks()
+        && SDL_IsGameController(override_idx)) {
+        s_sdl_pad = SDL_GameControllerOpen(override_idx);
+        if (s_sdl_pad) return s_sdl_pad;
+    }
+
+    /* Fallback: first valid controller */
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
             s_sdl_pad = SDL_GameControllerOpen(i);
@@ -653,6 +770,11 @@ void jak_sm64_toggle(void) {
  * Skip during fallback (shell, swimming etc.) and death so Mario's
  * own movement isn't overridden. */
 void jak_sm64_pre_update(void) {
+    /* Log controllers + write controllers.txt on first call (runs even
+     * before Jak is active so the user can see detected controllers
+     * regardless of Jak state). */
+    log_detected_controllers();
+
     if (!s_active || s_jak_id < 0) return;
 
     struct MarioState *m = &gMarioStates[0];

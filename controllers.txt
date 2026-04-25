@@ -1,0 +1,20 @@
+SDL detected 2 joystick(s):
+
+  index 0: PS1 Controller
+             GUID: 0300ef68100800000100000000000000
+             mapping: 0300ef68100800000100000000000000,PS1 Controller,a:b2,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b6,leftstick:b10,lefttrigger:b4,leftx:a0,lefty:a1,rightshoulder:b7,rightstick:b11,righttrigger:b5,rightx:a3,righty:a2,start:b9,x:b3,y:b0,platform:Windows,
+  index 1: PS1 Controller
+             GUID: 0300ef68100800000100000000000000
+             mapping: 0300ef68100800000100000000000000,PS1 Controller,a:b2,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b6,leftstick:b10,lefttrigger:b4,leftx:a0,lefty:a1,rightshoulder:b7,rightstick:b11,righttrigger:b5,rightx:a3,righty:a2,start:b9,x:b3,y:b0,platform:Windows,
+
+Total SDL mappings loaded: 873
+
+Current JAK_CONTROLLER_INDEX = 0
+
+Edit launch_sm64jak.bat and change the
+  set "JAK_CONTROLLER_INDEX=N"
+line to pick a different controller.
+
+--- gamecontrollerdb.txt search ---
+  cwd:  C:\Users\ZedBo\OneDrive\Documents\GitHub\jak-project\sm64-jak\build\us_pc\gamecontrollerdb.txt  [FOUND]
+  exe:  C:\Users\ZedBo\OneDrive\Documents\GitHub\jak-project\sm64-jak\build\us_pc\gamecontrollerdb.txt  [FOUND]
