@@ -1,0 +1,10 @@
+SDL detected 2 joystick(s):
+
+  index 0: PS1 Controller
+  index 1: PS1 Controller
+
+Current JAK_CONTROLLER_INDEX = 0
+
+Edit launch_sm64jak.bat and change the
+  set "JAK_CONTROLLER_INDEX=N"
+line to pick a different controller.

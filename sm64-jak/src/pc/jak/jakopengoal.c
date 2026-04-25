@@ -487,6 +487,8 @@ static void log_detected_controllers(void) {
     if (s_logged) return;
     s_logged = true;
     int n = SDL_NumJoysticks();
+    int override_idx = get_controller_index_override();
+
     JAK_LOG("Detected %d joystick(s):", n);
     for (int i = 0; i < n; i++) {
         const char *name = SDL_IsGameController(i)
@@ -496,11 +498,39 @@ static void log_detected_controllers(void) {
                 name ? name : "(unknown)",
                 SDL_IsGameController(i) ? "" : " [not a game controller]");
     }
-    int override_idx = get_controller_index_override();
     if (override_idx >= 0) {
         JAK_LOG("JAK_CONTROLLER_INDEX override: using index %d", override_idx);
     } else {
         JAK_LOG("JAK_CONTROLLER_INDEX not set, using first valid controller");
+    }
+
+    /* Also write a human-readable list to controllers.txt next to launch_sm64jak.bat
+     * (project root, taken from JAK_DATA_PATH).  Overwritten each launch. */
+    {
+        const char *root = getenv("JAK_DATA_PATH");
+        if (root && *root) {
+            char path[1024];
+            snprintf(path, sizeof(path), "%s\\controllers.txt", root);
+            FILE *f = fopen(path, "w");
+            if (f) {
+                fprintf(f, "SDL detected %d joystick(s):\n\n", n);
+                for (int i = 0; i < n; i++) {
+                    const char *name = SDL_IsGameController(i)
+                        ? SDL_GameControllerNameForIndex(i)
+                        : SDL_JoystickNameForIndex(i);
+                    fprintf(f, "  index %d: %s%s\n", i,
+                            name ? name : "(unknown)",
+                            SDL_IsGameController(i) ? "" : "  [not a game controller]");
+                }
+                fprintf(f, "\nCurrent JAK_CONTROLLER_INDEX = ");
+                if (override_idx >= 0) fprintf(f, "%d\n", override_idx);
+                else                   fprintf(f, "(unset, using first valid)\n");
+                fprintf(f, "\nEdit launch_sm64jak.bat and change the\n"
+                           "  set \"JAK_CONTROLLER_INDEX=N\"\n"
+                           "line to pick a different controller.\n");
+                fclose(f);
+            }
+        }
     }
 }
 
@@ -696,6 +726,11 @@ void jak_sm64_toggle(void) {
  * Skip during fallback (shell, swimming etc.) and death so Mario's
  * own movement isn't overridden. */
 void jak_sm64_pre_update(void) {
+    /* Log controllers + write controllers.txt on first call (runs even
+     * before Jak is active so the user can see detected controllers
+     * regardless of Jak state). */
+    log_detected_controllers();
+
     if (!s_active || s_jak_id < 0) return;
 
     struct MarioState *m = &gMarioStates[0];
