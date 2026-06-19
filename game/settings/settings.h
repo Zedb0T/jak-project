@@ -77,6 +77,7 @@ struct InputSettings {
 
   // NOTE - assumes only port 0
   std::string last_selected_controller_guid = "";
+  int last_selected_controller_index = -1;
   std::unordered_map<std::string, int> controller_port_mapping;
   std::unordered_map<std::string, InputBindingGroups> controller_binds;
   InputBindingGroups keyboard_binds;

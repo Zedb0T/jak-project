@@ -117,6 +117,10 @@ class InputManager {
                                const bool analog_for_minimum);
   int get_controller_index(const int port);
   void set_controller_for_port(const int controller_id, const int port);
+
+  static void resolve_port_mappings(const std::vector<std::string>& controller_guids,
+                                    game_settings::InputSettings& settings,
+                                    std::unordered_map<int, int>& port_mapping);
   bool controller_has_led(const int port);
   bool controller_has_rumble(const int port);
   bool controller_has_pressure_sensitivity_support(const int port);

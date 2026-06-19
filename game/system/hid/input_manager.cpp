@@ -80,6 +80,40 @@ InputManager::~InputManager() {
   }
 }
 
+void InputManager::resolve_port_mappings(
+    const std::vector<std::string>& controller_guids,
+    game_settings::InputSettings& settings,
+    std::unordered_map<int, int>& port_mapping) {
+  port_mapping.clear();
+  for (size_t i = 0; i < controller_guids.size(); i++) {
+    const auto& guid = controller_guids[i];
+    const int controller_idx = static_cast<int>(i);
+    if (settings.controller_port_mapping.find(guid) != settings.controller_port_mapping.end()) {
+      port_mapping[settings.controller_port_mapping.at(guid)] = controller_idx;
+    } else {
+      port_mapping[controller_idx] = controller_idx;
+      settings.controller_port_mapping[guid] = controller_idx;
+    }
+  }
+  if (!settings.last_selected_controller_guid.empty()) {
+    const int hint = settings.last_selected_controller_index;
+    // Prefer the saved index if the GUID still matches there (handles identical controllers)
+    if (hint >= 0 && hint < static_cast<int>(controller_guids.size()) &&
+        controller_guids[hint] == settings.last_selected_controller_guid) {
+      port_mapping[0] = hint;
+      settings.controller_port_mapping[controller_guids[hint]] = 0;
+    } else {
+      for (size_t i = 0; i < controller_guids.size(); i++) {
+        if (controller_guids[i] == settings.last_selected_controller_guid) {
+          port_mapping[0] = static_cast<int>(i);
+          settings.controller_port_mapping[controller_guids[i]] = 0;
+          break;
+        }
+      }
+    }
+  }
+}
+
 void InputManager::refresh_device_list() {
   prof().instant_event("ROOT");
   {
@@ -103,37 +137,18 @@ void InputManager::refresh_device_list() {
           continue;
         }
         m_available_controllers.push_back(controller);
-        // By default, controller port mapping is on a first-come-first-served basis
-        //
-        // However, we will use previously saved controller port mappings to take precedence
-        // For example, if you previous set your PS5 controller to be port 0, then even
-        // if another controller is detected first, the PS5 controller should be assigned as
-        // expected.
-        if (m_settings->controller_port_mapping.find(controller->get_guid()) !=
-            m_settings->controller_port_mapping.end()) {
-          // Though it's possible for a user to assign multiple controllers to the same port, so the
-          // last one wins
-          m_controller_port_mapping[m_settings->controller_port_mapping.at(
-              controller->get_guid())] = i;
-        } else {
-          m_controller_port_mapping[m_available_controllers.size() - 1] = i;
-          m_settings->controller_port_mapping[controller->get_guid()] =
-              m_available_controllers.size() - 1;
-        }
-        // Allocate a PadData if this is a new port
-        if (m_data.find(i) == m_data.end()) {
-          m_data[i] = std::make_shared<PadData>();
-        }
       }
-      // If the controller that was last selected to be port 0 is around, prioritize it
-      if (!m_settings->last_selected_controller_guid.empty()) {
-        for (size_t i = 0; i < m_available_controllers.size(); i++) {
-          const auto& controller_guid = m_available_controllers.at(i)->get_guid();
-          if (controller_guid == m_settings->last_selected_controller_guid) {
-            m_controller_port_mapping[0] = i;
-            m_settings->controller_port_mapping[controller_guid] = 0;
-            break;
-          }
+      // Resolve port mappings from saved settings
+      std::vector<std::string> guids;
+      guids.reserve(m_available_controllers.size());
+      for (const auto& c : m_available_controllers) {
+        guids.push_back(c->get_guid());
+      }
+      resolve_port_mappings(guids, *m_settings, m_controller_port_mapping);
+      // Allocate PadData for each controller
+      for (int idx = 0; idx < (int)m_available_controllers.size(); idx++) {
+        if (m_data.find(idx) == m_data.end()) {
+          m_data[idx] = std::make_shared<PadData>();
         }
       }
     }
@@ -402,16 +417,23 @@ int InputManager::get_controller_index(const int port) {
 }
 
 void InputManager::set_controller_for_port(const int controller_id, const int port) {
+  lg::info("set_controller_for_port: controller_id={}, port={}", controller_id, port);
   if (controller_id < (int)m_available_controllers.size()) {
-    // Reset inputs as this device won't be able to be read from again!
     clear_inputs();
     auto& controller = m_available_controllers.at(controller_id);
     m_controller_port_mapping[port] = controller_id;
-    m_settings->controller_port_mapping[controller->get_guid()] = port;
-    // NOTE - only tracking port 0 for now
-    if (port == 0) {
-      m_settings->last_selected_controller_guid = controller->get_guid();
+    // Clear stale entries: other controllers that previously claimed this port
+    for (auto it = m_settings->controller_port_mapping.begin();
+         it != m_settings->controller_port_mapping.end();) {
+      if (it->second == port && it->first != controller->get_guid()) {
+        it = m_settings->controller_port_mapping.erase(it);
+      } else {
+        ++it;
+      }
     }
+    m_settings->controller_port_mapping[controller->get_guid()] = port;
+    m_settings->last_selected_controller_guid = controller->get_guid();
+    m_settings->last_selected_controller_index = controller_id;
     m_settings->save_settings();
   }
 }

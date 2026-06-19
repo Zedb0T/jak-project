@@ -112,6 +112,7 @@ void DisplaySettings::save_settings() {
 void to_json(json& j, const InputSettings& obj) {
   json_serialize(version);
   json_serialize(last_selected_controller_guid);
+  json_serialize(last_selected_controller_index);
   json_serialize(controller_port_mapping);
   json_serialize(controller_binds);
   json_serialize(keyboard_binds);
@@ -126,6 +127,7 @@ void to_json(json& j, const InputSettings& obj) {
 void from_json(const json& j, InputSettings& obj) {
   json_deserialize_if_exists(version);
   json_deserialize_if_exists(last_selected_controller_guid);
+  json_deserialize_if_exists(last_selected_controller_index);
   json_deserialize_if_exists(controller_port_mapping);
   json_deserialize_if_exists(controller_binds);
   json_deserialize_if_exists(keyboard_binds);
