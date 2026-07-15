@@ -350,6 +350,25 @@
   )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Actor collision debug draw
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun lib-jak-draw-actor-collision ()
+  "Debug-draw every actor's collide-shape (spheres/meshes). Runs while the
+   PC collision renderer is enabled so actor collision shows alongside the
+   static level collide mesh."
+  (iterate-process-tree
+    *active-pool*
+    (lambda ((proc process-drawable))
+      (when (and (type-type? (-> proc type) process-drawable)
+                 (nonzero? (-> proc root))
+                 (type-type? (-> proc root type) collide-shape))
+        (debug-draw (the-as collide-shape (-> proc root))))
+      (none))
+    *null-kernel-context*)
+  (none))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Initialization
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -366,6 +385,16 @@
     ;; Initialize command state
     (set! *lib-jak-command* 0)
     (set! *lib-jak-command-type* 0)
+
+    ;; Per-frame debug-draw of actor collide shapes whenever the PC collision
+    ;; renderer is on (debug menu: Collision renderer -> Enable). The injected
+    ;; SM64 triangles can additionally be shown via Collision -> Collision Cache.
+    (process-spawn-function process :name 'lib-jak-collide-draw
+      (lambda :behavior process ()
+        (stack-size-set! (-> self main-thread) 1024)
+        (loop
+          (if *collision-renderer* (lib-jak-draw-actor-collision))
+          (suspend))))
 
     (format #t "[lib-jak] GOAL bridge initialized.~%")
 

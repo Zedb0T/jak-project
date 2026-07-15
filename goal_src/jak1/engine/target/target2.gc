@@ -1392,13 +1392,14 @@
         (set! (-> self control unknown-float00) 0.0)))
   :trans
     (behavior ()
-      ;; libjakopengoal: force deep water so we can dive as far as we want
+      ;; libjakopengoal: force effectively bottomless water so Jak can dive to
+      ;; any depth (4096000 = 1000m — deeper than any SM64 level)
       (when *lib-jak-enabled*
         (when (cpad-hold? (-> self control unknown-cpad-info00 number) square)
           (set-time! (-> self water swim-time))
           )
-        (set! (-> self water swim-depth) 409600.0)
-        (set! (-> self water bottom 0 y) (- (-> self water surface-height) 409600.0))
+        (set! (-> self water swim-depth) 4096000.0)
+        (set! (-> self water bottom 0 y) (- (-> self water surface-height) 4096000.0))
         )
       (if (time-elapsed? (-> self water swim-time) (seconds 0.5)) (go target-stance))
       (cond
