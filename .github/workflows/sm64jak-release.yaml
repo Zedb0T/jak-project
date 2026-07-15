@@ -167,3 +167,32 @@ jobs:
           VER="${TAG#sm64jak-}"
           gh release upload "$TAG" "./windows-$VER.zip" metadata.json --repo ${{ github.repository }} --clobber
           gh release edit "$TAG" --draft=false --repo ${{ github.repository }}
+
+  # Releases created with GITHUB_TOKEN don't fire `release` events, so the
+  # testing mod-list update is chained here instead of event-triggered.
+  update_mod_list:
+    name: "Update Mod List"
+    needs:
+      - create_release
+      - build_windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout Repository"
+        uses: actions/checkout@v4
+        with:
+          ref: 64-jak
+
+      - name: "Update mod_list.json"
+        env:
+          VERSION: ${{ needs.create_release.outputs.tagName }}
+          SUPPORTED_GAMES: "jak1"
+        run: python ./.github/scripts/create-mod-release/update-mod-list.py
+
+      - name: "Commit and Push"
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add mod_list.json
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update mod_list.json for ${{ needs.create_release.outputs.tagName }}"
+          git push
