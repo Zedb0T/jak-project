@@ -48,8 +48,8 @@ jobs:
   build_windows:
     name: "Windows Build + Bundle"
     needs: create_release
-    runs-on: windows-latest
-    timeout-minutes: 120
+    runs-on: windows-2022
+    timeout-minutes: 90
     steps:
       - name: "Checkout Repository"
         uses: actions/checkout@v4
@@ -57,31 +57,59 @@ jobs:
           ref: ${{ needs.create_release.outputs.tagName }}
           submodules: "recursive"
 
+      # Build setup mirrors .github/workflows/windows-build-clang.yaml
+      # (what jak-project / OG-Mod-Base CI use): clang-static preset +
+      # sccache is far faster than a cold MSVC build, and static exes
+      # need no companion-DLL co-location.
       - name: Install NASM
-        run: choco install nasm -y
-        shell: pwsh
+        run: |
+          $chocoVersion = choco --version
+          if ($chocoVersion.StartsWith("2.")) {
+            choco install nasm --source="${{ github.workspace }}/third-party/nasm"
+          } else {
+            choco install ${{ github.workspace }}/third-party/nasm/old/nasm.2.15.05.nupkg
+          }
 
-      - name: Configure CMake (MSVC)
-        shell: pwsh
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBJAKOPENGOAL=ON .
+      - name: Setup sccache
+        uses: hendrikmuhs/ccache-action@v1.2.20
+        with:
+          variant: sccache
+          key: windows-2022-static-sm64jak-${{ github.sha }}
+          restore-keys: windows-2022-static-sm64jak
+          max-size: 1000M
 
-      - name: Build gk, goalc, extractor, jakopengoal
-        shell: pwsh
-        run: cmake --build build --target gk goalc extractor jakopengoal --config Release -j 4
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      # https://github.com/actions/runner-images/issues/5459
+      - name: Remove Strawberry Perl from PATH
+        run: |
+          $env:PATH = $env:PATH -replace "C:\\Strawberry\\c\\bin;", ""
+          "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: CMake Generation
+        shell: cmd
+        run: cmake -B build --preset=Release-windows-clang-static -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DBUILD_LIBJAKOPENGOAL=ON .
+
+      - name: Build Project
+        shell: cmd
+        run: cmake --build build --parallel %NUMBER_OF_PROCESSORS% --target gk goalc extractor jakopengoal
 
       - name: Bundle (OG-Mod-Base layout + SM64-Jak extras)
         shell: bash
         run: |
           set -e
           DEST=./bundle
+          # Ninja presets output to build/bin; MSVC multi-config to build/bin/Release
+          BIN=build/bin
+          [ -d build/bin/Release ] && BIN=build/bin/Release
           mkdir -p $DEST/data/launcher $DEST/data/decompiler $DEST/data/game/graphics/opengl_renderer $DEST/data/log
 
-          # Binaries + ALL companion DLLs co-located (MSVC shared build:
-          # gk/extractor need common.dll, fmt.dll, etc. next to them)
-          cp build/bin/Release/gk.exe $DEST/
-          cp build/bin/Release/goalc.exe $DEST/
-          cp build/bin/Release/extractor.exe $DEST/
-          cp build/bin/Release/*.dll $DEST/
+          # Binaries (static build: exes are self-contained; copy any DLLs
+          # that do exist, e.g. jakopengoal.dll and shared SDL if present)
+          cp $BIN/gk.exe $DEST/
+          cp $BIN/goalc.exe $DEST/
+          cp $BIN/extractor.exe $DEST/
+          cp $BIN/*.dll $DEST/ 2>/dev/null || true
 
           # Official OpenGOAL data/ layout (what extractor + gk expect)
           cp .github/scripts/releases/error-code-metadata.json $DEST/data/launcher/
@@ -97,9 +125,11 @@ jobs:
 
           # DLLs the SM64 exe needs at runtime, staged for Setup.bat
           mkdir -p $DEST/dlls
-          cp build/bin/Release/*.dll $DEST/dlls/
+          cp $BIN/*.dll $DEST/dlls/ 2>/dev/null || true
           cp sm64-jak/extras/gamecontrollerdb.txt $DEST/dlls/ || true
           cp controllers.txt $DEST/dlls/ || true
+          # the SM64 exe dlopen's this at runtime — fail loudly if absent
+          test -f $DEST/dlls/jakopengoal.dll
 
           # Tester-facing scripts
           cp release_files/Setup.bat $DEST/
