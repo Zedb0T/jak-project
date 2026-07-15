@@ -98,3 +98,6 @@ goalc-report.html
 sm64-jak/build/
 *.so
 launch_sm64jak.bat
+/release_sm64jak
+*.lnk
+SM64-Jak_*.zip

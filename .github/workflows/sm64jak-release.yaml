@@ -1,0 +1,134 @@
+name: "Cut SM64-Jak Release"
+
+# OpenGOAL Mod Launcher-compatible release, modeled on
+# OpenGOAL-Mods/OG-Mod-Base's mod-release-pipeline: produces a
+# windows-vX.Y.Z.zip (gk.exe entry point + data/ layout) and metadata.json.
+# The zip additionally carries the sm64-jak source + Setup.bat so testers
+# build the SM64 half from their own ROM — no game data ships in the asset.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver Bump Type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  create_release:
+    name: "Create Release"
+    runs-on: ubuntu-latest
+    outputs:
+      tagName: ${{ steps.tag_version.outputs.new_tag }}
+    steps:
+      - name: Bump Version and Push Tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag_prefix: v
+          default_bump: ${{ inputs.bump }}
+          release_branches: "master,main,64-jak"
+
+      - name: Create Draft Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create ${{ steps.tag_version.outputs.new_tag }} --generate-notes --draft --repo ${{ github.repository }}
+
+  build_windows:
+    name: "Windows Build + Bundle"
+    needs: create_release
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: "Checkout Repository"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.tagName }}
+          submodules: "recursive"
+
+      - name: Install NASM
+        run: choco install nasm -y
+        shell: pwsh
+
+      - name: Configure CMake (MSVC)
+        shell: pwsh
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBJAKOPENGOAL=ON .
+
+      - name: Build gk, goalc, extractor, jakopengoal
+        shell: pwsh
+        run: cmake --build build --target gk goalc extractor jakopengoal --config Release -j 4
+
+      - name: Bundle (OG-Mod-Base layout + SM64-Jak extras)
+        shell: bash
+        run: |
+          set -e
+          DEST=./bundle
+          mkdir -p $DEST/data/launcher $DEST/data/decompiler $DEST/data/game/graphics/opengl_renderer $DEST/data/log
+
+          # Binaries + ALL companion DLLs co-located (MSVC shared build:
+          # gk/extractor need common.dll, fmt.dll, etc. next to them)
+          cp build/bin/Release/gk.exe $DEST/
+          cp build/bin/Release/goalc.exe $DEST/
+          cp build/bin/Release/extractor.exe $DEST/
+          cp build/bin/Release/*.dll $DEST/
+
+          # Official OpenGOAL data/ layout (what extractor + gk expect)
+          cp .github/scripts/releases/error-code-metadata.json $DEST/data/launcher/
+          cp -r decompiler/config $DEST/data/decompiler/
+          cp -r goal_src $DEST/data/
+          cp -r game/assets $DEST/data/game/
+          cp -r game/graphics/opengl_renderer/shaders $DEST/data/game/graphics/opengl_renderer/
+          cp -r custom_assets $DEST/data/
+
+          # SM64-Jak source (CI checkout is git-clean: no ROM-derived files)
+          cp -r sm64-jak $DEST/sm64-jak
+          rm -rf $DEST/sm64-jak/build
+
+          # DLLs the SM64 exe needs at runtime, staged for Setup.bat
+          mkdir -p $DEST/dlls
+          cp build/bin/Release/*.dll $DEST/dlls/
+          cp sm64-jak/extras/gamecontrollerdb.txt $DEST/dlls/ || true
+          cp controllers.txt $DEST/dlls/ || true
+
+          # Tester-facing scripts
+          cp release_files/Setup.bat $DEST/
+          cp "release_files/Play SM64-Jak.bat" $DEST/
+          cp release_files/README.txt $DEST/
+
+      - name: Zip Bundle
+        shell: pwsh
+        run: |
+          $tag = "${{ needs.create_release.outputs.tagName }}"
+          Compress-Archive -Path ./bundle/* -DestinationPath "./windows-$tag.zip" -Force
+
+      - name: Emit metadata.json
+        shell: bash
+        run: |
+          TAG="${{ needs.create_release.outputs.tagName }}"
+          cat > metadata.json <<EOF
+          {
+            "schemaVersion": "0.1.0",
+            "version": "${TAG#v}",
+            "supportedGames": ["jak1"],
+            "publishedDate": "$(date -u +%Y-%m-%dT%H:%M:%S)"
+          }
+          EOF
+          cat metadata.json
+
+      - name: Upload Assets + Publish
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.create_release.outputs.tagName }}"
+          gh release upload "$TAG" "./windows-$TAG.zip" metadata.json --repo ${{ github.repository }} --clobber
+          gh release edit "$TAG" --draft=false --repo ${{ github.repository }}

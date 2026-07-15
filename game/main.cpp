@@ -24,6 +24,8 @@
 #include "third-party/CLI11.hpp"
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 extern "C" {
 __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
@@ -240,6 +242,46 @@ int main(int argc, char** argv) {
     lg::error("Failed to setup logging: {}", e.what());
     return 1;
   }
+
+#ifdef _WIN32
+  // SM64-Jak: when distributed via the OpenGOAL mod launcher, gk.exe is the
+  // install/launch entry point. If the SM64 side is already set up (built by
+  // the bundled Setup.bat), hand off to it instead of booting vanilla gk.
+  // Escape hatch: JAK_NO_SM64=1 boots normal gk (with a setup menu in imgui).
+  {
+    const char* no_sm64 = getenv("JAK_NO_SM64");
+    if (!no_sm64 || no_sm64[0] != '1') {
+      char exe_buf[MAX_PATH] = {0};
+      if (GetModuleFileNameA(NULL, exe_buf, sizeof(exe_buf))) {
+        fs::path exe_dir = fs::path(exe_buf).parent_path();
+        fs::path sm64_exe = exe_dir / "sm64-jak" / "build" / "us_pc" / "sm64.us.f3dex2e.exe";
+        if (fs::exists(sm64_exe)) {
+          fs::path data_dir = exe_dir / "data";
+          if (!fs::exists(data_dir / "out" / "jak1")) {
+            // Jak data not extracted yet — fall through to normal gk so the
+            // launcher/extractor flow (or the imgui setup menu) can run.
+            lg::info("SM64-Jak found but Jak data not built yet — booting gk for setup");
+          } else {
+            lg::info("SM64-Jak is configured — launching {}", sm64_exe.string());
+            SetEnvironmentVariableA("JAK_DATA_PATH", data_dir.string().c_str());
+            STARTUPINFOA si = {};
+            si.cb = sizeof(si);
+            PROCESS_INFORMATION pi = {};
+            std::string cmd = "\"" + sm64_exe.string() + "\" --skip-intro";
+            std::string cwd = sm64_exe.parent_path().string();
+            if (CreateProcessA(NULL, cmd.data(), NULL, NULL, 0, 0, NULL, cwd.c_str(), &si,
+                               &pi)) {
+              CloseHandle(pi.hProcess);
+              CloseHandle(pi.hThread);
+              return 0;
+            }
+            lg::error("Failed to launch SM64-Jak ({}), booting gk instead", GetLastError());
+          }
+        }
+      }
+    }
+  }
+#endif
 
   bool force_debug_next_time = false;
   // always start with an empty arg, as internally kmachine starts at `1` not `0`
