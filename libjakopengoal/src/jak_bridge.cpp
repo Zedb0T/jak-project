@@ -20,6 +20,7 @@
 #include "game/kernel/common/Ptr.h"
 #include "game/kernel/common/kernel_types.h"
 #include "game/kernel/common/kscheme.h"
+#include "game/graphics/gfx.h"
 #include "game/kernel/jak1/kscheme.h"
 #include "game/runtime.h"
 #include "game/sce/iop.h"
@@ -1685,6 +1686,19 @@ static void force_settings() {
   *(float*)(g_ee_main_mem + sc_ptr + TARGET_BASE + 8) = MUSIC_VOL;
   *(float*)(g_ee_main_mem + sc_ptr + TARGET_BASE + 12) = DIALOG_VOL;
   *(float*)(g_ee_main_mem + sc_ptr + TARGET_BASE + 140) = AMBIENT_VOL;
+
+  // Debug fly: force *cheat-mode* = 'debug so Jak's R2 flying works
+  // (logic-target.gc flag-setup checks (= *cheat-mode* 'debug) + R2 held).
+  // Only forced while enabled — when off, the game's own value is left alone.
+  if (get_force_cheat_mode() == 1) {
+    auto cm_sym = jak1::intern_from_c("*cheat-mode*");
+    if (cm_sym.offset) {
+      u32 debug_sym = jak1::intern_from_c("debug").offset;
+      if (cm_sym->value != debug_sym) {
+        cm_sym->value = debug_sym;
+      }
+    }
+  }
 }
 
 /**
@@ -1986,6 +2000,14 @@ static void inject_water_state() {
   constexpr u32 WF_SWIM = (1 << 11);
   constexpr u32 WF_WADE = (1 << 10);
 
+  // bottom-height is the REAL dive limit: while diving, the collide-cache
+  // water clip clamps Jak's movement box to (base-height - bottom-height) and
+  // appends two synthetic waterbottom-pat triangles at that height
+  // (collide-cache.gc ~line 205/224) — the engine's own "seabed". When the
+  // host reports the real floor under Jak, we place that plane exactly at the
+  // seabed so Jak lands on it natively; otherwise water is bottomless (1000m).
+  constexpr float DIVE_DEPTH = 4096000.0f;
+
   bool below_swim = jak_y_goal <= (water_goal - swim_flag_threshold);
   bool below_wade = jak_y_goal <= (water_goal - wade_flag_threshold);
 
@@ -1998,24 +2020,39 @@ static void inject_water_state() {
   *(float*)(wc + 64) = wade_flag_threshold;  // wade-height
   *(float*)(wc + 68) = swim_height;          // swim-height
   *(float*)(wc + 72) = water_goal;           // surface-height
-  *(float*)(wc + 76) = 32768.0f;             // bottom-height (deep)
+  // bottom-height: distance from the surface down to the real seabed when the
+  // host reports one, else bottomless. Small clamp keeps it sane if the floor
+  // pokes above the waterline (shore).
+  float bottom_sm64 = s_water_state.bottom.load();
+  float bottom_height = DIVE_DEPTH;
+  if (bottom_sm64 > -10000.0f) {
+    float bottom_goal = bottom_sm64 * UNITS_TO_METERS;
+    bottom_height = water_goal - bottom_goal;
+    if (bottom_height < 0.0f) {
+      bottom_height = 0.0f;
+    }
+  }
+  *(float*)(wc + 76) = bottom_height;        // bottom-height (dive movement clamp)
   *(float*)(wc + 80) = water_goal;           // height
   *(float*)(wc + 84) = 0.0f;                 // real-ocean-offset
   *(float*)(wc + 88) = 0.0f;                 // ocean-offset
   *(float*)(wc + 92) = 0.0f;                 // bob-offset
   *(float*)(wc + 96) = 0.0f;                 // align-offset
 
-  // Override swim-depth when swimming to prevent dive-exit
+  // Keep the inter-frame swim-depth consistent with the deep-water model.
+  // Note: method-10 overwrites bottom[0] with Jak's position and recomputes
+  // swim-depth every frame (water.gc:583/606) — these writes only matter for
+  // readers that run before the target's post.
   if (below_swim) {
-    *(float*)(wc + 100) = 16384.0f;          // swim-depth
+    *(float*)(wc + 100) = DIVE_DEPTH;        // swim-depth
   }
 
-  // Set bottom[0] to Jak's position
+  // Set bottom[0] under Jak, far below the surface
   if (root_ptr != 0 && root_ptr != s7.offset) {
     float* trans = (float*)(g_ee_main_mem + root_ptr + 12);
     float* bottom0 = (float*)(wc + 156);
     bottom0[0] = trans[0];
-    bottom0[1] = trans[1];
+    bottom0[1] = water_goal - DIVE_DEPTH;
     bottom0[2] = trans[2];
     bottom0[3] = 1.0f;
   }
@@ -2073,11 +2110,15 @@ void bridge_tick() {
   // the display vsync callback, but in library mode display is disabled.
   // Without this, VBlank_Handler never fires and the sound system stalls
   // (gFrameNum stops incrementing, VAG clock stops, sound dies after ~1s).
-  iop::LIBRARY_signal_vblank();
+  // With the world-view display live, the real vsync callback already signals
+  // vblank and Gfx::vsync() paces the EE — doing either here would double up.
+  // If the display failed to come up (GL/SDL failure in the host process),
+  // fall back to self-pacing so sound and frame timing still work.
+  if (!g_world_view_enabled || !Gfx::lib_display_live()) {
+    iop::LIBRARY_signal_vblank();
 
-  // Throttle the GOAL runtime to ~60fps — without display/vsync it runs uncapped.
-  // We measure wall-clock time since the last tick and sleep for the remainder of 16.67ms.
-  {
+    // Throttle the GOAL runtime to ~60fps — without display/vsync it runs uncapped.
+    // We measure wall-clock time since the last tick and sleep for the remainder of 16.67ms.
     using clock = std::chrono::steady_clock;
     static auto last_tick = clock::now();
     constexpr auto FRAME_TIME = std::chrono::microseconds(16667);  // 60fps

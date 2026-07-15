@@ -64,10 +64,17 @@ CollisionState& get_collision_state();
 
 struct WaterState {
   std::atomic<float> height{-11000.0f};  // SM64 units; -11000 = no water
+  std::atomic<float> bottom{-11000.0f};  // SM64 units; seabed under Jak; -11000 = none
 };
 
 WaterState& get_water_state();
 void set_water_level(float height);
+void set_water_bottom(float height);
+
+/* Debug fly: when enabled, force *cheat-mode* = 'debug every frame so Jak's
+ * R2 debug flying works (host must also send L2/R2 in its pad mapping). */
+void set_force_cheat_mode(int enabled);
+int get_force_cheat_mode();
 
 struct PlatformRiderState {
   std::atomic<bool> on_platform{false};
@@ -224,6 +231,13 @@ void initialize_bridge();
  * Returns the exit status, or -1 if exec_runtime couldn't be resolved.
  */
 int launch_runtime_headless(const std::string& game_data_path);
+
+/**
+ * World-view: when set before launch, the runtime boots with the real gk
+ * renderer running into a small hidden window whose framebuffer the host
+ * can poll via jak_get_world_frame(). Must be set before jak_global_init.
+ */
+extern bool g_world_view_enabled;
 
 /**
  * Called once per GOAL frame (from the EE thread) to:

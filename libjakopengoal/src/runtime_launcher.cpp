@@ -16,6 +16,10 @@
 #include "common/util/FileUtil.h"
 #include "game/runtime.h"
 
+#ifndef RUNTIME_HEADLESS
+#include "game/graphics/gfx.h"
+#endif
+
 namespace jak_bridge {
 
 int launch_runtime_headless(const std::string& game_data_path) {
@@ -29,6 +33,16 @@ int launch_runtime_headless(const std::string& game_data_path) {
   GameLaunchOptions options;
   options.game_version = GameVersion::Jak1;
   options.disable_display = true;  // No window - headless mode
+
+#ifndef RUNTIME_HEADLESS
+  // World-view: boot the real gk renderer into a small hidden window so the
+  // host can poll the framebuffer (jak_get_world_frame).
+  if (g_world_view_enabled) {
+    options.disable_display = false;
+    Gfx::g_lib_hidden_display = true;
+    lg::info("[libjakopengoal] World-view enabled — booting with hidden display");
+  }
+#endif
 
   // Build argv for the GOAL runtime
   const char* argv[] = {"libjakopengoal", "-boot", "-fakeiso", "-debug", "-lib-jak"};

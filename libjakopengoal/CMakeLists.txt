@@ -71,8 +71,11 @@ target_include_directories(jakopengoal
     PRIVATE ${PROJECT_SOURCE_DIR}/third-party/fmt/include
 )
 
-# Link against the headless runtime (no graphics/display, safe for DLL loading in Blender)
-target_link_libraries(jakopengoal PRIVATE runtime_headless common fmt)
+# Link against the full runtime (graphics included) so the world-view can boot
+# the real gk renderer into a hidden window. Blender in-process loading is no
+# longer a concern for this DLL — Blender uses jakopengoal_thin + jak_server,
+# which stay on runtime_headless.
+target_link_libraries(jakopengoal PRIVATE runtime common fmt)
 if(WIN32)
     target_link_libraries(jakopengoal PRIVATE mman)
 else()

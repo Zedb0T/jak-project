@@ -309,6 +309,48 @@ JAK_LIB_FN void jak_give_eco(int32_t jak_id, int32_t eco_type);
  */
 JAK_LIB_FN void jak_set_water_level(float height);
 
+/**
+ * Set the seabed height under Jak (SM64/render units). While diving, the
+ * engine places its native waterbottom collision plane at this height, so
+ * Jak stops on (and can rest at) the real floor instead of passing through.
+ * Set to -11000 (or lower) when no floor is known — water becomes bottomless.
+ */
+JAK_LIB_FN void jak_set_water_bottom(float height);
+
+/**
+ * Enable/disable Jak's debug flying. While enabled, the GOAL side forces
+ * *cheat-mode* = 'debug each frame, which makes holding R2 lift Jak into
+ * debug flight (steer with the stick, release to fall). The host must also
+ * deliver L2/R2 in its JakInputs button mapping for this to trigger.
+ */
+JAK_LIB_FN void jak_set_debug_fly(int32_t enabled);
+
+/* -------------------------------------------------------------------------- */
+/*  World view (gk framebuffer capture)                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Enable the world view: the GOAL runtime boots with its real renderer
+ * drawing the actual Jak game world into a small hidden window, and the
+ * host can poll the framebuffer with jak_get_world_frame().
+ * MUST be called before jak_global_init() — the display decision is made
+ * at boot and cannot be changed afterwards. Costs GPU time when enabled.
+ */
+JAK_LIB_FN void jak_set_world_view(int32_t enabled);
+
+/**
+ * Copy the most recent gk world frame into dst as RGBA8 with bottom-up
+ * rows (OpenGL orientation), tightly packed (width*height*4 bytes).
+ * out_width/out_height receive the frame dimensions.
+ * Returns a monotonically increasing frame counter (>=1), 0 if no frame
+ * has been rendered yet (or world view is disabled), or -1 if dst_max_bytes
+ * is too small for the frame.
+ */
+JAK_LIB_FN int32_t jak_get_world_frame(uint8_t* dst,
+                                       int32_t dst_max_bytes,
+                                       int32_t* out_width,
+                                       int32_t* out_height);
+
 /* -------------------------------------------------------------------------- */
 /*  Collision queries (for host engine use)                                   */
 /* -------------------------------------------------------------------------- */

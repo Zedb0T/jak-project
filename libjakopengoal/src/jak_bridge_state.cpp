@@ -24,6 +24,9 @@ uint8_t* s_texture_output = nullptr;
 WaterState s_water_state;
 PlatformRiderState s_platform_rider_state;
 
+/* World-view: boot with the real gk renderer into a hidden window. */
+bool g_world_view_enabled = false;
+
 /* Accessors */
 CollisionState& get_collision_state() { return s_collision_state; }
 PadState& get_pad_state() { return s_pad_state; }
@@ -35,6 +38,11 @@ TextureAtlasInfo& get_texture_atlas_info() { return s_texture_atlas_info; }
 
 WaterState& get_water_state() { return s_water_state; }
 void set_water_level(float height) { s_water_state.height.store(height); }
+void set_water_bottom(float height) { s_water_state.bottom.store(height); }
+
+static std::atomic<int> s_force_cheat_mode{0};
+void set_force_cheat_mode(int enabled) { s_force_cheat_mode.store(enabled); }
+int get_force_cheat_mode() { return s_force_cheat_mode.load(); }
 
 PlatformRiderState& get_platform_rider_state() { return s_platform_rider_state; }
 

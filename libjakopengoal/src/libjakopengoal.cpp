@@ -38,6 +38,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 #include "common/versions/versions.h"
 
 #include "game/common/game_common_types.h"
+#include "game/graphics/gfx.h"
 #include "game/kernel/common/kboot.h"
 
 // NOTE: We intentionally do NOT #include "game/runtime.h" here.
@@ -451,6 +452,40 @@ JAK_LIB_FN void jak_give_eco(int32_t jak_id, int32_t eco_type) {
 
 JAK_LIB_FN void jak_set_water_level(float height) {
   jak_bridge::set_water_level(height);
+}
+
+JAK_LIB_FN void jak_set_water_bottom(float height) {
+  jak_bridge::set_water_bottom(height);
+}
+
+JAK_LIB_FN void jak_set_debug_fly(int32_t enabled) {
+  jak_bridge::set_force_cheat_mode(enabled ? 1 : 0);
+  lg::info("[libjakopengoal] Debug fly {}", enabled ? "enabled" : "disabled");
+}
+
+JAK_LIB_FN void jak_set_world_view(int32_t enabled) {
+  if (s_initialized.load()) {
+    lg::warn("[libjakopengoal] jak_set_world_view called after init — ignored");
+    return;
+  }
+  jak_bridge::g_world_view_enabled = enabled != 0;
+  lg::info("[libjakopengoal] World view {}", enabled ? "enabled" : "disabled");
+}
+
+JAK_LIB_FN int32_t jak_get_world_frame(uint8_t* dst,
+                                       int32_t dst_max_bytes,
+                                       int32_t* out_width,
+                                       int32_t* out_height) {
+  if (!jak_bridge::g_world_view_enabled) {
+    if (out_width) {
+      *out_width = 0;
+    }
+    if (out_height) {
+      *out_height = 0;
+    }
+    return 0;
+  }
+  return Gfx::lib_get_world_frame(dst, dst_max_bytes, out_width, out_height);
 }
 
 JAK_LIB_FN void jak_set_platform_vel(bool on_platform, float vx, float vy, float vz) {
