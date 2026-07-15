@@ -123,6 +123,19 @@ void register_vsync_callback(std::function<void()> f);
 void clear_vsync_callback();
 u32 sync_path();
 
+// libjakopengoal world-view: when true, the display window is created hidden
+// and small, fullscreen requests are ignored, and each rendered game frame is
+// copied into a shared buffer that the host engine can poll.
+extern bool g_lib_hidden_display;
+// True once the renderer and main display are actually up — used by the
+// bridge to decide whether real vsync paces the EE or it must self-pace.
+bool lib_display_live();
+void lib_store_world_frame(const u8* rgba, int w, int h);
+// Copies the latest frame into dst (RGBA8, bottom-up rows, w*h*4 bytes).
+// Returns the frame counter (monotonic, starts at 1), 0 if no frame yet,
+// or -1 if dst is too small. out_w/out_h always receive the frame size.
+s32 lib_get_world_frame(u8* dst, s32 max_bytes, s32* out_w, s32* out_h);
+
 // matching enum in kernel-defs.gc !!
 enum class RendererTreeType { NONE = 0, TFRAG3 = 1, TIE3 = 2, INVALID };
 bool CollisionRendererGetMask(GfxGlobalSettings::CollisionRendererMode mode, s64 mask_id);

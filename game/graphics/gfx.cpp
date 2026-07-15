@@ -6,8 +6,11 @@
 #include "gfx.h"
 
 #include <cstdio>
+#include <cstring>
 #include <functional>
+#include <mutex>
 #include <utility>
+#include <vector>
 
 #include "display.h"
 
@@ -28,6 +31,47 @@ namespace Gfx {
 std::function<void()> vsync_callback;
 GfxGlobalSettings g_global_settings;
 game_settings::DebugSettings g_debug_settings;
+
+// libjakopengoal world-view capture (see gfx.h)
+bool g_lib_hidden_display = false;
+
+namespace {
+std::mutex g_world_frame_mutex;
+std::vector<u8> g_world_frame_pixels;
+int g_world_frame_w = 0;
+int g_world_frame_h = 0;
+s32 g_world_frame_counter = 0;
+}  // namespace
+
+bool lib_display_live() {
+  return GetCurrentRenderer() != nullptr && Display::GetMainDisplay() != nullptr;
+}
+
+void lib_store_world_frame(const u8* rgba, int w, int h) {
+  std::lock_guard<std::mutex> lock(g_world_frame_mutex);
+  g_world_frame_pixels.assign(rgba, rgba + (size_t)w * h * 4);
+  g_world_frame_w = w;
+  g_world_frame_h = h;
+  g_world_frame_counter++;
+}
+
+s32 lib_get_world_frame(u8* dst, s32 max_bytes, s32* out_w, s32* out_h) {
+  std::lock_guard<std::mutex> lock(g_world_frame_mutex);
+  if (out_w) {
+    *out_w = g_world_frame_w;
+  }
+  if (out_h) {
+    *out_h = g_world_frame_h;
+  }
+  if (g_world_frame_counter == 0) {
+    return 0;
+  }
+  if ((s32)g_world_frame_pixels.size() > max_bytes) {
+    return -1;
+  }
+  memcpy(dst, g_world_frame_pixels.data(), g_world_frame_pixels.size());
+  return g_world_frame_counter;
+}
 
 const GfxRendererModule* GetRenderer(GfxPipeline pipeline) {
   switch (pipeline) {

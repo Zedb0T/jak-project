@@ -9,6 +9,12 @@
 
 #include "fmt/format.h"
 
+// libjakopengoal world-view flag (defined in game/graphics/gfx.cpp);
+// declared here directly to avoid a circular include with gfx.h.
+namespace Gfx {
+extern bool g_lib_hidden_display;
+}
+
 DisplayManager::DisplayManager(SDL_Window* window) : m_window(window) {
   prof().instant_event("ROOT");
   {
@@ -230,6 +236,11 @@ void DisplayManager::enqueue_set_window_display_mode(
 void DisplayManager::set_display_mode(game_settings::DisplaySettings::DisplayMode mode,
                                       const int window_width,
                                       const int window_height) {
+  // libjakopengoal world-view: the hidden capture window must stay hidden and
+  // small — ignore fullscreen/resize requests from settings or GOAL.
+  if (Gfx::g_lib_hidden_display) {
+    return;
+  }
   lg::info("[DISPLAY] Setting to display mode: {}, with window_size: {},{}", static_cast<int>(mode),
            window_width, window_height);
   // https://wiki.libsdl.org/SDL3/SDL_SetWindowFullscreen

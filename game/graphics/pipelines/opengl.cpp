@@ -6,6 +6,7 @@
 #include "opengl.h"
 
 #include <condition_variable>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -43,6 +44,58 @@
 #include "common/util/string_util.h"
 
 #include "third-party/stb_image/stb_image.h"
+
+#ifdef _WIN32
+// From SDL3/SDL_main.h — declared directly to avoid that header's main()
+// handling macros. Registers a distinct Win32 window class for SDL windows.
+extern "C" bool SDL_RegisterApp(const char* name, Uint32 style, void* hInst);
+
+/*!
+ * SM64-Jak first-run setup window. Shown when gk.exe is running from a
+ * mod-launcher install that has the SM64-Jak sources but no built game yet
+ * (gk main.cpp auto-launches the game once it exists). Always visible —
+ * independent of the debug gui toggle.
+ */
+static void draw_sm64jak_setup_window() {
+  static int s_state = 0;  // 0 = not checked, 1 = show, -1 = hidden
+  static std::string s_root;
+  if (s_state == 0) {
+    fs::path exe_dir = fs::path(file_util::get_current_executable_path()).parent_path();
+    if (fs::exists(exe_dir / "sm64-jak") &&
+        !fs::exists(exe_dir / "sm64-jak" / "build" / "us_pc" / "sm64.us.f3dex2e.exe")) {
+      s_root = exe_dir.string();
+      s_state = 1;
+    } else {
+      s_state = -1;
+    }
+  }
+  if (s_state != 1) {
+    return;
+  }
+  ImGui::SetNextWindowPos(ImVec2(40.0f, 60.0f), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(420.0f, 0.0f), ImGuiCond_FirstUseEver);
+  bool open = true;
+  if (ImGui::Begin("SM64-Jak Setup", &open)) {
+    ImGui::TextWrapped("The Jak side is installed, but SM64-Jak itself has not been built yet.");
+    ImGui::TextWrapped(
+        "Click below to run Setup (you will need your own Super Mario 64 US ROM). "
+        "After setup, this launcher starts SM64-Jak directly.");
+    ImGui::Spacing();
+    if (ImGui::Button("Run SM64-Jak Setup")) {
+      std::string cmd = "start \"SM64-Jak Setup\" /D \"" + s_root + "\" \"" + s_root + "\\Setup.bat\"";
+      std::system(cmd.c_str());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Not now")) {
+      open = false;
+    }
+  }
+  ImGui::End();
+  if (!open) {
+    s_state = -1;
+  }
+}
+#endif
 
 constexpr bool run_dma_copy = false;
 
@@ -104,10 +157,21 @@ static int gl_init(GfxGlobalSettings& settings) {
     auto p = scoped_prof("startup::sdl::init_sdl");
     // remove SDL garbage from hooking signal handler.
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+#ifdef _WIN32
+    if (Gfx::g_lib_hidden_display) {
+      // libjakopengoal world-view: the host engine (SM64) has SDL2 in the same
+      // process, and both SDL2 and SDL3 register the Win32 window class
+      // "SDL_app". Creating our window with SDL2's class fails with
+      // "The parameter is incorrect" — register a distinct class name first.
+      SDL_RegisterApp("gkJakWorldView", 0, nullptr);
+    }
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO)) {
       sdl_util::log_error("Could not initialize SDL, exiting");
-      dialogs::create_error_message_dialog("Critical Error Encountered",
-                                           "Could not initialize SDL, exiting");
+      if (!Gfx::g_lib_hidden_display) {
+        dialogs::create_error_message_dialog("Critical Error Encountered",
+                                             "Could not initialize SDL, exiting");
+      }
       return 1;
     }
   }
@@ -218,16 +282,25 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
   // Setup the window
   prof().instant_event("ROOT");
   prof().begin_event("startup::sdl::create_window");
-  SDL_Window* window =
-      SDL_CreateWindow(title, width, height,
-                       SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+  SDL_WindowFlags window_flags =
+      SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+  if (Gfx::g_lib_hidden_display) {
+    // libjakopengoal world-view: render offscreen into a small hidden window,
+    // the host engine reads the framebuffer back instead of showing this.
+    window_flags |= SDL_WINDOW_HIDDEN;
+    width = 480;
+    height = 360;
+  }
+  SDL_Window* window = SDL_CreateWindow(title, width, height, window_flags);
   prof().end_event();
   if (!window) {
     sdl_util::log_error("gl_make_display failed - Could not create display window");
-    dialogs::create_error_message_dialog(
-        "Critical Error Encountered",
-        "Unable to create OpenGL window.\nOpenGOAL requires OpenGL 4.3.\nEnsure your GPU "
-        "supports this and your drivers are up to date.");
+    if (!Gfx::g_lib_hidden_display) {
+      dialogs::create_error_message_dialog(
+          "Critical Error Encountered",
+          "Unable to create OpenGL window.\nOpenGOAL requires OpenGL 4.3.\nEnsure your GPU "
+          "supports this and your drivers are up to date.");
+    }
     return NULL;
   }
 
@@ -237,10 +310,12 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
   prof().end_event();
   if (!gl_context) {
     sdl_util::log_error("gl_make_display failed - Could not create OpenGL Context");
-    dialogs::create_error_message_dialog(
-        "Critical Error Encountered",
-        "Unable to create OpenGL context.\nOpenGOAL requires OpenGL 4.3.\nEnsure your GPU "
-        "supports this and your drivers are up to date.");
+    if (!Gfx::g_lib_hidden_display) {
+      dialogs::create_error_message_dialog(
+          "Critical Error Encountered",
+          "Unable to create OpenGL context.\nOpenGOAL requires OpenGL 4.3.\nEnsure your GPU "
+          "supports this and your drivers are up to date.");
+    }
     return NULL;
   }
 
@@ -248,10 +323,12 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
     auto p = scoped_prof("startup::sdl::assign_context");
     if (!SDL_GL_MakeCurrent(window, gl_context)) {
       sdl_util::log_error("gl_make_display failed - Could not associated context with window");
-      dialogs::create_error_message_dialog("Critical Error Encountered",
-                                           "Unable to create OpenGL window with context.\nOpenGOAL "
-                                           "requires OpenGL 4.3.\nEnsure your GPU "
-                                           "supports this and your drivers are up to date.");
+      if (!Gfx::g_lib_hidden_display) {
+        dialogs::create_error_message_dialog("Critical Error Encountered",
+                                             "Unable to create OpenGL window with context.\nOpenGOAL "
+                                             "requires OpenGL 4.3.\nEnsure your GPU "
+                                             "supports this and your drivers are up to date.");
+      }
       return NULL;
     }
   }
@@ -586,11 +663,30 @@ void GLDisplay::render() {
     }
   }
 
+  // libjakopengoal world-view: read the finished game frame back for the host
+  // engine (before imgui is drawn on top). Rows come back bottom-up, which
+  // matches GL texture orientation on the host side.
+  if (Gfx::g_lib_hidden_display && fbuf_w > 0 && fbuf_h > 0) {
+    auto p = scoped_prof("world-view-readback");
+    static std::vector<u8> readback;
+    readback.resize((size_t)fbuf_w * fbuf_h * 4);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, fbuf_w, fbuf_h, GL_RGBA, GL_UNSIGNED_BYTE, readback.data());
+    Gfx::lib_store_world_frame(readback.data(), fbuf_w, fbuf_h);
+  }
+
   // render debug
   if (is_imgui_visible()) {
     auto p = scoped_prof("debug-gui");
     g_gfx_data->debug_gui.draw(g_gfx_data->dma_copier.get_last_result().stats);
   }
+#ifdef _WIN32
+  // SM64-Jak first-run setup prompt (mod-launcher installs only)
+  if (!Gfx::g_lib_hidden_display) {
+    draw_sm64jak_setup_window();
+  }
+#endif
   {
     auto p = scoped_prof("imgui-render");
     ImGui::Render();
