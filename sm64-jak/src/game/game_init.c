@@ -24,6 +24,9 @@
 #ifdef BETTERCAMERA
 #include "bettercamera.h"
 #endif
+#ifdef JAKOPENGOAL
+#include "pc/jak/jakopengoal.h"
+#endif
 
 // FIXME: I'm not sure all of these variables belong in this file, but I don't
 // know of a good way to split them
@@ -594,6 +597,11 @@ void game_loop_one_iteration(void) {
     audio_game_loop_tick();
     config_gfx_pool();
     read_controller_inputs();
+#ifdef JAKOPENGOAL
+    /* While the gk-focus key (W) is held, controller input goes to the Jak
+     * world only — blank it out for SM64 so Mario/Jak don't react. */
+    jak_sm64_filter_input();
+#endif
     levelCommandAddr = level_script_execute(levelCommandAddr);
     display_and_vsync();
 

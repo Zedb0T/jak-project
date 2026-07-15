@@ -323,7 +323,7 @@ ifeq ($(DISCORDRPC),1)
 endif
 
 ifeq ($(JAKOPENGOAL),1)
-  SRC_DIRS += src/pc/jak
+  SRC_DIRS += src/pc/jak src/pc/jak/imgui
 endif
 
 BIN_DIRS := bin bin/$(VERSION)

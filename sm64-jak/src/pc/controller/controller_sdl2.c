@@ -148,6 +148,19 @@ static inline void update_button(const int i, const bool new) {
     if (pressed) last_joybutton = i;
 }
 
+#ifdef JAKOPENGOAL
+/* Close the current pad so the next read reopens with the (possibly changed)
+ * controller override. Called by jak_controller_select(). */
+void controller_sdl2_reopen(void) {
+    if (sdl_cntrl != NULL) {
+        if (sdl_haptic != NULL) SDL_HapticClose(sdl_haptic);
+        SDL_GameControllerClose(sdl_cntrl);
+        sdl_cntrl = NULL;
+        sdl_haptic = NULL;
+    }
+}
+#endif
+
 static void controller_sdl_read(OSContPad *pad) {
     if (!init_ok) {
         return;
@@ -180,9 +193,17 @@ static void controller_sdl_read(OSContPad *pad) {
     }
 
     if (sdl_cntrl == NULL) {
-        /* JAK_CONTROLLER_INDEX env var override */
+        /* JAK_CONTROLLER_INDEX env var override (or runtime swap from the
+         * jakopengoal ImGui Controllers menu, which takes priority) */
         const char *env = getenv("JAK_CONTROLLER_INDEX");
         int override_idx = (env && *env) ? atoi(env) : -1;
+#ifdef JAKOPENGOAL
+        {
+            extern int jak_controller_override_index(void);
+            int rt = jak_controller_override_index();
+            if (rt >= 0) override_idx = rt;
+        }
+#endif
         if (override_idx >= 0 && override_idx < SDL_NumJoysticks()
             && SDL_IsGameController(override_idx)) {
             sdl_cntrl = SDL_GameControllerOpen(override_idx);

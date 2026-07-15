@@ -148,12 +148,22 @@ struct JakTextureInfo {
 };
 
 /* Button flag constants */
-#define JAK_BUTTON_X         (1 << 14)
-#define JAK_BUTTON_SQUARE    (1 << 15)
-#define JAK_BUTTON_CIRCLE    (1 << 13)
-#define JAK_BUTTON_TRIANGLE  (1 << 12)
+#define JAK_BUTTON_SELECT    (1 << 0)
+#define JAK_BUTTON_L3        (1 << 1)
+#define JAK_BUTTON_R3        (1 << 2)
+#define JAK_BUTTON_START     (1 << 3)
+#define JAK_BUTTON_DPAD_UP   (1 << 4)
+#define JAK_BUTTON_DPAD_RIGHT (1 << 5)
+#define JAK_BUTTON_DPAD_DOWN (1 << 6)
+#define JAK_BUTTON_DPAD_LEFT (1 << 7)
+#define JAK_BUTTON_L2        (1 << 8)
+#define JAK_BUTTON_R2        (1 << 9)
 #define JAK_BUTTON_L1        (1 << 10)
 #define JAK_BUTTON_R1        (1 << 11)
+#define JAK_BUTTON_TRIANGLE  (1 << 12)
+#define JAK_BUTTON_CIRCLE    (1 << 13)
+#define JAK_BUTTON_X         (1 << 14)
+#define JAK_BUTTON_SQUARE    (1 << 15)
 
 #define JAK_TEXTURE_WIDTH  1024
 #define JAK_TEXTURE_HEIGHT 512
@@ -179,7 +189,11 @@ typedef void    (*pfn_jak_set_position)(int32_t, float, float, float);
 typedef bool    (*pfn_jak_get_bone_data)(struct JakBoneData*);
 typedef struct JakTextureInfo (*pfn_jak_get_texture_info)(void);
 typedef void    (*pfn_jak_set_water_level)(float);
+typedef void    (*pfn_jak_set_water_bottom)(float);
+typedef void    (*pfn_jak_set_debug_fly)(int32_t);
 typedef void    (*pfn_jak_set_platform_vel)(bool, float, float, float);
+typedef void    (*pfn_jak_set_world_view)(int32_t);
+typedef int32_t (*pfn_jak_get_world_frame)(uint8_t*, int32_t, int32_t*, int32_t*);
 
 /* ---- Module state ---- */
 
@@ -206,7 +220,23 @@ static pfn_jak_set_position        fn_jak_set_position = NULL;
 static pfn_jak_get_bone_data       fn_jak_get_bone_data = NULL;
 static pfn_jak_get_texture_info    fn_jak_get_texture_info = NULL;
 static pfn_jak_set_water_level     fn_jak_set_water_level = NULL;
+static pfn_jak_set_water_bottom    fn_jak_set_water_bottom = NULL;
+static pfn_jak_set_debug_fly       fn_jak_set_debug_fly = NULL;
+
+/* Debug fly (ImGui checkbox): hold R2 to lift Jak into debug flight.
+ * Sends L2/R2 to the Jak world and forces GOAL cheat-mode while on. */
+bool g_jak_debug_fly = false;
 static pfn_jak_set_platform_vel   fn_jak_set_platform_vel = NULL;
+static pfn_jak_set_world_view      fn_jak_set_world_view = NULL;
+static pfn_jak_get_world_frame     fn_jak_get_world_frame = NULL;
+
+/* gk world picture-in-picture (bottom-left corner), two flags:
+ * - g_jak_world_view: boot switch. Decided at DLL init: if false, the gk
+ *   renderer never starts and the PiP can never be shown this run.
+ * - g_jak_world_view_visible: overlay switch. Runtime-toggleable from the
+ *   ImGui menu (Left Alt) / debug menu. Defaults to hidden. */
+bool g_jak_world_view = true;
+bool g_jak_world_view_visible = false;
 
 /* Geometry buffers (heap-allocated) */
 static float *s_geo_position = NULL;
@@ -351,8 +381,16 @@ static bool resolve_functions(void) {
     if (!fn_jak_get_texture_info) JAK_LOG("jak_get_texture_info not available (optional)");
     fn_jak_set_water_level = (pfn_jak_set_water_level)JAK_DLSYM(s_dll_handle, "jak_set_water_level");
     if (!fn_jak_set_water_level) JAK_LOG("jak_set_water_level not available (optional)");
+    fn_jak_set_water_bottom = (pfn_jak_set_water_bottom)JAK_DLSYM(s_dll_handle, "jak_set_water_bottom");
+    if (!fn_jak_set_water_bottom) JAK_LOG("jak_set_water_bottom not available (optional)");
+    fn_jak_set_debug_fly = (pfn_jak_set_debug_fly)JAK_DLSYM(s_dll_handle, "jak_set_debug_fly");
+    if (!fn_jak_set_debug_fly) JAK_LOG("jak_set_debug_fly not available (optional)");
     fn_jak_set_platform_vel = (pfn_jak_set_platform_vel)JAK_DLSYM(s_dll_handle, "jak_set_platform_vel");
     if (!fn_jak_set_platform_vel) JAK_LOG("jak_set_platform_vel not available (optional)");
+    fn_jak_set_world_view = (pfn_jak_set_world_view)JAK_DLSYM(s_dll_handle, "jak_set_world_view");
+    if (!fn_jak_set_world_view) JAK_LOG("jak_set_world_view not available (optional)");
+    fn_jak_get_world_frame = (pfn_jak_get_world_frame)JAK_DLSYM(s_dll_handle, "jak_get_world_frame");
+    if (!fn_jak_get_world_frame) JAK_LOG("jak_get_world_frame not available (optional)");
     JAK_LOG("All function pointers resolved OK");
     return true;
 }
@@ -578,28 +616,164 @@ static void log_detected_controllers(void) {
     }
 }
 
+/* Runtime controller selection (ImGui Controllers section). Takes priority
+ * over the JAK_CONTROLLER_INDEX env var once set. */
+static int s_controller_override = -1;
+static int s_sdl_pad_idx = -1;  /* device index the current s_sdl_pad was opened with */
+
+int jak_controller_override_index(void) {
+    if (s_controller_override >= 0) return s_controller_override;
+    return get_controller_index_override();
+}
+
 static SDL_GameController *get_sdl_gamepad(void) {
     if (s_sdl_pad && SDL_GameControllerGetAttached(s_sdl_pad)) return s_sdl_pad;
     s_sdl_pad = NULL;
+    s_sdl_pad_idx = -1;
 
     log_detected_controllers();
 
-    /* If JAK_CONTROLLER_INDEX is set, try that index first */
-    int override_idx = get_controller_index_override();
+    /* Runtime override / JAK_CONTROLLER_INDEX env var first */
+    int override_idx = jak_controller_override_index();
     if (override_idx >= 0 && override_idx < SDL_NumJoysticks()
         && SDL_IsGameController(override_idx)) {
         s_sdl_pad = SDL_GameControllerOpen(override_idx);
-        if (s_sdl_pad) return s_sdl_pad;
+        if (s_sdl_pad) {
+            s_sdl_pad_idx = override_idx;
+            return s_sdl_pad;
+        }
     }
 
     /* Fallback: first valid controller */
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
             s_sdl_pad = SDL_GameControllerOpen(i);
-            if (s_sdl_pad) break;
+            if (s_sdl_pad) {
+                s_sdl_pad_idx = i;
+                break;
+            }
         }
     }
     return s_sdl_pad;
+}
+
+/* ---- Controller list/swap API (used by the ImGui overlay) ---- */
+
+int jak_controller_count(void) {
+    return SDL_NumJoysticks();
+}
+
+const char *jak_controller_name(int idx) {
+    const char *n = SDL_IsGameController(idx) ? SDL_GameControllerNameForIndex(idx)
+                                              : SDL_JoystickNameForIndex(idx);
+    return n ? n : "(unknown)";
+}
+
+bool jak_controller_is_gamepad(int idx) {
+    return SDL_IsGameController(idx);
+}
+
+int jak_controller_active(void) {
+    /* Make sure the pad is opened/refreshed before reporting */
+    get_sdl_gamepad();
+    return s_sdl_pad_idx;
+}
+
+void jak_controller_select(int idx) {
+    if (idx < 0 || idx >= SDL_NumJoysticks() || !SDL_IsGameController(idx)) return;
+    s_controller_override = idx;
+
+    /* Close our pad — get_sdl_gamepad reopens with the new index next call */
+    if (s_sdl_pad) {
+        SDL_GameControllerClose(s_sdl_pad);
+        s_sdl_pad = NULL;
+        s_sdl_pad_idx = -1;
+    }
+
+    /* Close SM64's own pad too so gameplay input follows the swap */
+    extern void controller_sdl2_reopen(void);
+    controller_sdl2_reopen();
+
+    JAK_LOG("Controller switched to index %d (%s)", idx, jak_controller_name(idx));
+}
+
+/* ---- gk-focus mode: hold W to send raw pad input to the Jak world ---- */
+
+bool jak_gk_focus_active(void) {
+    if (!s_active || s_jak_id < 0) return false;
+    const Uint8 *keys = SDL_GetKeyboardState(NULL);
+    return keys && keys[SDL_SCANCODE_W];
+}
+
+/* Called from game_loop_one_iteration right after read_controller_inputs:
+ * while gk-focus is held, SM64 must not see any input. */
+void jak_sm64_filter_input(void) {
+    if (!jak_gk_focus_active()) return;
+    for (int i = 0; i < 3; i++) {
+        gControllers[i].rawStickX = 0;
+        gControllers[i].rawStickY = 0;
+        gControllers[i].stickX = 0;
+        gControllers[i].stickY = 0;
+        gControllers[i].stickMag = 0;
+        gControllers[i].buttonDown = 0;
+        gControllers[i].buttonPressed = 0;
+    }
+}
+
+/**
+ * Build raw pad inputs for gk menu navigation (gk-focus mode).
+ * Everything is passed through unmapped: full PS2 button set + raw sticks,
+ * so Jak's pause/progress menus can be driven directly.
+ */
+static void build_gk_focus_inputs(struct JakInputs *inputs) {
+    /* Neutral camera — menus don't use it */
+    inputs->cam_x = 0.0f;
+    inputs->cam_z = -1.0f;
+
+    uint16_t b = 0;
+    SDL_GameController *pad = get_sdl_gamepad();
+    if (pad) {
+        Sint16 lx = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
+        Sint16 ly = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
+        Sint16 rx = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_RIGHTX);
+        Sint16 ry = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_RIGHTY);
+        inputs->stick_x = lx / 32767.0f;
+        inputs->stick_y = -(ly / 32767.0f);   /* SDL Y-down -> PS2 Y-up */
+        inputs->r_stick_x = rx / 32767.0f;
+        inputs->r_stick_y = -(ry / 32767.0f);
+
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_A)) b |= JAK_BUTTON_X;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_B)) b |= JAK_BUTTON_CIRCLE;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_X)) b |= JAK_BUTTON_SQUARE;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_Y)) b |= JAK_BUTTON_TRIANGLE;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_START)) b |= JAK_BUTTON_START;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_BACK)) b |= JAK_BUTTON_SELECT;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_UP)) b |= JAK_BUTTON_DPAD_UP;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) b |= JAK_BUTTON_DPAD_DOWN;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) b |= JAK_BUTTON_DPAD_LEFT;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) b |= JAK_BUTTON_DPAD_RIGHT;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) b |= JAK_BUTTON_L1;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) b |= JAK_BUTTON_R1;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_LEFTSTICK)) b |= JAK_BUTTON_L3;
+        if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_RIGHTSTICK)) b |= JAK_BUTTON_R3;
+        if (SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16384) b |= JAK_BUTTON_L2;
+        if (SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16384) b |= JAK_BUTTON_R2;
+    }
+
+    /* Keyboard fallback while W is held: arrows = d-pad, Enter = X,
+     * Backspace = Triangle, P = Start */
+    const Uint8 *keys = SDL_GetKeyboardState(NULL);
+    if (keys) {
+        if (keys[SDL_SCANCODE_UP]) b |= JAK_BUTTON_DPAD_UP;
+        if (keys[SDL_SCANCODE_DOWN]) b |= JAK_BUTTON_DPAD_DOWN;
+        if (keys[SDL_SCANCODE_LEFT]) b |= JAK_BUTTON_DPAD_LEFT;
+        if (keys[SDL_SCANCODE_RIGHT]) b |= JAK_BUTTON_DPAD_RIGHT;
+        if (keys[SDL_SCANCODE_RETURN]) b |= JAK_BUTTON_X;
+        if (keys[SDL_SCANCODE_BACKSPACE]) b |= JAK_BUTTON_TRIANGLE;
+        if (keys[SDL_SCANCODE_P]) b |= JAK_BUTTON_START;
+    }
+
+    inputs->buttons = b;
 }
 
 /**
@@ -607,6 +781,12 @@ static SDL_GameController *get_sdl_gamepad(void) {
  */
 static void build_jak_inputs(struct JakInputs *inputs) {
     memset(inputs, 0, sizeof(*inputs));
+
+    /* gk-focus mode: raw passthrough for Jak-world menu navigation */
+    if (jak_gk_focus_active()) {
+        build_gk_focus_inputs(inputs);
+        return;
+    }
 
     if (!gPlayer1Controller) return;
     struct Controller *ctrl = gPlayer1Controller;
@@ -638,6 +818,22 @@ static void build_jak_inputs(struct JakInputs *inputs) {
             jak_buttons |= JAK_BUTTON_CIRCLE;
         if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_Y))
             jak_buttons |= JAK_BUTTON_TRIANGLE;
+        /* Debug fly: triggers -> L2/R2 (hold R2 to fly) */
+        if (g_jak_debug_fly) {
+            if (SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16384)
+                jak_buttons |= JAK_BUTTON_L2;
+            if (SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16384)
+                jak_buttons |= JAK_BUTTON_R2;
+        }
+    }
+
+    /* Propagate debug-fly toggle to the GOAL side (forces cheat-mode) */
+    {
+        static bool s_debug_fly_prev = false;
+        if (g_jak_debug_fly != s_debug_fly_prev) {
+            if (fn_jak_set_debug_fly) fn_jak_set_debug_fly(g_jak_debug_fly ? 1 : 0);
+            s_debug_fly_prev = g_jak_debug_fly;
+        }
     }
 
     inputs->buttons = jak_buttons;
@@ -680,6 +876,12 @@ static void deferred_init(void) {
     }
 
     JAK_LOG("Booting GOAL runtime (in-process) with data: %s", jak_path);
+
+    /* World view must be requested before init — it's a boot-time decision */
+    if (fn_jak_set_world_view) {
+        fn_jak_set_world_view(g_jak_world_view ? 1 : 0);
+        JAK_LOG("World view (gk PiP): %s", g_jak_world_view ? "enabled" : "disabled");
+    }
 
     int32_t ret = fn_jak_global_init(jak_path, s_texture_atlas);
     if (ret < 0) {
@@ -857,6 +1059,7 @@ void jak_sm64_update(void) {
             /* Reset water level so Jak doesn't swim in the new area */
             if (fn_jak_set_water_level) {
                 fn_jak_set_water_level(-11000.0f);
+                if (fn_jak_set_water_bottom) fn_jak_set_water_bottom(-11000.0f);
                 JAK_LOG("  Reset water level for area transition");
             }
 
@@ -1109,6 +1312,23 @@ void jak_sm64_update(void) {
     if (fn_jak_set_water_level) {
         f32 water_y = find_water_level(s_jak_state.position[0], s_jak_state.position[2]);
         fn_jak_set_water_level(water_y);
+
+        /* Seabed under Jak: probe SM64's floor from just above his position so
+         * the GOAL engine can place its native waterbottom plane there. Only
+         * meaningful when there's water; -11000 = bottomless. */
+        if (fn_jak_set_water_bottom) {
+            f32 bottom_y = -11000.0f;
+            if (water_y > -10000.0f) {
+                struct Surface *floor = NULL;
+                f32 floor_y = find_floor(s_jak_state.position[0],
+                                         s_jak_state.position[1] + 50.0f,
+                                         s_jak_state.position[2], &floor);
+                if (floor != NULL && floor_y > -10000.0f) {
+                    bottom_y = floor_y;
+                }
+            }
+            fn_jak_set_water_bottom(bottom_y);
+        }
     }
 
     /* --- Punch-to-grab: let Jak grab SM64 objects during first 0.25s of punch --- */
@@ -1377,8 +1597,130 @@ static void upload_texture_atlas(void) {
     JAK_LOG("  GL texture ID = %u", s_jak_texture_id);
 }
 
+/* ---- gk world picture-in-picture (bottom-left corner) ---- */
+
+#define WORLD_VIEW_MAX_BYTES (1280 * 960 * 4)
+
+static void jak_render_world_view(void) {
+    if (!fn_jak_get_world_frame) return;
+
+    static uint8_t *pixels = NULL;
+    static GLuint tex = 0;
+    static int32_t last_frame = 0;
+    static int32_t tex_w = 0, tex_h = 0;
+
+    if (!pixels) {
+        pixels = (uint8_t*)malloc(WORLD_VIEW_MAX_BYTES);
+        if (!pixels) return;
+    }
+
+    int32_t w = 0, h = 0;
+    int32_t frame = fn_jak_get_world_frame(pixels, WORLD_VIEW_MAX_BYTES, &w, &h);
+    if (frame > 0 && frame != last_frame && w > 0 && h > 0) {
+        if (!tex) {
+            glGenTextures(1, &tex);
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, tex);
+        }
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        if (w != tex_w || h != tex_h) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+            tex_w = w;
+            tex_h = h;
+        } else {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        }
+        last_frame = frame;
+    }
+
+    if (!tex || tex_w <= 0 || tex_h <= 0) return;  /* no frame captured yet */
+
+    /* ---- Save GL state ---- */
+    GLint prev_program = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prev_program);
+    GLboolean prev_depth_test = glIsEnabled(GL_DEPTH_TEST);
+    GLboolean prev_blend = glIsEnabled(GL_BLEND);
+    GLboolean prev_cull = glIsEnabled(GL_CULL_FACE);
+    GLboolean prev_tex2d = glIsEnabled(GL_TEXTURE_2D);
+    GLint prev_tex_binding = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex_binding);
+    GLint prev_tex_env = 0;
+    glGetTexEnviv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, &prev_tex_env);
+
+    glUseProgram(0);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glDisable(GL_CULL_FACE);
+
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    float vw = (float)viewport[2];
+    float vh = (float)viewport[3];
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0.0, (double)vw, 0.0, (double)vh, -1.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    /* Bottom-left placement, ~28% of screen width, aspect from the frame */
+    float margin = vw * 0.01f;
+    float pw = vw * 0.28f;
+    float ph = pw * ((float)tex_h / (float)tex_w);
+    float x0 = margin;
+    float y0 = margin;
+
+    /* Border */
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(0.05f, 0.05f, 0.05f, 1.0f);
+    glBegin(GL_QUADS);
+    glVertex2f(x0 - 2.0f, y0 - 2.0f);
+    glVertex2f(x0 + pw + 2.0f, y0 - 2.0f);
+    glVertex2f(x0 + pw + 2.0f, y0 + ph + 2.0f);
+    glVertex2f(x0 - 2.0f, y0 + ph + 2.0f);
+    glEnd();
+
+    /* Frame quad. glReadPixels rows are bottom-up, which matches GL's t=0
+     * at the bottom — a straight 0..1 mapping renders upright. */
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y0);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(x0 + pw, y0);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(x0 + pw, y0 + ph);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(x0, y0 + ph);
+    glEnd();
+
+    /* ---- Restore GL state ---- */
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, prev_tex_env);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)prev_tex_binding);
+    if (prev_tex2d) glEnable(GL_TEXTURE_2D); else glDisable(GL_TEXTURE_2D);
+    if (prev_depth_test) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (prev_blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (prev_cull) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    glUseProgram((GLuint)prev_program);
+}
+
 void jak_sm64_render(void) {
     if (!s_active || s_jak_id < 0) return;
+
+    /* gk world PiP draws even during Mario-fallback actions */
+    if (g_jak_world_view && g_jak_world_view_visible) jak_render_world_view();
+
     if (mario_should_fallback()) return;  /* Mario is rendering, skip Jak */
 
     /* Fetch bone data from DLL */
@@ -1606,6 +1948,57 @@ void jak_sm64_render(void) {
 
 extern void initiate_warp(s16 destLevel, s16 destArea, s16 destWarpNode, s32 arg3);
 
+/* ---- Level warp table (shared with the ImGui overlay) ---- */
+
+struct JakWarpEntry {
+    const char *name;
+    int level;
+};
+
+static const struct JakWarpEntry s_warp_table[] = {
+    { "Castle Grounds",              LEVEL_CASTLE_GROUNDS },
+    { "Castle Inside",               LEVEL_CASTLE },
+    { "Castle Courtyard",            LEVEL_CASTLE_COURTYARD },
+    { "Bob-omb Battlefield",         LEVEL_BOB },
+    { "Whomp's Fortress",            LEVEL_WF },
+    { "Jolly Roger Bay",             LEVEL_JRB },
+    { "Cool, Cool Mountain",         LEVEL_CCM },
+    { "Big Boo's Haunt",             LEVEL_BBH },
+    { "Hazy Maze Cave",              LEVEL_HMC },
+    { "Lethal Lava Land",            LEVEL_LLL },
+    { "Shifting Sand Land",          LEVEL_SSL },
+    { "Dire, Dire Docks",            LEVEL_DDD },
+    { "Snowman's Land",              LEVEL_SL },
+    { "Wet-Dry World",               LEVEL_WDW },
+    { "Tall, Tall Mountain",         LEVEL_TTM },
+    { "Tiny-Huge Island",            LEVEL_THI },
+    { "Tick Tock Clock",             LEVEL_TTC },
+    { "Rainbow Ride",                LEVEL_RR },
+    { "Bowser in the Dark World",    LEVEL_BITDW },
+    { "Bowser in the Fire Sea",      LEVEL_BITFS },
+    { "Bowser in the Sky",           LEVEL_BITS },
+    { "Bowser 1 Fight",              LEVEL_BOWSER_1 },
+    { "Bowser 2 Fight",              LEVEL_BOWSER_2 },
+    { "Bowser 3 Fight",              LEVEL_BOWSER_3 },
+    { "Princess's Secret Slide",     LEVEL_PSS },
+    { "Secret Aquarium",             LEVEL_SA },
+    { "Cavern of the Metal Cap",     LEVEL_COTMC },
+    { "Tower of the Wing Cap",       LEVEL_TOTWC },
+    { "Vanish Cap under the Moat",   LEVEL_VCUTM },
+    { "Wing Mario over the Rainbow", LEVEL_WMOTR },
+};
+
+const struct JakWarpEntry *jak_get_warp_table(int *count) {
+    if (count) *count = (int)(sizeof(s_warp_table) / sizeof(s_warp_table[0]));
+    return s_warp_table;
+}
+
+void jak_sm64_warp_to(int level) {
+    initiate_warp((s16)level, 1, 0x0A, 0);
+    fade_into_special_warp(0, 0);
+    JAK_LOG("ImGui warp to level %d", level);
+}
+
 static bool s_jak_menu_open = false;
 static int  s_jak_menu_cursor = 0;
 static bool s_dpad_up_prev = false;
@@ -1623,6 +2016,7 @@ enum {
     MENU_FALLBACK_SHELL,
     MENU_FALLBACK_POLE,
     MENU_FALLBACK_TELEPORT,
+    MENU_WORLD_VIEW,
     MENU_SEP,  /* separator */
     MENU_WARP_CASTLE_GROUNDS,
     MENU_WARP_CASTLE_INSIDE,
@@ -1666,6 +2060,7 @@ static const char *jak_menu_label(int idx) {
         case MENU_FALLBACK_SHELL:       return "SHELL";
         case MENU_FALLBACK_POLE:        return "POLES";
         case MENU_FALLBACK_TELEPORT:    return "TELEPORT";
+        case MENU_WORLD_VIEW:           return "JAK WORLD PIP";
         case MENU_SEP:                  return "--- WARP ---";
         case MENU_WARP_CASTLE_GROUNDS:  return "CASTLE GROUNDS";
         case MENU_WARP_CASTLE_INSIDE:   return "CASTLE INSIDE";
@@ -1710,6 +2105,7 @@ static bool *jak_menu_toggle_ptr(int idx) {
         case MENU_FALLBACK_SHELL:       return &s_mario_fallback_shell;
         case MENU_FALLBACK_POLE:        return &s_mario_fallback_pole;
         case MENU_FALLBACK_TELEPORT:    return &s_mario_fallback_teleport;
+        case MENU_WORLD_VIEW:           return &g_jak_world_view_visible;
         default: return NULL;
     }
 }

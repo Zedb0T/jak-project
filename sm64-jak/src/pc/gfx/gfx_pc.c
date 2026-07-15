@@ -1904,6 +1904,9 @@ void gfx_run(Gfx *commands) {
     /* Render Jak skeleton overlay BEFORE the buffer swap so it's visible */
     extern void jak_sm64_render(void);
     jak_sm64_render();
+    /* ImGui overlay on top of everything (Left Alt to toggle) */
+    extern void jak_imgui_frame(void);
+    jak_imgui_frame();
 #endif
 
     gfx_rapi->end_frame();
