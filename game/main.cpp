@@ -5,6 +5,7 @@
 
 #define STBI_WINDOWS_UTF8
 
+#include <cstdlib>
 #include <string>
 
 #include "runtime.h"
@@ -255,29 +256,38 @@ int main(int argc, char** argv) {
       if (GetModuleFileNameA(NULL, exe_buf, sizeof(exe_buf))) {
         fs::path exe_dir = fs::path(exe_buf).parent_path();
         fs::path sm64_exe = exe_dir / "sm64-jak" / "build" / "us_pc" / "sm64.us.f3dex2e.exe";
-        if (fs::exists(sm64_exe)) {
-          fs::path data_dir = exe_dir / "data";
-          if (!fs::exists(data_dir / "out" / "jak1")) {
-            // Jak data not extracted yet — fall through to normal gk so the
-            // launcher/extractor flow (or the imgui setup menu) can run.
-            lg::info("SM64-Jak found but Jak data not built yet — booting gk for setup");
-          } else {
-            lg::info("SM64-Jak is configured — launching {}", sm64_exe.string());
-            SetEnvironmentVariableA("JAK_DATA_PATH", data_dir.string().c_str());
-            STARTUPINFOA si = {};
-            si.cb = sizeof(si);
-            PROCESS_INFORMATION pi = {};
-            std::string cmd = "\"" + sm64_exe.string() + "\" --skip-intro";
-            std::string cwd = sm64_exe.parent_path().string();
-            if (CreateProcessA(NULL, cmd.data(), NULL, NULL, 0, 0, NULL, cwd.c_str(), &si,
-                               &pi)) {
-              CloseHandle(pi.hProcess);
-              CloseHandle(pi.hThread);
-              return 0;
-            }
-            lg::error("Failed to launch SM64-Jak ({}), booting gk instead", GetLastError());
+        fs::path setup_bat = exe_dir / "Setup.bat";
+        fs::path data_dir = exe_dir / "data";
+        bool mod_install = fs::exists(setup_bat) && fs::exists(exe_dir / "sm64-jak");
+        bool sm64_built = fs::exists(sm64_exe);
+        bool jak_data_ok = fs::exists(data_dir / "out" / "jak1");
+
+        if (sm64_built && jak_data_ok) {
+          // Fully configured — gk.exe IS the game: hand off to SM64-Jak.
+          lg::info("SM64-Jak is configured — launching {}", sm64_exe.string());
+          SetEnvironmentVariableA("JAK_DATA_PATH", data_dir.string().c_str());
+          STARTUPINFOA si = {};
+          si.cb = sizeof(si);
+          PROCESS_INFORMATION pi = {};
+          std::string cmd = "\"" + sm64_exe.string() + "\" --skip-intro";
+          std::string cwd = sm64_exe.parent_path().string();
+          if (CreateProcessA(NULL, cmd.data(), NULL, NULL, 0, 0, NULL, cwd.c_str(), &si, &pi)) {
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+            return 0;
           }
+          lg::error("Failed to launch SM64-Jak ({}), booting gk instead", GetLastError());
+        } else if (mod_install) {
+          // Mod install but not (fully) set up — gk.exe IS the installer:
+          // run Setup.bat (it resumes whichever steps are missing) and exit.
+          // Booting gk here would just crash on missing game data.
+          lg::info("SM64-Jak not set up yet — launching Setup.bat");
+          std::string cmd = "cmd.exe /c start \"SM64-Jak Setup\" /D \"" + exe_dir.string() +
+                            "\" \"" + setup_bat.string() + "\"";
+          std::system(cmd.c_str());
+          return 0;
         }
+        // Not a mod install (dev tree / vanilla layout) — normal gk boot.
       }
     }
   }
