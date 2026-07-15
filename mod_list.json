@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0.0",
+  "sourceName": "SM64-Jak Testing",
+  "lastUpdated": "2026-07-15T00:00:00Z",
+  "mods": {
+    "sm64-jak": {
+      "displayName": "SM64-Jak",
+      "description": "Jak & Daxter inside Super Mario 64 - the real GOAL engine drives Jak as a drop-in character in Mario's world. First launch of gk.exe runs setup: you provide your own SM64 US ROM and Jak 1 ISO; nothing from either game is distributed.",
+      "authors": [
+        "Zed"
+      ],
+      "tags": [
+        "gameplay",
+        "crossover"
+      ],
+      "websiteUrl": "https://github.com/Zedb0T/jak-project",
+      "supportedGames": [
+        "jak1"
+      ],
+      "versions": [],
+      "coverArtUrl": null,
+      "thumbnailArtUrl": null,
+      "perGameConfig": null,
+      "externalLink": null
+    }
+  }
+}
