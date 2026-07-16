@@ -26,7 +26,7 @@ extern bool g_jak_world_view;          /* boot flag: gk renderer running */
 extern bool g_jak_world_view_visible;  /* overlay flag: draw the PiP */
 extern bool g_jak_display_swapped;     /* gk fullscreen + SM64 PiP (Tab) */
 extern bool g_jak_debug_fly;           /* hold R2 to fly while enabled */
-extern bool g_jak_shadow;              /* dynamic silhouette shadow */
+extern int g_jak_shadow_mode;          /* 0 off, 1 flat, 2 volumes */
 void jak_settings_save(void);
 
 struct JakWarpEntry {
@@ -205,8 +205,12 @@ static void jak_imgui_menu(void) {
             ImGui::EndDisabled();
             ImGui::TextDisabled("gk renderer disabled at boot\n(g_jak_world_view was false)");
         }
-        if (ImGui::Checkbox("Jak shadow", &g_jak_shadow)) {
-            jak_settings_save();  /* remember across launches */
+        {
+            static const char* shadow_modes[] = {"Off", "Flat silhouette", "Shadow volumes (real)"};
+            ImGui::SetNextItemWidth(180.0f);
+            if (ImGui::Combo("Jak shadow", &g_jak_shadow_mode, shadow_modes, 3)) {
+                jak_settings_save();  /* remember across launches */
+            }
         }
         ImGui::Checkbox("Debug fly (hold R2)", &g_jak_debug_fly);
         if (g_jak_debug_fly && ImGui::IsItemHovered()) {

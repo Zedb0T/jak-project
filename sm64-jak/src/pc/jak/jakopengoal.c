@@ -243,9 +243,10 @@ bool g_jak_world_view_visible = false;
  * drives the Jak world directly. */
 bool g_jak_display_swapped = false;
 
-/* Dynamic silhouette shadow. Off by default; persisted in jak_settings.txt
- * next to the exe so the choice survives relaunches. */
-bool g_jak_shadow = false;
+/* Dynamic shadow: 0 = off (default), 1 = flat planar silhouette,
+ * 2 = real stencil shadow volumes (OpenGOAL-renderer style).
+ * Persisted in jak_settings.txt next to the exe. */
+int g_jak_shadow_mode = 0;
 
 static void jak_settings_load(void) {
     FILE *f = fopen("jak_settings.txt", "r");
@@ -253,10 +254,11 @@ static void jak_settings_load(void) {
     char line[128];
     while (fgets(line, sizeof(line), f)) {
         int v;
-        if (sscanf(line, "shadow=%d", &v) == 1) g_jak_shadow = (v != 0);
+        if (sscanf(line, "shadow=%d", &v) == 1) g_jak_shadow_mode = v;
     }
     fclose(f);
-    JAK_LOG("Settings loaded: shadow=%d", g_jak_shadow ? 1 : 0);
+    if (g_jak_shadow_mode < 0 || g_jak_shadow_mode > 2) g_jak_shadow_mode = 0;
+    JAK_LOG("Settings loaded: shadow=%d", g_jak_shadow_mode);
 }
 
 void jak_settings_save(void) {
@@ -265,7 +267,7 @@ void jak_settings_save(void) {
         JAK_ERR("Could not write jak_settings.txt");
         return;
     }
-    fprintf(f, "shadow=%d\n", g_jak_shadow ? 1 : 0);
+    fprintf(f, "shadow=%d\n", g_jak_shadow_mode);
     fclose(f);
 }
 
@@ -1831,8 +1833,110 @@ static void jak_render_world_view(void) {
  * win and rejects the rest. Called inside the mesh render's camera
  * matrices, after the mesh (nothing 3D draws later this frame, so the
  * slightly-lifted depth values are harmless). */
+/* Mode 2: real stencil shadow volumes, in the style of OpenGOAL's shadow
+ * renderer. Every light-facing triangle of Jak's skinned mesh is extruded
+ * straight down into a closed prism (top cap, bottom cap, three sides).
+ * Per-triangle closed volumes are robust on non-manifold skinned meshes —
+ * shared interior faces cancel in the stencil count. Rendered z-fail
+ * (Carmack's reverse: works with the camera inside the volume): two-sided
+ * stencil INCR_WRAP on back-face depth-fail / DECR_WRAP on front-face
+ * depth-fail, then a fullscreen darkening quad where stencil != 0. The
+ * shadow drapes correctly over ledges, walls and objects, and Jak
+ * self-shadows. Requires the stencil buffer requested in gfx_sdl2.c. */
+static void draw_jak_shadow_volume(void) {
+    uint16_t num_tris = s_jak_geo.num_triangles_used;
+    if (num_tris == 0 || !s_geo_position) return;
+
+    const f32 EXTRUDE = 5000.0f;   /* volume depth below each triangle */
+    const f32 TOP_BIAS = 2.0f;     /* sink top caps to avoid self-acne  */
+
+    /* ---- Pass 1: volume geometry into stencil only ---- */
+    glEnable(GL_STENCIL_TEST);
+    glClear(GL_STENCIL_BUFFER_BIT);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glDepthMask(GL_FALSE);
+    /* depth test stays enabled (GL_LESS) — z-fail counts occluded frags */
+    glDisable(GL_CULL_FACE);  /* both faces drawn; ops separated below */
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_BLEND);
+    glStencilFunc(GL_ALWAYS, 0, 0xFF);
+    glStencilOpSeparate(GL_BACK, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
+    glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
+
+    glBegin(GL_TRIANGLES);
+    for (uint32_t i = 0; i < num_tris; i++) {
+        const float *v0 = &s_geo_position[(i * 3 + 0) * 3];
+        const float *v1 = &s_geo_position[(i * 3 + 1) * 3];
+        const float *v2 = &s_geo_position[(i * 3 + 2) * 3];
+
+        /* face normal: keep only light-facing tris (light = straight down,
+         * so tris whose normal points up) */
+        f32 e1x = v1[0] - v0[0], e1y = v1[1] - v0[1], e1z = v1[2] - v0[2];
+        f32 e2x = v2[0] - v0[0], e2y = v2[1] - v0[1], e2z = v2[2] - v0[2];
+        f32 ny = e1z * e2x - e1x * e2z;  /* y of cross(e1, e2) */
+        if (ny <= 0.0001f) continue;
+
+        /* top ring (biased down) and bottom ring */
+        f32 t[3][3] = {{v0[0], v0[1] - TOP_BIAS, v0[2]},
+                       {v1[0], v1[1] - TOP_BIAS, v1[2]},
+                       {v2[0], v2[1] - TOP_BIAS, v2[2]}};
+        f32 b[3][3] = {{v0[0], v0[1] - EXTRUDE, v0[2]},
+                       {v1[0], v1[1] - EXTRUDE, v1[2]},
+                       {v2[0], v2[1] - EXTRUDE, v2[2]}};
+
+        /* top cap (outward = up, original winding) */
+        glVertex3fv(t[0]); glVertex3fv(t[1]); glVertex3fv(t[2]);
+        /* bottom cap (reversed) */
+        glVertex3fv(b[0]); glVertex3fv(b[2]); glVertex3fv(b[1]);
+        /* sides: edge (a,b) -> quad a, a_bot, b_bot, b (outward) */
+        for (int e = 0; e < 3; e++) {
+            int a = e, c = (e + 1) % 3;
+            glVertex3fv(t[a]); glVertex3fv(b[a]); glVertex3fv(b[c]);
+            glVertex3fv(t[a]); glVertex3fv(b[c]); glVertex3fv(t[c]);
+        }
+    }
+    glEnd();
+
+    /* ---- Pass 2: darken where stencil != 0 ---- */
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glStencilFunc(GL_NOTEQUAL, 0, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    glColor4f(0.0f, 0.0f, 0.0f, 0.45f);
+    glBegin(GL_QUADS);
+    glVertex3f(-1.0f, -1.0f, 0.0f);
+    glVertex3f(1.0f, -1.0f, 0.0f);
+    glVertex3f(1.0f, 1.0f, 0.0f);
+    glVertex3f(-1.0f, 1.0f, 0.0f);
+    glEnd();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+
+    /* restore state the mesh pass expects */
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glEnable(GL_CULL_FACE);
+}
+
 static void draw_jak_shadow(void) {
-    if (!g_jak_shadow) return;
+    if (g_jak_shadow_mode == 0) return;
+    if (g_jak_shadow_mode == 2) {
+        draw_jak_shadow_volume();
+        return;
+    }
     struct Surface *floor = NULL;
     f32 jx = s_jak_state.position[0];
     f32 jy = s_jak_state.position[1];

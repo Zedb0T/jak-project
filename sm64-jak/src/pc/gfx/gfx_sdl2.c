@@ -155,6 +155,10 @@ static void gfx_sdl_init(const char *window_title) {
 
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+#ifdef JAKOPENGOAL
+    /* Stencil buffer for Jak's shadow-volume renderer */
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+#endif
 
     #ifdef USE_GLES
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);  // These attributes allow for hardware acceleration on RPis.

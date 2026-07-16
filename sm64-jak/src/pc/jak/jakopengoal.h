@@ -50,8 +50,9 @@ extern bool g_jak_world_view;
 extern bool g_jak_world_view_visible;
 extern bool g_jak_display_swapped;  /* Tab: gk fullscreen + SM64 PiP; forces gk-focus */
 
-/* ---- Jak shadow (persisted in jak_settings.txt next to the exe) ---- */
-extern bool g_jak_shadow;
+/* ---- Jak shadow (persisted in jak_settings.txt next to the exe) ----
+ * 0 = off, 1 = flat planar silhouette, 2 = stencil shadow volumes */
+extern int g_jak_shadow_mode;
 void jak_settings_save(void);
 
 /* ---- Debug fly (hold R2 while enabled) ---- */
