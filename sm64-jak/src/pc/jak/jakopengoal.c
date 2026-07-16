@@ -1794,6 +1794,63 @@ static void jak_render_world_view(void) {
     glUseProgram((GLuint)prev_program);
 }
 
+/* Soft blob shadow under Jak, SM64-style: projected onto the floor found
+ * below him, tilted to the floor normal, shrinking and fading with height.
+ * (Mario's own shadow is part of his graph node, which we hide entirely.)
+ * Called inside the mesh render's camera matrices, after the mesh. */
+static void draw_jak_shadow(void) {
+    struct Surface *floor = NULL;
+    f32 jx = s_jak_state.position[0];
+    f32 jy = s_jak_state.position[1];
+    f32 jz = s_jak_state.position[2];
+    f32 floor_y = find_floor(jx, jy + 50.0f, jz, &floor);
+    if (floor == NULL || floor_y <= -10000.0f) return;
+
+    f32 dist = jy - floor_y;
+    if (dist < 0.0f) dist = 0.0f;
+    if (dist > 600.0f) return;  /* too high — no shadow, like SM64 */
+    f32 t = dist / 600.0f;
+    f32 radius = 70.0f * (1.0f - 0.4f * t);
+    f32 alpha = 0.45f * (1.0f - t);
+
+    /* Basis on the floor plane from its normal */
+    f32 nx = floor->normal.x, ny = floor->normal.y, nz = floor->normal.z;
+    f32 ux, uy, uz;
+    if (ny > 0.99f) {
+        ux = 1.0f; uy = 0.0f; uz = 0.0f;
+    } else {
+        ux = nz; uy = 0.0f; uz = -nx;   /* cross(n, up), horizontal in-plane */
+        f32 l = sqrtf(ux * ux + uz * uz);
+        if (l < 0.0001f) return;
+        ux /= l; uz /= l;
+    }
+    f32 vx = ny * uz - nz * uy;
+    f32 vy = nz * ux - nx * uz;
+    f32 vz = nx * uy - ny * ux;
+
+    /* Center on the floor under Jak, nudged along the normal vs z-fighting */
+    f32 cx = jx + nx * 2.0f;
+    f32 cy = floor_y + ny * 2.0f;
+    f32 cz = jz + nz * 2.0f;
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);   /* don't occlude, just darken */
+    glColor4f(0.0f, 0.0f, 0.0f, alpha);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex3f(cx, cy, cz);
+    for (int i = 0; i <= 16; i++) {
+        f32 a = (f32)i * (2.0f * 3.14159265f / 16.0f);
+        f32 ca = cosf(a) * radius;
+        f32 sa = sinf(a) * radius;
+        glVertex3f(cx + ux * ca + vx * sa, cy + uy * ca + vy * sa, cz + uz * ca + vz * sa);
+    }
+    glEnd();
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+}
+
 static void jak_sm64_render_game(void) {
     if (mario_should_fallback()) return;  /* Mario is rendering, skip Jak */
 
@@ -2001,6 +2058,10 @@ static void jak_sm64_render_game(void) {
                             0.2f, 1.0f, 0.3f, 0.9f);
         }
     }
+
+    /* Blob shadow under Jak (drawn last: depth-tested against the world,
+     * correctly hidden under his feet, doesn't write depth) */
+    draw_jak_shadow();
 
     /* ---- Restore GL state ---- */
     glMatrixMode(GL_PROJECTION);
