@@ -18,7 +18,8 @@ FIRST-TIME SETUP (one time, ~15-25 minutes):
        and store it there for reuse
      - install the MSYS2 compiler environment if needed (via winget)
      - build the SM64-Jak game from source with your ROM
-     - ask for your Jak 1 ISO and build the Jak data from it
+     - reuse your OpenGOAL Launcher's Jak 1 data automatically if
+       installed, else ask for your Jak 1 ISO and build the data from it
   2. Run "Play SM64-Jak.bat"
 
 REQUIREMENTS:

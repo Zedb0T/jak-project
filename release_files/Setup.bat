@@ -94,12 +94,37 @@ echo   Build complete.
 echo.
 
 :: ----------------------------------------------------------------
-:: [4/4] Jak game data from your ISO
+:: [4/4] Jak game data
+:: If the OpenGOAL Launcher already extracted Jak 1 (settings.json ->
+:: installationDir\active\jak1\data\iso_data\jak1), reuse that data
+:: instead of asking for an ISO. Otherwise prompt as before.
 :: ----------------------------------------------------------------
 if exist "%ROOT%\data\out\jak1" (
     echo [4/4] Jak data already built, skipping.
     goto :jak_done
 )
+set "LAUNCHER_ISO="
+for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "try { $s = Get-Content \"$env:APPDATA\OpenGOAL-Launcher\settings.json\" -Raw | ConvertFrom-Json; $d = $s.installationDir; if (-not $d) { $d = $s.installation_dir }; if ($d) { $p = Join-Path $d 'active\jak1\data\iso_data\jak1'; if (Test-Path (Join-Path $p 'DGO')) { Write-Output $p } } } catch {}"`) do set "LAUNCHER_ISO=%%D"
+if not defined LAUNCHER_ISO goto :jak_prompt
+
+echo [4/4] Found OpenGOAL Launcher Jak 1 data:
+echo       !LAUNCHER_ISO!
+echo   Copying game data into this install (a few GB, several minutes)...
+robocopy "!LAUNCHER_ISO!" "%ROOT%\data\iso_data\jak1" /E /NFL /NDL /NJH /NJS >nul
+if errorlevel 8 (
+    echo ERROR: copying launcher data failed -- falling back to ISO prompt.
+    goto :jak_prompt
+)
+echo   Building Jak data (several minutes)...
+"%ROOT%\extractor.exe" "%ROOT%\data\iso_data\jak1" -f -d -c --proj-path "%ROOT%\data"
+if errorlevel 1 (
+    echo ERROR: Jak data setup failed. See errors above.
+    pause
+    exit /b 1
+)
+goto :jak_done
+
+:jak_prompt
 set /p "ISO=[4/4] Path to your Jak 1 .iso: "
 set "ISO=!ISO:"=!"
 if not exist "!ISO!" (
