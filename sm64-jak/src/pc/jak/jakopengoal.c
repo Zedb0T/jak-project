@@ -238,6 +238,11 @@ static pfn_jak_get_world_frame     fn_jak_get_world_frame = NULL;
 bool g_jak_world_view = true;
 bool g_jak_world_view_visible = false;
 
+/* Display swap (Tab): gk world fullscreen with SM64 in the corner PiP.
+ * While swapped, gk-focus is forced on (as if W were held) so the pad
+ * drives the Jak world directly. */
+bool g_jak_display_swapped = false;
+
 /* Geometry buffers (heap-allocated) */
 static float *s_geo_position = NULL;
 static float *s_geo_normal = NULL;
@@ -701,6 +706,9 @@ void jak_controller_select(int idx) {
 
 bool jak_gk_focus_active(void) {
     if (!s_active || s_jak_id < 0) return false;
+    /* While the displays are swapped (gk fullscreen), act as if W were
+     * always held: the pad drives the Jak world, SM64 input is muted. */
+    if (g_jak_display_swapped && g_jak_world_view) return true;
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
     return keys && keys[SDL_SCANCODE_W];
 }
@@ -1670,35 +1678,106 @@ static void jak_render_world_view(void) {
     glPushMatrix();
     glLoadIdentity();
 
-    /* Bottom-left placement, ~28% of screen width, aspect from the frame */
-    float margin = vw * 0.01f;
-    float pw = vw * 0.28f;
-    float ph = pw * ((float)tex_h / (float)tex_w);
-    float x0 = margin;
-    float y0 = margin;
-
-    /* Border */
-    glDisable(GL_TEXTURE_2D);
-    glColor4f(0.05f, 0.05f, 0.05f, 1.0f);
-    glBegin(GL_QUADS);
-    glVertex2f(x0 - 2.0f, y0 - 2.0f);
-    glVertex2f(x0 + pw + 2.0f, y0 - 2.0f);
-    glVertex2f(x0 + pw + 2.0f, y0 + ph + 2.0f);
-    glVertex2f(x0 - 2.0f, y0 + ph + 2.0f);
-    glEnd();
-
-    /* Frame quad. glReadPixels rows are bottom-up, which matches GL's t=0
-     * at the bottom — a straight 0..1 mapping renders upright. */
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, tex);
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    glBegin(GL_QUADS);
-    glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y0);
-    glTexCoord2f(1.0f, 0.0f); glVertex2f(x0 + pw, y0);
-    glTexCoord2f(1.0f, 1.0f); glVertex2f(x0 + pw, y0 + ph);
-    glTexCoord2f(0.0f, 1.0f); glVertex2f(x0, y0 + ph);
-    glEnd();
+    float margin = vw * 0.01f;
+
+    if (!g_jak_display_swapped) {
+        /* --- Normal: gk world as bottom-left PiP --- */
+        float pw = vw * 0.28f;
+        float ph = pw * ((float)tex_h / (float)tex_w);
+        float x0 = margin;
+        float y0 = margin;
+
+        /* Border */
+        glDisable(GL_TEXTURE_2D);
+        glColor4f(0.05f, 0.05f, 0.05f, 1.0f);
+        glBegin(GL_QUADS);
+        glVertex2f(x0 - 2.0f, y0 - 2.0f);
+        glVertex2f(x0 + pw + 2.0f, y0 - 2.0f);
+        glVertex2f(x0 + pw + 2.0f, y0 + ph + 2.0f);
+        glVertex2f(x0 - 2.0f, y0 + ph + 2.0f);
+        glEnd();
+
+        /* Frame quad. Captured rows are bottom-up = GL orientation. */
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y0);
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(x0 + pw, y0);
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(x0 + pw, y0 + ph);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(x0, y0 + ph);
+        glEnd();
+    } else {
+        /* --- Swapped: gk world fullscreen, SM64 as the corner PiP ---
+         * Grab SM64's finished frame (everything drawn so far, incl. Jak's
+         * mesh) from the backbuffer BEFORE covering it with the gk view. */
+        static GLuint s_sm64_tex = 0;
+        if (!s_sm64_tex) {
+            glGenTextures(1, &s_sm64_tex);
+            glBindTexture(GL_TEXTURE_2D, s_sm64_tex);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, s_sm64_tex);
+        }
+        glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, viewport[0], viewport[1],
+                         (GLsizei)vw, (GLsizei)vh, 0);
+
+        /* Black backdrop + letterboxed gk world (keep its aspect) */
+        glDisable(GL_TEXTURE_2D);
+        glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+        glBegin(GL_QUADS);
+        glVertex2f(0.0f, 0.0f);
+        glVertex2f(vw, 0.0f);
+        glVertex2f(vw, vh);
+        glVertex2f(0.0f, vh);
+        glEnd();
+
+        float scale = vw / (float)tex_w;
+        if ((float)tex_h * scale > vh) scale = vh / (float)tex_h;
+        float gw = (float)tex_w * scale;
+        float gh = (float)tex_h * scale;
+        float gx = (vw - gw) * 0.5f;
+        float gy = (vh - gh) * 0.5f;
+
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(gx, gy);
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(gx + gw, gy);
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(gx + gw, gy + gh);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(gx, gy + gh);
+        glEnd();
+
+        /* SM64 corner PiP (window-shaped, so it keeps its own aspect) */
+        float pw = vw * 0.28f;
+        float ph = pw * (vh / vw);
+        float x0 = margin;
+        float y0 = margin;
+
+        glDisable(GL_TEXTURE_2D);
+        glColor4f(0.05f, 0.05f, 0.05f, 1.0f);
+        glBegin(GL_QUADS);
+        glVertex2f(x0 - 2.0f, y0 - 2.0f);
+        glVertex2f(x0 + pw + 2.0f, y0 - 2.0f);
+        glVertex2f(x0 + pw + 2.0f, y0 + ph + 2.0f);
+        glVertex2f(x0 - 2.0f, y0 + ph + 2.0f);
+        glEnd();
+
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, s_sm64_tex);
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y0);
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(x0 + pw, y0);
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(x0 + pw, y0 + ph);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(x0, y0 + ph);
+        glEnd();
+    }
 
     /* ---- Restore GL state ---- */
     glMatrixMode(GL_PROJECTION);
@@ -1715,12 +1794,7 @@ static void jak_render_world_view(void) {
     glUseProgram((GLuint)prev_program);
 }
 
-void jak_sm64_render(void) {
-    if (!s_active || s_jak_id < 0) return;
-
-    /* gk world PiP draws even during Mario-fallback actions */
-    if (g_jak_world_view && g_jak_world_view_visible) jak_render_world_view();
-
+static void jak_sm64_render_game(void) {
     if (mario_should_fallback()) return;  /* Mario is rendering, skip Jak */
 
     /* Fetch bone data from DLL */
@@ -1942,6 +2016,31 @@ void jak_sm64_render(void) {
     glBindTexture(GL_TEXTURE_2D, prev_tex_binding);
 
     glUseProgram(prev_program);
+}
+
+void jak_sm64_render(void) {
+    if (!s_active || s_jak_id < 0) return;
+
+    /* Tab toggles which world is fullscreen (needs the gk renderer alive) */
+    {
+        static bool s_tab_prev = false;
+        const Uint8 *keys = SDL_GetKeyboardState(NULL);
+        bool tab = keys && keys[SDL_SCANCODE_TAB];
+        if (tab && !s_tab_prev && g_jak_world_view) {
+            g_jak_display_swapped = !g_jak_display_swapped;
+            JAK_LOG("Display swap: %s fullscreen", g_jak_display_swapped ? "gk" : "SM64");
+        }
+        s_tab_prev = tab;
+    }
+
+    jak_sm64_render_game();
+
+    /* World view draws AFTER the game render so the swapped fullscreen view
+     * covers everything (and can capture the finished SM64 frame for its
+     * corner PiP). Draws even during Mario-fallback actions. */
+    if (g_jak_world_view && (g_jak_world_view_visible || g_jak_display_swapped)) {
+        jak_render_world_view();
+    }
 }
 
 /* ---- Jak Menu (hold X + D-pad Right to open) ---- */

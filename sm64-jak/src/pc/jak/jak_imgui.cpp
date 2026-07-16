@@ -24,6 +24,7 @@ extern "C" {
 /* From jakopengoal.c */
 extern bool g_jak_world_view;          /* boot flag: gk renderer running */
 extern bool g_jak_world_view_visible;  /* overlay flag: draw the PiP */
+extern bool g_jak_display_swapped;     /* gk fullscreen + SM64 PiP (Tab) */
 extern bool g_jak_debug_fly;           /* hold R2 to fly while enabled */
 
 struct JakWarpEntry {
@@ -191,6 +192,10 @@ static void jak_imgui_menu(void) {
     if (ImGui::Begin("Jak Integration (Left Alt)", &s_visible)) {
         if (g_jak_world_view) {
             ImGui::Checkbox("Show gk world PiP", &g_jak_world_view_visible);
+            ImGui::Checkbox("Swap displays (Tab)", &g_jak_display_swapped);
+            if (g_jak_display_swapped) {
+                ImGui::TextDisabled("gk fullscreen: controller drives the Jak world");
+            }
         } else {
             ImGui::BeginDisabled();
             bool off = false;

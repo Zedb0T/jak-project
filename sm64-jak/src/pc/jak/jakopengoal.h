@@ -48,6 +48,7 @@ extern struct Object *g_jak_held_obj;
  * toggle (ImGui menu on Left Alt / debug menu), defaults to hidden. */
 extern bool g_jak_world_view;
 extern bool g_jak_world_view_visible;
+extern bool g_jak_display_swapped;  /* Tab: gk fullscreen + SM64 PiP; forces gk-focus */
 
 /* ---- Debug fly (hold R2 while enabled) ---- */
 extern bool g_jak_debug_fly;
