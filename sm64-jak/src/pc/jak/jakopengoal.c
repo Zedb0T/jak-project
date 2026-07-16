@@ -243,6 +243,32 @@ bool g_jak_world_view_visible = false;
  * drives the Jak world directly. */
 bool g_jak_display_swapped = false;
 
+/* Dynamic silhouette shadow. Off by default; persisted in jak_settings.txt
+ * next to the exe so the choice survives relaunches. */
+bool g_jak_shadow = false;
+
+static void jak_settings_load(void) {
+    FILE *f = fopen("jak_settings.txt", "r");
+    if (!f) return;
+    char line[128];
+    while (fgets(line, sizeof(line), f)) {
+        int v;
+        if (sscanf(line, "shadow=%d", &v) == 1) g_jak_shadow = (v != 0);
+    }
+    fclose(f);
+    JAK_LOG("Settings loaded: shadow=%d", g_jak_shadow ? 1 : 0);
+}
+
+void jak_settings_save(void) {
+    FILE *f = fopen("jak_settings.txt", "w");
+    if (!f) {
+        JAK_ERR("Could not write jak_settings.txt");
+        return;
+    }
+    fprintf(f, "shadow=%d\n", g_jak_shadow ? 1 : 0);
+    fclose(f);
+}
+
 /* Geometry buffers (heap-allocated) */
 static float *s_geo_position = NULL;
 static float *s_geo_normal = NULL;
@@ -924,6 +950,7 @@ bool jak_is_active(void) {
 
 void jak_sm64_init(void) {
     JAK_LOG("Init registered (deferred until game is running)");
+    jak_settings_load();
 }
 
 void jak_sm64_shutdown(void) {
@@ -1805,6 +1832,7 @@ static void jak_render_world_view(void) {
  * matrices, after the mesh (nothing 3D draws later this frame, so the
  * slightly-lifted depth values are harmless). */
 static void draw_jak_shadow(void) {
+    if (!g_jak_shadow) return;
     struct Surface *floor = NULL;
     f32 jx = s_jak_state.position[0];
     f32 jy = s_jak_state.position[1];
