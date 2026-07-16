@@ -1794,10 +1794,16 @@ static void jak_render_world_view(void) {
     glUseProgram((GLuint)prev_program);
 }
 
-/* Soft blob shadow under Jak, SM64-style: projected onto the floor found
- * below him, tilted to the floor normal, shrinking and fading with height.
- * (Mario's own shadow is part of his graph node, which we hide entirely.)
- * Called inside the mesh render's camera matrices, after the mesh. */
+/* Dynamic silhouette shadow, in the spirit of OpenGOAL's real shadow
+ * renderer: Jak's actual skinned mesh (already extracted for rendering) is
+ * projected straight down onto the floor plane under him and drawn as a
+ * translucent black silhouette — animations (spin, punch, jump tuck) show
+ * in the shadow. Double-darkening where projected triangles overlap is
+ * avoided without a stencil buffer: all projected fragments land on one
+ * plane, so drawing with depth-WRITE on + GL_LESS lets the first fragment
+ * win and rejects the rest. Called inside the mesh render's camera
+ * matrices, after the mesh (nothing 3D draws later this frame, so the
+ * slightly-lifted depth values are harmless). */
 static void draw_jak_shadow(void) {
     struct Surface *floor = NULL;
     f32 jx = s_jak_state.position[0];
@@ -1809,46 +1815,35 @@ static void draw_jak_shadow(void) {
     f32 dist = jy - floor_y;
     if (dist < 0.0f) dist = 0.0f;
     if (dist > 600.0f) return;  /* too high — no shadow, like SM64 */
-    f32 t = dist / 600.0f;
-    f32 radius = 70.0f * (1.0f - 0.4f * t);
-    f32 alpha = 0.45f * (1.0f - t);
+    f32 alpha = 0.45f * (1.0f - dist / 600.0f);
 
-    /* Basis on the floor plane from its normal */
     f32 nx = floor->normal.x, ny = floor->normal.y, nz = floor->normal.z;
-    f32 ux, uy, uz;
-    if (ny > 0.99f) {
-        ux = 1.0f; uy = 0.0f; uz = 0.0f;
-    } else {
-        ux = nz; uy = 0.0f; uz = -nx;   /* cross(n, up), horizontal in-plane */
-        f32 l = sqrtf(ux * ux + uz * uz);
-        if (l < 0.0001f) return;
-        ux /= l; uz /= l;
-    }
-    f32 vx = ny * uz - nz * uy;
-    f32 vy = nz * ux - nx * uz;
-    f32 vz = nx * uy - ny * ux;
+    if (ny < 0.1f) return;  /* near-vertical "floor" — skip */
 
-    /* Center on the floor under Jak, nudged along the normal vs z-fighting */
-    f32 cx = jx + nx * 2.0f;
-    f32 cy = floor_y + ny * 2.0f;
-    f32 cz = jz + nz * 2.0f;
+    uint16_t num_tris = s_jak_geo.num_triangles_used;
+    if (num_tris == 0 || !s_geo_position) return;
+
+    /* Plane point: the floor directly under Jak, lifted vs z-fighting */
+    f32 px = jx, py = floor_y + 2.0f, pz = jz;
 
     glDisable(GL_TEXTURE_2D);
+    glDisable(GL_CULL_FACE);   /* projection can flip winding */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);   /* don't occlude, just darken */
+    glDepthMask(GL_TRUE);      /* see comment above: rejects overlap */
     glColor4f(0.0f, 0.0f, 0.0f, alpha);
-    glBegin(GL_TRIANGLE_FAN);
-    glVertex3f(cx, cy, cz);
-    for (int i = 0; i <= 16; i++) {
-        f32 a = (f32)i * (2.0f * 3.14159265f / 16.0f);
-        f32 ca = cosf(a) * radius;
-        f32 sa = sinf(a) * radius;
-        glVertex3f(cx + ux * ca + vx * sa, cy + uy * ca + vy * sa, cz + uz * ca + vz * sa);
+    glBegin(GL_TRIANGLES);
+    for (uint32_t v = 0; v < (uint32_t)num_tris * 3; v++) {
+        const float *vp = &s_geo_position[v * 3];
+        /* project along (0,-1,0) onto plane (p, n):
+         * t = n.(V - p) / n.y ; proj = (Vx, Vy - t, Vz) */
+        f32 dx = vp[0] - px, dy = vp[1] - py, dz = vp[2] - pz;
+        f32 tproj = (nx * dx + ny * dy + nz * dz) / ny;
+        glVertex3f(vp[0], vp[1] - tproj, vp[2]);
     }
     glEnd();
-    glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
+    glEnable(GL_CULL_FACE);
 }
 
 static void jak_sm64_render_game(void) {
