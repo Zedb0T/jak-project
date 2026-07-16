@@ -13,7 +13,9 @@ You must own both games. Setup builds everything locally from YOUR copies:
 
 FIRST-TIME SETUP (one time, ~15-25 minutes):
   1. Run "Setup.bat". It will:
-     - ask for your SM64 ROM
+     - find your SM64 ROM automatically if another OpenGOAL Mario mod
+       already stored one (%APPDATA%\OpenGOAL\mario), else ask for it
+       and store it there for reuse
      - install the MSYS2 compiler environment if needed (via winget)
      - build the SM64-Jak game from source with your ROM
      - ask for your Jak 1 ISO and build the Jak data from it

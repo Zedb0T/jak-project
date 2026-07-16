@@ -21,10 +21,21 @@ echo.
 
 :: ----------------------------------------------------------------
 :: [1/4] Mario ROM
+:: Shares Super-Mario-Legacy's ROM store (%APPDATA%\OpenGOAL\mario):
+:: auto-detect an 8 MiB .z64 there (or next to this install) before
+:: prompting, and save picked ROMs back so both mods reuse them.
 :: ----------------------------------------------------------------
+set "ROMSTORE=%APPDATA%\OpenGOAL\mario"
 if exist "%ROOT%\sm64-jak\baserom.us.z64" (
     echo [1/4] Mario ROM already in place, skipping.
     goto :rom_done
+)
+set "ROM="
+for %%F in ("%ROMSTORE%\*.z64") do if not defined ROM if "%%~zF"=="8388608" set "ROM=%%~fF"
+for %%F in ("%ROOT%\*.z64") do if not defined ROM if "%%~zF"=="8388608" set "ROM=%%~fF"
+if defined ROM (
+    echo [1/4] Found existing Mario ROM: !ROM!
+    goto :rom_copy
 )
 set /p "ROM=[1/4] Path to your SM64 US .z64 ROM: "
 set "ROM=!ROM:"=!"
@@ -33,8 +44,11 @@ if not exist "!ROM!" (
     pause
     exit /b 1
 )
+:rom_copy
 copy /Y "!ROM!" "%ROOT%\sm64-jak\baserom.us.z64" >nul
-echo   ROM copied.
+if not exist "%ROMSTORE%" mkdir "%ROMSTORE%" 2>nul
+if /i not "!ROM!"=="%ROMSTORE%\baserom.us.z64" copy /Y "!ROM!" "%ROMSTORE%\baserom.us.z64" >nul 2>nul
+echo   ROM ready (stored in %ROMSTORE% for reuse^).
 :rom_done
 echo.
 
