@@ -1958,11 +1958,19 @@ static void draw_jak_shadow(void) {
     /* Plane point: the floor directly under Jak, lifted vs z-fighting */
     f32 px = jx, py = floor_y + 2.0f, pz = jz;
 
+    /* Overlapping projected triangles must darken each pixel exactly ONCE.
+     * Depth-write tricks z-fight (interpolated depths differ slightly per
+     * triangle -> pixel noise); instead stencil-mask: pass only where
+     * stencil == 0 and increment, so seconds hits are rejected. */
     glDisable(GL_TEXTURE_2D);
     glDisable(GL_CULL_FACE);   /* projection can flip winding */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_TRUE);      /* see comment above: rejects overlap */
+    glDepthMask(GL_FALSE);
+    glEnable(GL_STENCIL_TEST);
+    glClear(GL_STENCIL_BUFFER_BIT);
+    glStencilFunc(GL_EQUAL, 0, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
     glColor4f(0.0f, 0.0f, 0.0f, alpha);
     glBegin(GL_TRIANGLES);
     for (uint32_t v = 0; v < (uint32_t)num_tris * 3; v++) {
@@ -1974,7 +1982,9 @@ static void draw_jak_shadow(void) {
         glVertex3f(vp[0], vp[1] - tproj, vp[2]);
     }
     glEnd();
+    glDisable(GL_STENCIL_TEST);
     glDisable(GL_BLEND);
+    glDepthMask(GL_TRUE);
     glEnable(GL_CULL_FACE);
 }
 
