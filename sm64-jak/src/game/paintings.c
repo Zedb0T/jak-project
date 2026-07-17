@@ -1265,7 +1265,20 @@ Gfx *geo_painting_update(s32 callContext, UNUSED struct GraphNode *node, UNUSED 
         gPaintingUpdateCounter = gAreaUpdateCounter;
 
         // Store Mario's floor and position
+#ifdef JAKOPENGOAL
+        /* Jak-glue can leave Mario out of bounds during death/level warps —
+         * find_floor then returns NULL and the unchecked deref crashed
+         * (SSL quicksand death -> castle warp). */
+        if (gMarioObject == NULL) {
+            return NULL;
+        }
         find_floor(gMarioObject->oPosX, gMarioObject->oPosY, gMarioObject->oPosZ, &surface);
+        if (surface == NULL) {
+            return NULL;
+        }
+#else
+        find_floor(gMarioObject->oPosX, gMarioObject->oPosY, gMarioObject->oPosZ, &surface);
+#endif
         gPaintingMarioFloorType = surface->type;
         gPaintingMarioXPos = gMarioObject->oPosX;
         gPaintingMarioYPos = gMarioObject->oPosY;
