@@ -1020,7 +1020,7 @@ void jak_sm64_toggle(void) {
         JAK_LOG("Jak removed");
     } else if (s_runtime_ready) {
         struct MarioState *m = &gMarioStates[0];
-        s_jak_id = fn_jak_create(m->pos[0], m->pos[1], m->pos[2]);
+        s_jak_id = fn_jak_create(m->pos[0], m->pos[1] + 75.0f, m->pos[2]);  /* lift: spawning at foot height embeds Jak in the floor tri and sticks him */
         if (s_jak_id >= 0) {
             s_active = true;
             JAK_LOG("Jak spawned at (%.0f, %.0f, %.0f)", m->pos[0], m->pos[1], m->pos[2]);
@@ -1201,7 +1201,7 @@ void jak_sm64_update(void) {
 
         JAK_LOG("Spawning Jak at Mario pos (%.0f, %.0f, %.0f)",
                 m->pos[0], m->pos[1], m->pos[2]);
-        s_jak_id = fn_jak_create(m->pos[0], m->pos[1], m->pos[2]);
+        s_jak_id = fn_jak_create(m->pos[0], m->pos[1] + 75.0f, m->pos[2]);  /* lift: spawning at foot height embeds Jak in the floor tri and sticks him */
         if (s_jak_id >= 0) {
             s_active = true;
             JAK_LOG("Jak spawned (id=%d)", s_jak_id);
