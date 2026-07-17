@@ -2845,6 +2845,14 @@ s32 lvl_init_menu_values_and_cursor_pos(UNUSED s32 arg, UNUSED s32 unused) {
  * defined in load_main_menu_save_file.
  */
 s32 lvl_update_obj_and_load_file_selected(UNUSED s32 arg, UNUSED s32 unused) {
+#ifdef JAKOPENGOAL
+    /* SM64-Jak: skip the file-select screen entirely and go straight into
+     * save file 1. Flip to false to get the vanilla menu back. */
+    static const s8 jak_skip_file_select = TRUE;  /* #t — set FALSE for vanilla menu */
+    if (jak_skip_file_select && sSelectedFileNum == 0) {
+        sSelectedFileNum = 1;
+    }
+#endif
     area_update_objects();
     return sSelectedFileNum;
 }
