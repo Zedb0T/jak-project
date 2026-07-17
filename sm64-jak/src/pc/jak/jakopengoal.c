@@ -1372,7 +1372,11 @@ void jak_sm64_update(void) {
 
     /* --- Water level: query SM64's water system and forward to GOAL --- */
     if (fn_jak_set_water_level) {
-        f32 water_y = find_water_level(s_jak_state.position[0], s_jak_state.position[2]);
+        /* find_water_level walks per-area environment regions — freed during
+         * death/level transitions (e.g. SSL quicksand death) */
+        f32 water_y = (gCurrentArea != NULL)
+                          ? find_water_level(s_jak_state.position[0], s_jak_state.position[2])
+                          : -11000.0f;
         fn_jak_set_water_level(water_y);
 
         /* Seabed under Jak: probe SM64's floor from just above his position so
