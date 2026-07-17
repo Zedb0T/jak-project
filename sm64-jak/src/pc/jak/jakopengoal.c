@@ -1031,6 +1031,18 @@ void jak_sm64_pre_update(void) {
         return;
     }
 
+    /* Don't teleport Mario during cutscene/dialog sequences. Teleporting his
+     * position to Jak knocks him into freefall, which kicks him out of
+     * ACT_READING_NPC_DIALOG before its actionState can climb to 8 — so
+     * set_mario_npc_dialog() never returns 2 and NPC-dialog cutscene triggers
+     * (chain chomp release, star spawns) spin for a long time until Mario
+     * happens to stay grounded. Let SM64 own his position through these. */
+    if ((act & ACT_GROUP_MASK) == ACT_GROUP_CUTSCENE
+        || act == ACT_READING_NPC_DIALOG || act == ACT_WAITING_FOR_DIALOG
+        || act == ACT_READING_SIGN) {
+        return;
+    }
+
     m->pos[0] = s_jak_state.position[0];
     m->pos[1] = s_jak_state.position[1];
     m->pos[2] = s_jak_state.position[2];
@@ -1327,22 +1339,32 @@ void jak_sm64_update(void) {
      */
     {
         struct MarioState *m = &gMarioStates[0];
-        m->pos[0] = s_jak_state.position[0];
-        m->pos[1] = s_jak_state.position[1];
-        m->pos[2] = s_jak_state.position[2];
+        u32 mact = m->action;
+        /* Same cutscene/dialog guard as pre_update: don't teleport Mario
+         * during dialog cutscenes or their triggers never complete. */
+        bool in_cutscene = ((mact & ACT_GROUP_MASK) == ACT_GROUP_CUTSCENE
+                            || mact == ACT_READING_NPC_DIALOG
+                            || mact == ACT_WAITING_FOR_DIALOG
+                            || mact == ACT_READING_SIGN);
+        if (!in_cutscene) {
+            m->pos[0] = s_jak_state.position[0];
+            m->pos[1] = s_jak_state.position[1];
+            m->pos[2] = s_jak_state.position[2];
+        }
 
         /* Hide Mario's model — Jak is the player character.
          * Also sync marioObj position so enemies/interactions detect us. */
         if (gMarioObject) {
             gMarioObject->header.gfx.node.flags |= GRAPH_RENDER_INVISIBLE;
-            gMarioObject->oPosX = s_jak_state.position[0];
-            gMarioObject->oPosY = s_jak_state.position[1];
-            gMarioObject->oPosZ = s_jak_state.position[2];
-            gMarioObject->header.gfx.pos[0] = s_jak_state.position[0];
-            gMarioObject->header.gfx.pos[1] = s_jak_state.position[1];
-            gMarioObject->header.gfx.pos[2] = s_jak_state.position[2];
+            if (!in_cutscene) {
+                gMarioObject->oPosX = s_jak_state.position[0];
+                gMarioObject->oPosY = s_jak_state.position[1];
+                gMarioObject->oPosZ = s_jak_state.position[2];
+                gMarioObject->header.gfx.pos[0] = s_jak_state.position[0];
+                gMarioObject->header.gfx.pos[1] = s_jak_state.position[1];
+                gMarioObject->header.gfx.pos[2] = s_jak_state.position[2];
+            }
         }
-
     }
 
     /* --- Water level: query SM64's water system and forward to GOAL --- */
