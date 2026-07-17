@@ -386,7 +386,7 @@ static bool load_dll(void) {
 
 /* Public wrapper for mario.c to check fallback state */
 bool jak_mario_should_fallback(void) {
-    if (s_transition_fallback) return true;  /* Mario carries level transitions */
+    /* transitions: Mario runs the logic but stays HIDDEN (immersion) */
     if (!s_active || s_jak_id < 0) return false;
     return mario_should_fallback();
 }
@@ -1189,7 +1189,12 @@ void jak_sm64_update(void) {
             JAK_LOG("Transition fallback over — Mario idle at (%.0f,%.0f,%.0f), spawning Jak here",
                     gMarioStates[0].pos[0], gMarioStates[0].pos[1], gMarioStates[0].pos[2]);
         } else {
-            return;  /* Mario plays the transition; don't spawn/tick Jak yet */
+            /* Mario runs the transition logic invisibly — no visible Mario,
+             * no premature Jak. Screen shows the level until he settles. */
+            if (gMarioObject != NULL) {
+                gMarioObject->header.gfx.node.flags |= GRAPH_RENDER_INVISIBLE;
+            }
+            return;  /* don't spawn/tick Jak yet */
         }
     }
 
