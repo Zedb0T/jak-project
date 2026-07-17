@@ -950,9 +950,28 @@ bool jak_is_active(void) {
     return s_active && s_jak_id >= 0;
 }
 
+#if defined(_WIN32)
+/* Crash telemetry: log the faulting address as exe/dll offsets so a repro
+ * pinpoints the function via addr2line (guard-guessing failed on the SSL
+ * quicksand-death crash). */
+static LONG WINAPI jak_crash_handler(EXCEPTION_POINTERS *ep) {
+    void *addr = ep->ExceptionRecord->ExceptionAddress;
+    HMODULE exe = GetModuleHandleA(NULL);
+    HMODULE dll = GetModuleHandleA("jakopengoal.dll");
+    JAK_ERR("CRASH: code=0x%lx addr=%p exe_off=0x%llx dll_off=0x%llx",
+            (unsigned long)ep->ExceptionRecord->ExceptionCode, addr,
+            (unsigned long long)((char *)addr - (char *)exe),
+            dll ? (unsigned long long)((char *)addr - (char *)dll) : 0ULL);
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
+
 void jak_sm64_init(void) {
     JAK_LOG("Init registered (deferred until game is running)");
     jak_settings_load();
+#if defined(_WIN32)
+    SetUnhandledExceptionFilter(jak_crash_handler);
+#endif
 }
 
 void jak_sm64_shutdown(void) {
