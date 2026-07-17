@@ -1191,6 +1191,23 @@ void jak_sm64_update(void) {
         return;
     }
 
+    /* Void recovery: death/level warps can leave Jak out of bounds with no
+     * geometry below — he falls forever and drags glued-Mario with him
+     * (invisible + stuck). Teleport him to the area's spawn point. */
+    if (s_active && s_jak_id >= 0 && fn_jak_set_position &&
+        s_jak_state.position[1] < -12000.0f) {
+        f32 sx = gMarioStates[0].pos[0], sy = gMarioStates[0].pos[1] + 100.0f,
+            sz = gMarioStates[0].pos[2];
+        if (gMarioSpawnInfo != NULL) {
+            sx = gMarioSpawnInfo->startPos[0];
+            sy = gMarioSpawnInfo->startPos[1] + 100.0f;
+            sz = gMarioSpawnInfo->startPos[2];
+        }
+        JAK_LOG("VOID RECOVERY: Jak at y=%.0f, teleporting to spawn (%.0f,%.0f,%.0f)",
+                s_jak_state.position[1], sx, sy, sz);
+        fn_jak_set_position(s_jak_id, sx, sy, sz);
+    }
+
     /* Don't tick Jak if surfaces aren't loaded yet (prevents falling through void) */
     if (!s_surfaces_loaded) return;
     if (!s_active || s_jak_id < 0) return;
