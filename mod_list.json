@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "sourceName": "SM64-Jak Testing",
-  "lastUpdated": "2026-07-16T09:13:32Z",
+  "lastUpdated": "2026-07-17T13:27:17Z",
   "mods": {
     "sm64-jak": {
       "displayName": "SM64-Jak",
@@ -18,6 +18,19 @@
         "jak1"
       ],
       "versions": [
+        {
+          "version": "0.0.5",
+          "publishedDate": "2026-07-17T13:27:17Z",
+          "supportedGames": [
+            "jak1"
+          ],
+          "assets": {
+            "windows": "https://github.com/Zedb0T/jak-project/releases/download/sm64jak-v0.0.5/windows-v0.0.5.zip"
+          },
+          "assetDownloadCounts": {
+            "windows": 0
+          }
+        },
         {
           "version": "0.0.4",
           "publishedDate": "2026-07-16T09:13:32Z",
