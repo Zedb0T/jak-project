@@ -386,6 +386,12 @@
     (set! *lib-jak-command* 0)
     (set! *lib-jak-command-type* 0)
 
+    ;; Show the injected SM64 collision in the world view by default: the
+    ;; collide-cache holds the SM64 triangle window around Jak, so drawing it
+    ;; gives him visible ground/walls in the gk world instead of walking on
+    ;; air. Toggle in the debug menu: Collision -> Collision Cache.
+    (set! *display-collide-cache* #t)
+
     ;; Per-frame debug-draw of actor collide shapes whenever the PC collision
     ;; renderer is on (debug menu: Collision renderer -> Enable). The injected
     ;; SM64 triangles can additionally be shown via Collision -> Collision Cache.
