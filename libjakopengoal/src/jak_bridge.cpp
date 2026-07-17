@@ -1593,6 +1593,20 @@ void initialize_bridge() {
   // Register C++ functions as GOAL callables
   jak1::make_function_symbol_from_c("lib-jak-fill-external-collide",
                                      (void*)goal_fill_external_collide);
+  jak1::make_function_symbol_from_c("lib-jak-surface-count", (void*)+[]() -> u64 {
+    auto& cs = get_collision_state();
+    std::lock_guard<std::mutex> lock(cs.mutex);
+    return (u64)cs.static_surfaces.size();
+  });
+  // vertex component in GOAL game units (int) — GOAL side converts with (the float ...)
+  jak1::make_function_symbol_from_c("lib-jak-surface-vert", (void*)+[](u64 tri, u64 vert, u64 axis) -> u64 {
+    auto& cs = get_collision_state();
+    std::lock_guard<std::mutex> lock(cs.mutex);
+    if (tri >= cs.static_surfaces.size() || vert > 2 || axis > 2) return 0;
+    constexpr float UNITS_TO_METERS = 4096.0f / 50.0f;
+    const auto& s = cs.static_surfaces[tri];
+    return (u64)(s64)(s.vertices[vert][axis] * UNITS_TO_METERS);
+  });
   jak1::make_function_symbol_from_c("lib-jak-notify-target-ready",
                                      (void*)goal_notify_target_ready);
   jak1::make_function_symbol_from_c("lib-jak-provide-bone-data",

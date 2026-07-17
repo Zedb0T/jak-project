@@ -28,6 +28,8 @@
 
 ;; Forward declarations for C++ bridge functions
 (define-extern lib-jak-fill-external-collide (function object int))
+(define-extern lib-jak-surface-count (function int))
+(define-extern lib-jak-surface-vert (function int int int int))
 (define-extern lib-jak-notify-target-ready (function none))
 (define-extern lib-jak-provide-bone-data (function pointer int none))
 
@@ -353,6 +355,29 @@
 ;; Actor collision debug draw
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun lib-jak-draw-sm64-world ()
+  "Debug-draw EVERY loaded SM64 surface (not just the collide-cache window)
+   so the host level is fully visible in the world view."
+  (let ((count (lib-jak-surface-count))
+        (v0 (new 'stack-no-clear 'vector))
+        (v1 (new 'stack-no-clear 'vector))
+        (v2 (new 'stack-no-clear 'vector)))
+    (dotimes (i count)
+      (set! (-> v0 x) (the float (lib-jak-surface-vert i 0 0)))
+      (set! (-> v0 y) (the float (lib-jak-surface-vert i 0 1)))
+      (set! (-> v0 z) (the float (lib-jak-surface-vert i 0 2)))
+      (set! (-> v1 x) (the float (lib-jak-surface-vert i 1 0)))
+      (set! (-> v1 y) (the float (lib-jak-surface-vert i 1 1)))
+      (set! (-> v1 z) (the float (lib-jak-surface-vert i 1 2)))
+      (set! (-> v2 x) (the float (lib-jak-surface-vert i 2 0)))
+      (set! (-> v2 y) (the float (lib-jak-surface-vert i 2 1)))
+      (set! (-> v2 z) (the float (lib-jak-surface-vert i 2 2)))
+      (add-debug-flat-triangle #t (bucket-id debug-draw1) v0 v1 v2
+                               (new 'static 'rgba :r #x30 :g #x60 :b #x30 :a #x40))
+      )
+    )
+  (none))
+
 (defun lib-jak-draw-actor-collision ()
   "Debug-draw every actor's collide-shape (spheres/meshes). Runs while the
    PC collision renderer is enabled so actor collision shows alongside the
@@ -395,10 +420,16 @@
     ;; Per-frame debug-draw of actor collide shapes whenever the PC collision
     ;; renderer is on (debug menu: Collision renderer -> Enable). The injected
     ;; SM64 triangles can additionally be shown via Collision -> Collision Cache.
+    ;; Speedrunner mode re-disables debug globals every frame (and shows its
+    ;; HUD) — force it off so the world-view debug draws survive.
+    (set! (-> *pc-settings* speedrunner-mode?) #f)
+
     (process-spawn-function process :name 'lib-jak-collide-draw
       (lambda :behavior process ()
         (stack-size-set! (-> self main-thread) 1024)
         (loop
+          (set! (-> *pc-settings* speedrunner-mode?) #f)
+          (lib-jak-draw-sm64-world)
           (if *collision-renderer* (lib-jak-draw-actor-collision))
           (suspend))))
 
