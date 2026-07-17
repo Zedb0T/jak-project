@@ -243,7 +243,8 @@ void CollideMeshRenderer::render(SharedRenderState* render_state, ScopedProfiler
   }
 
   auto levels = render_state->loader->get_in_use_levels();
-  if (levels.empty()) {
+  if (levels.empty() && !Gfx::g_lib_hidden_display) {
+    // library mode continues: the injected SM64 mesh can draw with no levels
     return;
   }
   render_state->shaders[ShaderId::COLLISION].activate();
@@ -336,5 +337,50 @@ void CollideMeshRenderer::render(SharedRenderState* render_state, ScopedProfiler
 
     prof.add_draw_call();
     prof.add_tri(lev->level->collision.vertices.size() / 3);
+  }
+
+  // libjakopengoal: draw the injected host-engine (SM64) collision mesh with
+  // the same shader/uniform state as level meshes. Re-uploaded only when the
+  // bridge bumps the generation (area transitions).
+  {
+    static std::vector<u8> jak_verts;
+    u64 gen = Gfx::lib_fetch_collide_mesh(jak_verts, m_jak_gen);
+    if (gen != m_jak_gen) {
+      m_jak_gen = gen;
+      if (!m_jak_vbo) {
+        glGenBuffers(1, &m_jak_vbo);
+      }
+      glBindBuffer(GL_ARRAY_BUFFER, m_jak_vbo);
+      glBufferData(GL_ARRAY_BUFFER, jak_verts.size(), jak_verts.data(), GL_STATIC_DRAW);
+      m_jak_vert_count = (int)(jak_verts.size() / sizeof(tfrag3::CollisionMesh::Vertex));
+    }
+    if (m_jak_vbo && m_jak_vert_count > 0) {
+      glBindBuffer(GL_ARRAY_BUFFER, m_jak_vbo);
+      glEnableVertexAttribArray(0);
+      glEnableVertexAttribArray(1);
+      glEnableVertexAttribArray(2);
+      glEnableVertexAttribArray(3);
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(tfrag3::CollisionMesh::Vertex), 0);
+      glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(tfrag3::CollisionMesh::Vertex),
+                             (void*)offsetof(tfrag3::CollisionMesh::Vertex, flags));
+      glVertexAttribPointer(2, 3, GL_SHORT, GL_TRUE, sizeof(tfrag3::CollisionMesh::Vertex),
+                            (void*)offsetof(tfrag3::CollisionMesh::Vertex, nx));
+      glVertexAttribIPointer(3, 1, GL_UNSIGNED_INT, sizeof(tfrag3::CollisionMesh::Vertex),
+                             (void*)offsetof(tfrag3::CollisionMesh::Vertex, pat));
+      glUniform1i(glGetUniformLocation(shader, "wireframe"), 0);
+      glDrawArrays(GL_TRIANGLES, 0, m_jak_vert_count);
+      if (Gfx::g_global_settings.collision_wireframe) {
+        glUniform1i(glGetUniformLocation(shader, "wireframe"), 1);
+        glDisable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glDrawArrays(GL_TRIANGLES, 0, m_jak_vert_count);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        glEnable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+      }
+      prof.add_draw_call();
+      prof.add_tri(m_jak_vert_count / 3);
+    }
   }
 }

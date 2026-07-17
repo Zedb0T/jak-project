@@ -429,7 +429,7 @@
         (stack-size-set! (-> self main-thread) 1024)
         (loop
           (set! (-> *pc-settings* speedrunner-mode?) #f)
-          (lib-jak-draw-sm64-world)
+          ;; full SM64 mesh now drawn by the C++ CollideMeshRenderer (always on)
           (if *collision-renderer* (lib-jak-draw-actor-collision))
           (suspend))))
 

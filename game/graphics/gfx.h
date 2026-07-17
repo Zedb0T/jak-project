@@ -131,6 +131,13 @@ extern bool g_lib_hidden_display;
 // bridge to decide whether real vsync paces the EE or it must self-pace.
 bool lib_display_live();
 void lib_store_world_frame(const u8* rgba, int w, int h);
+
+// Injected collision mesh (SM64 surfaces) for the CollideMeshRenderer.
+// Vertices are tfrag3::CollisionMesh::Vertex, passed as raw bytes to keep
+// this header light. Generation bumps on every store.
+void lib_store_collide_mesh(const void* verts, int vert_count, int vert_stride);
+// Returns current generation; fills out only when gen differs from have_gen.
+u64 lib_fetch_collide_mesh(std::vector<u8>& out, u64 have_gen);
 // Copies the latest frame into dst (RGBA8, bottom-up rows, w*h*4 bytes).
 // Returns the frame counter (monotonic, starts at 1), 0 if no frame yet,
 // or -1 if dst is too small. out_w/out_h always receive the frame size.

@@ -2109,8 +2109,49 @@ static void inject_water_state() {
   }
 }
 
+/* Push the full converted SM64 surface set into the gk PC collision
+ * renderer (CollideMeshRenderer draws it like a level collide mesh).
+ * Rebuilt only when the static surface set changes. */
+static void publish_collide_mesh() {
+#ifndef RUNTIME_HEADLESS
+  if (!g_world_view_enabled) {
+    return;
+  }
+  auto& cs = get_collision_state();
+  static size_t last_count = (size_t)-1;
+  std::lock_guard<std::mutex> lock(cs.mutex);
+  if (cs.static_surfaces.size() == last_count && !cs.static_dirty) {
+    return;
+  }
+  last_count = cs.static_surfaces.size();
+
+  constexpr float U2M = 4096.0f / 50.0f;
+  std::vector<tfrag3::CollisionMesh::Vertex> verts;
+  verts.reserve(cs.static_surfaces.size() * 3);
+  for (const auto& s : cs.static_surfaces) {
+    for (int v = 0; v < 3; v++) {
+      tfrag3::CollisionMesh::Vertex cv{};
+      cv.x = s.vertices[v][0] * U2M;
+      cv.y = s.vertices[v][1] * U2M;
+      cv.z = s.vertices[v][2] * U2M;
+      cv.flags = 0;
+      cv.nx = (s16)(s.normal[0] * 16384.0f);
+      cv.ny = (s16)(s.normal[1] * 16384.0f);
+      cv.nz = (s16)(s.normal[2] * 16384.0f);
+      cv.pat = (0 /*stone*/ << 6) | (0 /*ground*/ << 3);
+      verts.push_back(cv);
+    }
+  }
+  Gfx::lib_store_collide_mesh(verts.data(), (int)verts.size(),
+                              (int)sizeof(tfrag3::CollisionMesh::Vertex));
+  // force the collision renderer on — it's the ground Jak stands on
+  Gfx::g_global_settings.collision_enable = true;
+#endif
+}
+
 void bridge_tick() {
   process_commands();
+  publish_collide_mesh();
   force_settings();
   inject_camera_rotation();
   apply_rider_displacement();

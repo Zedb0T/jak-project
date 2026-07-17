@@ -23,4 +23,9 @@ class CollideMeshRenderer {
   GLuint m_ubo;
 
   PatColors m_colors;
+
+  // libjakopengoal: injected host-engine (SM64) collision mesh
+  GLuint m_jak_vbo = 0;
+  int m_jak_vert_count = 0;
+  u64 m_jak_gen = 0;
 };

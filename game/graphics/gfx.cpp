@@ -43,6 +43,27 @@ int g_world_frame_h = 0;
 s32 g_world_frame_counter = 0;
 }  // namespace
 
+namespace {
+std::mutex g_collide_mesh_mutex;
+std::vector<u8> g_collide_mesh_bytes;
+u64 g_collide_mesh_gen = 0;
+}  // namespace
+
+void lib_store_collide_mesh(const void* verts, int vert_count, int vert_stride) {
+  std::lock_guard<std::mutex> lock(g_collide_mesh_mutex);
+  const u8* p = (const u8*)verts;
+  g_collide_mesh_bytes.assign(p, p + (size_t)vert_count * vert_stride);
+  g_collide_mesh_gen++;
+}
+
+u64 lib_fetch_collide_mesh(std::vector<u8>& out, u64 have_gen) {
+  std::lock_guard<std::mutex> lock(g_collide_mesh_mutex);
+  if (g_collide_mesh_gen != have_gen) {
+    out = g_collide_mesh_bytes;
+  }
+  return g_collide_mesh_gen;
+}
+
 bool lib_display_live() {
   return GetCurrentRenderer() != nullptr && Display::GetMainDisplay() != nullptr;
 }
