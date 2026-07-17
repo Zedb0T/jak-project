@@ -1247,7 +1247,10 @@ void jak_sm64_update(void) {
         f32 jak_x = s_jak_state.position[0];
         f32 jak_y = s_jak_state.position[1];
         f32 jak_z = s_jak_state.position[2];
-        f32 floor_y = find_floor(jak_x, jak_y + 80.0f, jak_z, &floor);
+        /* mid-transition (star grab / death / level exit) the surface pool is
+         * torn down — probing it crashes */
+        f32 floor_y = (gCurrentArea != NULL) ? find_floor(jak_x, jak_y + 80.0f, jak_z, &floor)
+                                             : -11000.0f;
 
         if (floor != NULL && floor->object != NULL && fabsf(jak_y - floor_y) < 50.0f) {
             struct Object *plat = floor->object;
@@ -1377,7 +1380,7 @@ void jak_sm64_update(void) {
          * meaningful when there's water; -11000 = bottomless. */
         if (fn_jak_set_water_bottom) {
             f32 bottom_y = -11000.0f;
-            if (water_y > -10000.0f) {
+            if (water_y > -10000.0f && gCurrentArea != NULL) {
                 struct Surface *floor = NULL;
                 f32 floor_y = find_floor(s_jak_state.position[0],
                                          s_jak_state.position[1] + 50.0f,
@@ -1982,6 +1985,7 @@ static void draw_jak_shadow_volume(void) {
 
 static void draw_jak_shadow(void) {
     if (g_jak_shadow_mode == 0) return;
+    if (gCurrentArea == NULL) return;  /* surface pool torn down mid-transition */
     if (g_jak_shadow_mode == 2) {
         draw_jak_shadow_volume();
         return;

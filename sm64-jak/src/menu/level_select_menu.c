@@ -161,6 +161,13 @@ s16 level_select_input_loop(void) {
 int intro_default(void) {
     s32 sp1C = 0;
 
+#ifdef JAKOPENGOAL
+    /* SM64-Jak: auto-press START on the title screen (pairs with the
+     * file-select skip so boot goes straight to gameplay) */
+    sp1C = 100 + gDebugLevelSelect;
+    return run_press_start_demo_timer(sp1C);
+#endif
+
 #ifndef VERSION_JP
     if (D_U_801A7C34 == 1) {
         play_sound(SOUND_MARIO_HELLO, gDefaultSoundArgs);
@@ -203,7 +210,10 @@ int intro_game_over(void) {
 
 int intro_play_its_a_me_mario(void) {
     set_background_music(0, SEQ_SOUND_PLAYER, 0);
+#ifndef JAKOPENGOAL
+    /* SM64-Jak: skip the "It's-a me, Mario!" voice line */
     play_sound(SOUND_MENU_COIN_ITS_A_ME_MARIO, gDefaultSoundArgs);
+#endif
     return 1;
 }
 
