@@ -356,6 +356,9 @@ static s32 s_last_level_area = -1;  /* gCurrLevelNum * 16 + gCurrAreaIndex */
 /* After a level/area transition, Mario stays visible and in control until he
  * reaches his idle stance; Jak then spawns exactly there. */
 static bool s_transition_fallback = false;
+/* Jak's position when the transition began — the frozen ghost mesh is drawn
+ * offset by (mario_pos - s_ghost_base) so it rides the invisible Mario */
+static f32 s_ghost_base[3] = {0, 0, 0};
 
 /* ---- Helpers ---- */
 
@@ -1123,7 +1126,10 @@ void jak_sm64_update(void) {
                 JAK_LOG("  Destroyed Jak for area transition");
             }
             s_transition_fallback = true;
-            JAK_LOG("  Transition fallback: Mario until ACT_IDLE");
+            s_ghost_base[0] = s_jak_state.position[0];
+            s_ghost_base[1] = s_jak_state.position[1];
+            s_ghost_base[2] = s_jak_state.position[2];
+            JAK_LOG("  Transition fallback: ghost-Jak rides hidden Mario until ACT_IDLE");
 
             /* Clear old surfaces */
             if (s_surfaces_loaded) {
@@ -2051,6 +2057,7 @@ static void draw_jak_shadow_volume(void) {
 static void draw_jak_shadow(void) {
     if (g_jak_shadow_mode == 0) return;
     if (gCurrentArea == NULL) return;  /* surface pool torn down mid-transition */
+    if (s_transition_fallback) return; /* ghost mesh is offset; its shadow isn't */
     if (g_jak_shadow_mode == 2) {
         draw_jak_shadow_volume();
         return;
@@ -2152,7 +2159,15 @@ static void jak_sm64_render_game(void) {
     gluLookAt(
         gLakituState.curPos[0], gLakituState.curPos[1], gLakituState.curPos[2],
         gLakituState.curFocus[0], gLakituState.curFocus[1], gLakituState.curFocus[2],
-        0.0, 1.0, 0.0
+        0.0, 1.0, 0.0);
+    /* Ghost mode: during transitions Jak's frozen last pose is glued to the
+     * invisible Mario, so entries/falls visually happen to Jak */
+    if (s_transition_fallback && s_jak_id < 0) {
+        glTranslatef(gMarioStates[0].pos[0] - s_ghost_base[0],
+                     gMarioStates[0].pos[1] - s_ghost_base[1],
+                     gMarioStates[0].pos[2] - s_ghost_base[2]);
+    }
+    (void)(0.0
     );
 
     /* ================================================================== */
@@ -2335,7 +2350,10 @@ static void jak_sm64_render_game(void) {
 }
 
 void jak_sm64_render(void) {
-    if (!s_active || s_jak_id < 0) return;
+    if (!s_active || s_jak_id < 0) {
+        /* ghost mode: keep drawing the frozen mesh through transitions */
+        if (!(s_transition_fallback && s_jak_geo.num_triangles_used > 0)) return;
+    }
 
     /* Tab toggles which world is fullscreen (needs the gk renderer alive) */
     {
