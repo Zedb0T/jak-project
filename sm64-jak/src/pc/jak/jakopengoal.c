@@ -1535,6 +1535,33 @@ void jak_sm64_update(void) {
         }
     }
 
+    /* Cutscene/hitch diagnostics (chain-chomp cutscene freeze reports):
+     * logs frame delta + cutscene/time-stop/action state so we can tell a
+     * stalled main loop (dt spikes) from stuck cutscene logic (smooth dt,
+     * frozen state). */
+    {
+        static Uint32 s_last_ms = 0;
+        static int s_cs_log = 0;
+        Uint32 now = SDL_GetTicks();
+        Uint32 dt = (s_last_ms == 0) ? 0 : (now - s_last_ms);
+        u8 cs = gCamera ? gCamera->cutscene : 0;
+        if (cs != 0 || gTimeStopState != 0) {
+            if ((s_cs_log++ % 30) == 0 || dt > 100) {
+                JAK_LOG("CS-DIAG: dt=%lums cutscene=%u timestop=0x%x mact=0x%x jact=%d pos=(%.0f,%.0f,%.0f)",
+                        (unsigned long)dt, cs, (unsigned)gTimeStopState,
+                        (unsigned)gMarioStates[0].action, s_jak_state.action,
+                        s_jak_state.position[0], s_jak_state.position[1], s_jak_state.position[2]);
+            }
+        } else {
+            s_cs_log = 0;
+            if (dt > 100) {
+                JAK_LOG("HITCH: dt=%lums mact=0x%x jact=%d",
+                        (unsigned long)dt, (unsigned)gMarioStates[0].action, s_jak_state.action);
+            }
+        }
+        s_last_ms = now;
+    }
+
     /* Autosave every 5 minutes (18000 ticks at 60fps) */
     static int tick_count = 0;
     tick_count++;
