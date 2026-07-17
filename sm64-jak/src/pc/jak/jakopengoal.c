@@ -353,6 +353,10 @@ static int s_jak_surface_count = 0;
 static bool s_surfaces_loaded = false;
 static s32 s_last_level_area = -1;  /* gCurrLevelNum * 16 + gCurrAreaIndex */
 
+/* After a level/area transition, Mario stays visible and in control until he
+ * reaches his idle stance; Jak then spawns exactly there. */
+static bool s_transition_fallback = false;
+
 /* ---- Helpers ---- */
 
 static bool load_dll(void) {
@@ -382,6 +386,7 @@ static bool load_dll(void) {
 
 /* Public wrapper for mario.c to check fallback state */
 bool jak_mario_should_fallback(void) {
+    if (s_transition_fallback) return true;  /* Mario carries level transitions */
     if (!s_active || s_jak_id < 0) return false;
     return mario_should_fallback();
 }
@@ -1109,13 +1114,16 @@ void jak_sm64_update(void) {
         if (s_last_level_area != cur_la) {
             JAK_LOG("Level/area changed (%d -> %d)", s_last_level_area, cur_la);
 
-            /* Destroy Jak so he stops ticking with stale collision */
+            /* Destroy Jak so he stops ticking with stale collision, and hand
+             * control to visible Mario until he lands in his idle stance */
             if (s_active && s_jak_id >= 0) {
                 fn_jak_delete(s_jak_id);
                 s_jak_id = -1;
                 s_active = false;
                 JAK_LOG("  Destroyed Jak for area transition");
             }
+            s_transition_fallback = true;
+            JAK_LOG("  Transition fallback: Mario until ACT_IDLE");
 
             /* Clear old surfaces */
             if (s_surfaces_loaded) {
@@ -1170,6 +1178,18 @@ void jak_sm64_update(void) {
             struct MarioState *m = &gMarioStates[0];
             JAK_LOG("  mario_pos=(%.1f,%.1f,%.1f) gCurrentArea=%p",
                     m->pos[0], m->pos[1], m->pos[2], (void*)gCurrentArea);
+        }
+    }
+
+    /* Transition fallback ends only when Mario has settled into idle —
+     * that's where Jak takes over */
+    if (s_transition_fallback) {
+        if (gMarioStates[0].action == ACT_IDLE) {
+            s_transition_fallback = false;
+            JAK_LOG("Transition fallback over — Mario idle at (%.0f,%.0f,%.0f), spawning Jak here",
+                    gMarioStates[0].pos[0], gMarioStates[0].pos[1], gMarioStates[0].pos[2]);
+        } else {
+            return;  /* Mario plays the transition; don't spawn/tick Jak yet */
         }
     }
 
