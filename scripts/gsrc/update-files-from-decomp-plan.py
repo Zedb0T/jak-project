@@ -21,6 +21,8 @@ def run_decomp(name: str):
         env=env,
         cwd=BASE_DIR,
         check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
     )
 
 
@@ -41,13 +43,16 @@ def copy_to_ref(name: str):
     shutil.copyfile(src, dst)
 
 
-with open("./scripts/gsrc/decomp-plan.json", "r") as f:
+with open("./scripts/gsrc/_decomp-plan.json", "r") as f:
     data = json.load(f)
 
-for entry in data:
+for i, entry in enumerate(data):
     name = entry.get("name")
+    print(f"[{i}/{len(data)}] {name}")
     done = entry.get("done")
-
+    if entry.get("skip"):
+        print(f"skipping {name}")
+        continue
     if done and name:
         run_decomp(name)
         copy_to_ref(name)
